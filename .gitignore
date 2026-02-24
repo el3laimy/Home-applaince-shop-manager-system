@@ -1,0 +1,28 @@
+# Visual Studio / .NET
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+/build/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/.fvm/
+*.log
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db

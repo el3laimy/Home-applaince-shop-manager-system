@@ -1,0 +1,6 @@
+@ALIkhlasPOS.API_HostAddress = http://localhost:5290
+
+GET {{ALIkhlasPOS.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
