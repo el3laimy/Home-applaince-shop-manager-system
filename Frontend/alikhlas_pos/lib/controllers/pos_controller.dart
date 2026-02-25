@@ -4,6 +4,7 @@ import '../models/product_model.dart';
 import '../models/invoice_model.dart';
 import '../services/api_service.dart';
 import '../services/receipt_service.dart';
+import '../core/utils/toast_service.dart';
 
 class PosController extends GetxController {
   // Cart state
@@ -152,6 +153,21 @@ class PosController extends GetxController {
       unitPrice: item.unitPrice,
       quantity: newQty,
       discount: item.discount,
+      customPrice: item.customPrice,
+    );
+  }
+
+  void updateCustomPrice(int index, double? newPrice) {
+    if (index < 0 || index >= cartItems.length) return;
+    final item = cartItems[index];
+    cartItems[index] = CartItemModel(
+      barcode: item.barcode,
+      productId: item.productId,
+      productName: item.productName,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      discount: item.discount,
+      customPrice: newPrice,
     );
   }
 
@@ -174,7 +190,10 @@ class PosController extends GetxController {
 
     try {
       final scannedItems = cartItems.expand((item) =>
-        List.generate(item.quantity, (_) => {'barcode': item.barcode})
+        List.generate(item.quantity, (_) => {
+          'barcode': item.barcode,
+          if (item.customPrice != null) 'customPrice': item.customPrice,
+        })
       ).toList();
 
       final body = {
@@ -227,19 +246,11 @@ class PosController extends GetxController {
 
 
   void _showSuccess(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: Colors.green,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 3),
-    ));
+    ToastService.showSuccess(msg);
   }
 
   void _showError(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: Colors.redAccent,
-      behavior: SnackBarBehavior.floating,
-    ));
+    ToastService.showError(msg);
   }
+
 }

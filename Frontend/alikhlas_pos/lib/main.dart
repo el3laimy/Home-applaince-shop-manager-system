@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/main_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/api_service.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+  ApiService.initialize();
 
   // Setup Window Manager for Desktop Apps
   await windowManager.ensureInitialized();

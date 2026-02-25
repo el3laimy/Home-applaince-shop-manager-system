@@ -138,14 +138,19 @@ class _PosScreenState extends State<PosScreen> {
         autofocus: true,
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent) {
-            // F2 = confirm checkout
-            if (event.logicalKey == LogicalKeyboardKey.f2) {
+            // F12 = confirm checkout (Pay)
+            if (event.logicalKey == LogicalKeyboardKey.f12) {
               if (_ctrl.cartItems.isNotEmpty) _ctrl.confirmCheckout(context);
               return KeyEventResult.handled;
             }
-            // F12 = Focus barcode scanner
-            if (event.logicalKey == LogicalKeyboardKey.f12) {
+            // F2 = Focus barcode scanner (Search)
+            if (event.logicalKey == LogicalKeyboardKey.f2) {
               FocusScope.of(context).requestFocus(_barcodeFocusNode);
+              return KeyEventResult.handled;
+            }
+            // F4 = Discount
+            if (event.logicalKey == LogicalKeyboardKey.f4) {
+              if (_ctrl.cartItems.isNotEmpty) _showDiscountDialog();
               return KeyEventResult.handled;
             }
             // Escape = clear cart
@@ -257,8 +262,8 @@ class _PosScreenState extends State<PosScreen> {
 
                 const SizedBox(height: 8),
 
-                // Cart list
-                Expanded(child: _buildCartList(isDark)),
+                // Cart list (Dynamic Table)
+                Expanded(child: _buildCartTable(isDark)),
 
                 const SizedBox(height: 12),
 
@@ -336,57 +341,112 @@ class _PosScreenState extends State<PosScreen> {
     ).animate().fade().slideY(begin: -0.3);
   }
 
-  Widget _buildCartList(bool isDark) {
-    return Obx(() => _ctrl.cartItems.isEmpty
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildCartTable(bool isDark) {
+    return Obx(() {
+      if (_ctrl.cartItems.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.shopping_cart_outlined, size: 72, color: Colors.grey.withAlpha(80)),
+              const SizedBox(height: 16),
+              Text('العربة فارغة\nامسح باركود لإضافة صنف', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.withAlpha(120), fontSize: 16)),
+            ],
+          ),
+        ).animate().fade();
+      }
+
+      return Column(
+        children: [
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withAlpha(15) : Colors.grey[200],
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: Row(
               children: [
-                Icon(Icons.shopping_cart_outlined, size: 72, color: Colors.grey.withAlpha(80)),
-                const SizedBox(height: 16),
-                Text('العربة فارغة\nامسح باركود لإضافة صنف', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.withAlpha(120), fontSize: 16)),
+                const Expanded(flex: 3, child: Text('الصنف', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                const Expanded(flex: 2, child: Text('السعر', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13), textAlign: TextAlign.center)),
+                const Expanded(flex: 2, child: Text('الكمية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13), textAlign: TextAlign.center)),
+                const Expanded(flex: 2, child: Text('الإجمالي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13), textAlign: TextAlign.end)),
               ],
             ),
-          ).animate().fade()
-        : ListView.builder(
-            itemCount: _ctrl.cartItems.length,
-            itemBuilder: (context, index) {
-              final item = _ctrl.cartItems[index];
-              return Card(
-                elevation: 0,
-                color: isDark ? Colors.white.withAlpha(8) : Colors.white,
-                margin: const EdgeInsets.only(bottom: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primaryColor.withAlpha(30),
-                    child: Text('${item.quantity}', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
-                  ),
-                  title: Text(item.productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text('${item.unitPrice.toStringAsFixed(2)} ج.م / قطعة', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('${item.totalPrice.toStringAsFixed(2)} ج.م', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor)),
-                      const SizedBox(width: 4),
-                      // Quantity stepper
-                      InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () => _ctrl.updateQuantity(index, item.quantity - 1),
-                        child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.remove_circle_outline, size: 20, color: Colors.redAccent)),
-                      ),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () => _ctrl.updateQuantity(index, item.quantity + 1),
-                        child: Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.add_circle_outline, size: 20, color: AppTheme.primaryColor)),
-                      ),
-                    ],
-                  ),
-                ),
-              ).animate().fade().slideX(begin: -0.2);
-            },
-          ));
+          ),
+          // Table Rows
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: isDark ? Colors.white.withAlpha(15) : Colors.grey[300]!),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+              ),
+              child: ListView.separated(
+                itemCount: _ctrl.cartItems.length,
+                separatorBuilder: (context, index) => Divider(height: 1, color: isDark ? Colors.white.withAlpha(10) : Colors.grey[200]),
+                itemBuilder: (context, index) {
+                  final item = _ctrl.cartItems[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(item.productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: InkWell(
+                            onTap: () => _showEditPriceDialog(index, item),
+                            child: Tooltip(
+                              message: 'تعديل السعر',
+                              child: Text(
+                                '${item.effectivePrice.toStringAsFixed(2)}', 
+                                style: TextStyle(
+                                  color: item.customPrice != null ? AppTheme.primaryColor : Colors.grey[600], 
+                                  fontSize: 13,
+                                  decoration: TextDecoration.underline,
+                                  decorationStyle: TextDecorationStyle.dashed
+                                ), 
+                                textAlign: TextAlign.center
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              InkWell(
+                                onTap: () => _ctrl.updateQuantity(index, item.quantity - 1),
+                                child: const Icon(Icons.remove_circle_outline, size: 20, color: Colors.redAccent),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              ),
+                              InkWell(
+                                onTap: () => _ctrl.updateQuantity(index, item.quantity + 1),
+                                child: Icon(Icons.add_circle_outline, size: 20, color: AppTheme.primaryColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text('${item.totalPrice.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondaryColor, fontSize: 14), textAlign: TextAlign.end),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+    });
   }
 
   Widget _buildCheckoutSummary(bool isDark) {
@@ -414,24 +474,38 @@ class _PosScreenState extends State<PosScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Totals
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('الأصناف: ${_ctrl.totalItems}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-              Text('الإجمالي:', style: Theme.of(context).textTheme.titleMedium),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (_ctrl.globalDiscount.value > 0)
+                    Text('الخصم: ${_ctrl.globalDiscount.value.toStringAsFixed(2)} ج.م', style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  Text('الإجمالي:', style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '${_ctrl.total.toStringAsFixed(2)} ج.م',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppTheme.primaryColor,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: () => _showDiscountDialog(), 
+                icon: const Icon(Icons.local_offer, size: 16), 
+                label: const Text('خصم (F4)'),
+                style: TextButton.styleFrom(foregroundColor: Colors.orange),
               ),
-            ),
+              Text(
+                '${_ctrl.total.toStringAsFixed(2)} ج.م',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -694,6 +768,87 @@ class _PosScreenState extends State<PosScreen> {
               Get.back();
             },
             child: const Text('نعم، امسح', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditPriceDialog(int index, CartItemModel item) {
+    final TextEditingController priceCtrl = TextEditingController(text: item.effectivePrice.toStringAsFixed(2));
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('تعديل السعر لـ ${item.productName}', style: const TextStyle(fontSize: 16)),
+        content: TextField(
+          controller: priceCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: 'السعر الجديد (ج.م)',
+            hintText: 'السعر الأساسي: ${item.unitPrice}',
+            prefixIcon: const Icon(Icons.edit_note),
+          ),
+          autofocus: true,
+          onSubmitted: (val) {
+            final newPrice = double.tryParse(val);
+            if (newPrice != null && newPrice >= 0) {
+              _ctrl.updateCustomPrice(index, newPrice);
+            }
+            Get.back();
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _ctrl.updateCustomPrice(index, null); // استعادة الأصلي
+              Get.back();
+            },
+            child: const Text('استعادة الأصلي'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+            onPressed: () {
+              final newPrice = double.tryParse(priceCtrl.text);
+              if (newPrice != null && newPrice >= 0) {
+                _ctrl.updateCustomPrice(index, newPrice);
+              }
+              Get.back();
+            },
+            child: const Text('حفظ السعر', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDiscountDialog() {
+    final TextEditingController discountCtrl = TextEditingController(text: _ctrl.globalDiscount.value > 0 ? _ctrl.globalDiscount.value.toString() : '');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('إضافة خصم للفاتورة'),
+        content: TextField(
+          controller: discountCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'قيمة الخصم إجمالاً (ج.م)',
+            prefixIcon: Icon(Icons.money_off),
+          ),
+          autofocus: true,
+          onSubmitted: (_) {
+            _ctrl.globalDiscount.value = double.tryParse(discountCtrl.text) ?? 0.0;
+            Get.back();
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor, foregroundColor: Colors.white),
+            onPressed: () {
+              _ctrl.globalDiscount.value = double.tryParse(discountCtrl.text) ?? 0.0;
+              Get.back();
+            },
+            child: const Text('تطبيق الخصم'),
           ),
         ],
       ),

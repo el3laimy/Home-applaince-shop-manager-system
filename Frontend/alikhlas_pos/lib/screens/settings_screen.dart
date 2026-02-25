@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../controllers/settings_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../services/receipt_service.dart';
@@ -419,7 +420,7 @@ class SettingsScreen extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () {
-                  final url = '${ApiService.baseUrl}/excelexport/sales';
+                  final url = '${dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api'}/excelexport/sales';
                   Get.snackbar('📊 تصدير Excel', 'افتح الرابط:\n$url',
                       duration: const Duration(seconds: 5),
                       backgroundColor: Colors.indigo.withAlpha(220), colorText: Colors.white);

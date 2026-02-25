@@ -4,11 +4,21 @@ using ALIkhlasPOS.Application.Services;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using ALIkhlasPOS.Infrastructure.Services;
+using ALIkhlasPOS.API.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/alikhlaspos-.txt", rollingInterval: RollingInterval.Day));
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -26,6 +36,13 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "ALIkhlasPOS_";
 });
 
+// Verify JWT Key exists to fail-fast
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT Secret Key is missing from configuration.");
+}
+
 // Configure JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -36,9 +53,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "ALIkhlasPOS",
-            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "ALIkhlasClient",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "super_secret_key_which_should_be_long_enough_for_hmac_sha256"))
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
         };
     });
 builder.Services.AddAuthorization();
@@ -50,6 +68,7 @@ builder.Services.AddScoped<IProductCacheService, ProductCacheService>();
 
 // Register Background Workers
 builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.InstallmentReminderService>();
+builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.DatabaseBackupService>();
 
 // Learn more about configuring OpenAPI
 builder.Services.AddOpenApi();
@@ -57,6 +76,9 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseSerilogRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -97,3 +119,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

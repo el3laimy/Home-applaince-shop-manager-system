@@ -10,6 +10,7 @@ class CartItemModel {
   final double unitPrice;
   int quantity;
   double? discount;
+  double? customPrice;
 
   CartItemModel({
     required this.barcode,
@@ -18,9 +19,11 @@ class CartItemModel {
     required this.unitPrice,
     this.quantity = 1,
     this.discount,
+    this.customPrice,
   });
 
-  double get totalPrice => (unitPrice - (discount ?? 0)) * quantity;
+  double get effectivePrice => customPrice ?? unitPrice;
+  double get totalPrice => (effectivePrice - (discount ?? 0)) * quantity;
 }
 
 class InvoiceItemModel {

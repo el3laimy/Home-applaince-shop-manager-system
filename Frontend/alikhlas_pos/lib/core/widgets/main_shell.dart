@@ -18,6 +18,7 @@ import '../../screens/reports_screen.dart';
 import '../../screens/settings_screen.dart';
 import '../../screens/users_screen.dart';
 import '../../screens/installments_screen.dart';
+import '../../screens/stock_adjustments_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -34,6 +35,7 @@ class _MainShellState extends State<MainShell> {
     const DashboardScreen(),
     const PosScreen(),
     const InventoryScreen(),
+    const StockAdjustmentsScreen(), // index 3
     const CustomersScreen(),
     const PurchasingScreen(),
     const ReturnsScreen(),
@@ -41,25 +43,26 @@ class _MainShellState extends State<MainShell> {
     const BridalOrdersScreen(),
     const ReportsScreen(),
     const SettingsScreen(),
-    const UsersScreen(), // index 10 — Admin only
-    const InstallmentsScreen(), // index 11 — Admin or Manager only
+    const UsersScreen(), // index 11 — Admin only
+    const InstallmentsScreen(), // index 12 — Admin or Manager only
   ];
 
   final List<_NavItem> _coreNavItems = [
     _NavItem(0, 'لوحة القيادة', Icons.dashboard_rounded, Color(0xFF6C63FF)),
     _NavItem(1, 'نقطة البيع (POS)', Icons.point_of_sale_rounded, Color(0xFF00E5FF)),
     _NavItem(2, 'إدارة المخزون', Icons.inventory_2_rounded, Color(0xFF43E97B)),
-    _NavItem(3, 'العملاء', Icons.people_alt_rounded, Color(0xFF4FACFE)),
-    _NavItem(4, 'الموردين والمشتريات', Icons.local_shipping_rounded, Color(0xFFFA709A)),
-    _NavItem(5, 'إدارة المرتجعات', Icons.assignment_return_rounded, Color(0xFFFF5E5E)),
-    _NavItem(6, 'الخزينة والمحاسبة', Icons.account_balance_wallet_rounded, Color(0xFFFFB800)),
-    _NavItem(7, 'طلبيات العرائس', Icons.auto_awesome_rounded, Color(0xFFF093FB)),
-    _NavItem(8, 'التقارير التحليلية', Icons.insights_rounded, Color(0xFF6C63FF)),
-    _NavItem(9, 'إعدادات النظام', Icons.settings_rounded, Color(0xFF9E9E9E)),
+    _NavItem(3, 'تسوية المخزون', Icons.inventory_rounded, Color(0xFFFBBC05)),
+    _NavItem(4, 'العملاء', Icons.people_alt_rounded, Color(0xFF4FACFE)),
+    _NavItem(5, 'الموردين والمشتريات', Icons.local_shipping_rounded, Color(0xFFFA709A)),
+    _NavItem(6, 'إدارة المرتجعات', Icons.assignment_return_rounded, Color(0xFFFF5E5E)),
+    _NavItem(7, 'الخزينة والمحاسبة', Icons.account_balance_wallet_rounded, Color(0xFFFFB800)),
+    _NavItem(8, 'طلبيات العرائس', Icons.auto_awesome_rounded, Color(0xFFF093FB)),
+    _NavItem(9, 'التقارير التحليلية', Icons.insights_rounded, Color(0xFF6C63FF)),
+    _NavItem(10, 'إعدادات النظام', Icons.settings_rounded, Color(0xFF9E9E9E)),
   ];
 
-  static const _adminNavItem = _NavItem(10, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
-  static const _installmentsNavItem = _NavItem(11, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
+  static const _adminNavItem = _NavItem(11, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
+  static const _installmentsNavItem = _NavItem(12, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
 
   @override
   Widget build(BuildContext context) {
@@ -310,21 +313,50 @@ class _MainShellState extends State<MainShell> {
 
           // ── Main Content Area ──────────────────────────────────────────────
           Expanded(
-            child: ClipRect(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(begin: const Offset(0.02, 0), end: Offset.zero).animate(animation),
-                    child: child,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Breadcrumbs ──────────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.surfaceDark : Colors.white,
+                    border: Border(bottom: BorderSide(color: Colors.grey.withAlpha(isDark ? 30 : 50))),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.home_rounded, size: 16, color: Colors.grey[500]),
+                      const SizedBox(width: 8),
+                      Text('الرئيسية', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                      if (_selectedIndex != 0) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.chevron_left_rounded, size: 16, color: Colors.grey[400]),
+                        const SizedBox(width: 8),
+                        Text(navItems.firstWhere((item) => item.index == _selectedIndex, orElse: () => navItems.first).label, 
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ]
+                    ],
                   ),
                 ),
-                child: KeyedSubtree(
-                  key: ValueKey(_selectedIndex),
-                  child: _screens[_selectedIndex],
+                Expanded(
+                  child: ClipRect(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(begin: const Offset(0.02, 0), end: Offset.zero).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: KeyedSubtree(
+                        key: ValueKey(_selectedIndex),
+                        child: _screens[_selectedIndex],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],

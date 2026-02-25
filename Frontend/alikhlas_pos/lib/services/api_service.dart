@@ -1,122 +1,163 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:get/get.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:get/get.dart' hide Response;
 import '../controllers/auth_controller.dart';
 
 class ApiService {
-  // Base URL - change this to match your backend
-  static const String baseUrl = 'http://localhost:5290/api';
-  static String? _token;
+  static late final Dio _dio;
+  
 
-  static final http.Client _client = http.Client();
+  static void initialize() {
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+    
+    _dio = Dio(BaseOptions(
+      baseUrl: baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ));
 
-  static void setToken(String? token) {
-    _token = token;
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        final token = (await SharedPreferences.getInstance()).getString('auth_token');
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        return handler.next(options);
+      },
+      onError: (DioException error, handler) async {
+        if (error.response?.statusCode == 401) {
+          final isRefreshed = await _attemptTokenRefresh();
+          if (isRefreshed) {
+            // Retry the original request with new token
+            final token = (await SharedPreferences.getInstance()).getString('auth_token');
+            error.requestOptions.headers['Authorization'] = 'Bearer $token';
+            try {
+              final response = await _dio.fetch(error.requestOptions);
+              return handler.resolve(response);
+            } catch (retryError) {
+              return handler.next(retryError as DioException);
+            }
+          } else {
+            // Logout if refresh fails
+            try {
+              Get.find<AuthController>().logout();
+            } catch (_) {}
+          }
+        }
+        return handler.next(error);
+      },
+    ));
   }
 
-  static Map<String, String> get _headers {
-    final h = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    if (_token != null && _token!.isNotEmpty) {
-      h['Authorization'] = 'Bearer $_token';
-    }
-    return h;
-  }
-
-  // GET request
-  static Future<Map<String, dynamic>> get(String endpoint) async {
-    final response = await _client.get(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: _headers,
-    );
-    return _handleResponse(response);
-  }
-
-  // GET list request
-  static Future<List<dynamic>> getList(String endpoint) async {
-    final response = await _client.get(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: _headers,
-    );
-    final data = _handleResponse(response);
-    if (data.containsKey('data')) return data['data'] as List<dynamic>;
-    return [];
-  }
-
-  // POST request
-  static Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
-    final response = await _client.post(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: _headers,
-      body: jsonEncode(data),
-    );
-    return _handleResponse(response);
-  }
-
-  // PUT request
-  static Future<dynamic> put(String endpoint, Map<String, dynamic> data) async {
-    final response = await _client.put(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: _headers,
-      body: jsonEncode(data),
-    );
-    return _handleResponse(response);
-  }
-
-  // PATCH request
-  static Future<dynamic> patch(String endpoint, Map<String, dynamic> data) async {
-    final response = await _client.patch(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: _headers,
-      body: jsonEncode(data),
-    );
-    return _handleResponse(response);
-  }
-
-  // DELETE request
-  static Future<dynamic> delete(String endpoint) async {
-    final response = await _client.delete(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: _headers,
-    );
-    return _handleResponse(response);
-  }
-
-  static Map<String, dynamic> _handleResponse(http.Response response) {
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      if (response.body.isEmpty) return {};
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      if (decoded is List) return {'data': decoded};
-      return decoded as Map<String, dynamic>;
-    }
-
-    if (response.statusCode == 401) {
-      // Token expired or invalid
-      try {
-        Get.find<AuthController>().logout();
-      } catch (_) {}
-      throw ApiException(
-        statusCode: 401,
-        message: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.',
-      );
-    }
-
-    throw ApiException(
-      statusCode: response.statusCode,
-      message: _parseErrorMessage(response.body),
-    );
-  }
-
-  static String _parseErrorMessage(String body) {
+  static Future<bool> _attemptTokenRefresh() async {
     try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map) {
-        return decoded['message'] ?? decoded['title'] ?? 'حدث خطأ غير متوقع';
+      final token = (await SharedPreferences.getInstance()).getString('auth_token');
+      final refreshToken = (await SharedPreferences.getInstance()).getString('refresh_token');
+      
+      if (token == null || refreshToken == null) return false;
+
+      // Use a separate Dio instance to avoid interceptor loops
+      final refreshDio = Dio(BaseOptions(baseUrl: _dio.options.baseUrl));
+      final response = await refreshDio.post('/auth/refresh', data: {
+        'token': token,
+        'refreshToken': refreshToken
+      });
+
+      if (response.statusCode == 200) {
+        final newToken = response.data['token'];
+        final newRefreshToken = response.data['refreshToken'];
+
+        await (await SharedPreferences.getInstance()).setString('auth_token', newToken);
+        await (await SharedPreferences.getInstance()).setString('refresh_token', newRefreshToken);
+        return true;
       }
     } catch (_) {}
-    return body.isNotEmpty ? body : 'حدث خطأ في الاتصال بالخادم';
+    return false;
+  }
+
+  static Future<Map<String, dynamic>> get(String endpoint, {Map<String, dynamic>? queryParameters}) async {
+    try {
+      final response = await _dio.get('/$endpoint', queryParameters: queryParameters);
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static Future<List<dynamic>> getList(String endpoint, {Map<String, dynamic>? queryParameters}) async {
+    try {
+      final response = await _dio.get('/$endpoint', queryParameters: queryParameters);
+      if (response.data is List) return response.data as List<dynamic>;
+      if (response.data is Map && response.data.containsKey('data')) return response.data['data'] as List<dynamic>;
+      return [];
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static Future<dynamic> post(String endpoint, dynamic data) async {
+    try {
+      final response = await _dio.post('/$endpoint', data: data);
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static Future<dynamic> put(String endpoint, dynamic data) async {
+    try {
+      final response = await _dio.put('/$endpoint', data: data);
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static Future<dynamic> patch(String endpoint, dynamic data) async {
+    try {
+      final response = await _dio.patch('/$endpoint', data: data);
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static Future<dynamic> delete(String endpoint) async {
+    try {
+      final response = await _dio.delete('/$endpoint');
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static dynamic _handleResponse(Response response) {
+    if (response.data == null || response.data == '') return {};
+    return response.data;
+  }
+
+  static ApiException _handleDioError(DioException e) {
+    String message = 'حدث خطأ غير متوقع في الاتصال بالخادم';
+    if (e.response != null && e.response?.data != null) {
+      final data = e.response?.data;
+      if (data is Map) {
+        message = data['message'] ?? data['title'] ?? data['detail'] ?? message;
+      } else {
+        message = data.toString();
+      }
+    } else if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+      message = 'انتهت مهلة الاتصال بالخادم، يرجى المحاولة لاحقاً.';
+    }
+    
+    return ApiException(
+      statusCode: e.response?.statusCode ?? 500,
+      message: message,
+    );
   }
 }
 
@@ -126,5 +167,5 @@ class ApiException implements Exception {
   ApiException({required this.statusCode, required this.message});
 
   @override
-  String toString() => 'ApiException($statusCode): $message';
+  String toString() => message;
 }

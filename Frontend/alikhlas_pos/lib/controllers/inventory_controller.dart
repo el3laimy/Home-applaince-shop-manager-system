@@ -4,8 +4,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/product_model.dart';
 import '../services/api_service.dart';
+import '../core/utils/toast_service.dart';
 
 class InventoryController extends GetxController {
   final RxList<ProductModel> products = <ProductModel>[].obs;
@@ -122,7 +124,7 @@ class InventoryController extends GetxController {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token') ?? '';
       
-      final uri = Uri.parse('${ApiService.baseUrl}/products/$productId/image');
+      final uri = Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api'}/products/$productId/image');
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
       request.files.add(await http.MultipartFile.fromPath(
@@ -192,11 +194,11 @@ class InventoryController extends GetxController {
 
   List<ProductModel> get lowStockProducts => products.where((p) => p.isLowStock).toList();
 
-  void _snap(BuildContext context, String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: color,
-      behavior: SnackBarBehavior.floating,
-    ));
+  void _snap(BuildContext $1, String msg, Color color) {
+    if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
+    else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }
+    else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
+    else { ToastService.showInfo(msg); }
   }
+
 }

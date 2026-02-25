@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/api_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/formatters.dart';
@@ -128,7 +129,7 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
     try {
       final filter = activeFilter.value == 'all' ? '' : '?filter=${activeFilter.value}';
       // Open the export URL in the system browser/downloader
-      const baseUrl = ApiService.baseUrl; // e.g. http://localhost:5000/api
+      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api'; // e.g. http://localhost:5000/api
       Get.snackbar('📥 تصدير', 'جارٍ تنزيل الملف...', backgroundColor: Colors.blue.withAlpha(200), colorText: Colors.white);
       await ApiService.get('installments/export-csv$filter');
     } catch (_) {
@@ -207,7 +208,7 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
 
   void _openCsvInBrowser() {
     final filter = activeFilter.value == 'all' ? '' : '?filter=${activeFilter.value}';
-    final url = '${ApiService.baseUrl}/installments/export-csv$filter';
+    final url = '${dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api'}/installments/export-csv$filter';
     Get.snackbar('📥 تصدير', 'افتح الرابط في المتصفح:\n$url',
         duration: const Duration(seconds: 6),
         backgroundColor: Colors.green.withAlpha(220), colorText: Colors.white);

@@ -129,6 +129,21 @@ public class ProductsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.ImageUrl))
             product.ImageUrl = request.ImageUrl;
 
+        // Check for duplicate barcodes securely before saving
+        var checkingBarcodes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(product.GlobalBarcode)) checkingBarcodes.Add(product.GlobalBarcode);
+        if (!string.IsNullOrWhiteSpace(product.InternalBarcode)) checkingBarcodes.Add(product.InternalBarcode);
+
+        bool barcodeExists = checkingBarcodes.Any() && await _dbContext.Products.AnyAsync(p => 
+            (p.GlobalBarcode != null && checkingBarcodes.Contains(p.GlobalBarcode)) ||
+            (p.InternalBarcode != null && checkingBarcodes.Contains(p.InternalBarcode)), 
+            cancellationToken);
+
+        if (barcodeExists)
+        {
+            return BadRequest(new { message = "الباركود مستخدم بالفعل لمنتج آخر." });
+        }
+
         _dbContext.Products.Add(product);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _productCacheService.SetProductCacheAsync(product, cancellationToken);
@@ -183,7 +198,7 @@ public class ProductsController : ControllerBase
         var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
         if (product == null) return NotFound();
 
-        _dbContext.Products.Remove(product);
+        product.IsActive = false;
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _productCacheService.RemoveProductCacheAsync(product.GlobalBarcode, cancellationToken);
 

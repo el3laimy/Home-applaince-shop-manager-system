@@ -24,7 +24,7 @@ public class CustomersController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] string? search = null, CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Customers.AsQueryable();
+        var query = _dbContext.Customers.Where(c => c.IsActive).AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(c => c.Name.Contains(search) || (c.Phone != null && c.Phone.Contains(search)));
 
@@ -107,7 +107,9 @@ public class CustomersController : ControllerBase
     {
         var customer = await _dbContext.Customers.FindAsync(new object[] { id }, cancellationToken);
         if (customer == null) return NotFound();
-        _dbContext.Customers.Remove(customer);
+        
+        customer.IsActive = false;
+        
         await _dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

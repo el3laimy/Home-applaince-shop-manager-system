@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
@@ -42,11 +43,68 @@ public class AuthController : ControllerBase
         }
 
         var token = GenerateJwtToken(user);
+        var refreshToken = GenerateRefreshToken();
+
+        var refreshTokenEntity = new RefreshToken
+        {
+            Token = refreshToken,
+            Expires = DateTime.UtcNow.AddDays(double.Parse(_config["Jwt:RefreshTokenExpiryDays"] ?? "7")),
+            UserId = user.Id
+        };
+
+        _dbContext.RefreshTokens.Add(refreshTokenEntity);
+        await _dbContext.SaveChangesAsync();
 
         return Ok(new
         {
             Token = token,
+            RefreshToken = refreshToken,
             User = new { user.Id, user.Username, user.FullName, user.Role }
+        });
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        var principal = GetPrincipalFromExpiredToken(request.Token);
+        if (principal == null)
+            return Unauthorized(new { message = "Invalid access token." });
+
+        var username = principal.Identity?.Name ?? principal.FindFirstValue(ClaimTypes.Name);
+        if (string.IsNullOrEmpty(username))
+            return Unauthorized(new { message = "Invalid token claims." });
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == username);
+        if (user == null || !user.IsActive)
+            return Unauthorized(new { message = "User not found or inactive." });
+
+        var refreshTokenEntity = await _dbContext.RefreshTokens
+            .FirstOrDefaultAsync(t => t.Token == request.RefreshToken && t.UserId == user.Id);
+
+        if (refreshTokenEntity == null || !refreshTokenEntity.IsActive)
+            return Unauthorized(new { message = "Invalid or expired refresh token." });
+
+        // Revoke the old token
+        refreshTokenEntity.Revoked = DateTime.UtcNow;
+
+        // Generate new tokens
+        var newJwtToken = GenerateJwtToken(user);
+        var newRefreshToken = GenerateRefreshToken();
+
+        var newRefreshTokenEntity = new RefreshToken
+        {
+            Token = newRefreshToken,
+            Expires = DateTime.UtcNow.AddDays(double.Parse(_config["Jwt:RefreshTokenExpiryDays"] ?? "7")),
+            UserId = user.Id
+        };
+
+        _dbContext.RefreshTokens.Add(newRefreshTokenEntity);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new
+        {
+            Token = newJwtToken,
+            RefreshToken = newRefreshToken
         });
     }
 
@@ -92,27 +150,65 @@ public class AuthController : ControllerBase
 
     private string GenerateJwtToken(User user)
     {
-        var key = _config["Jwt:Key"] ?? "super_secret_key_which_should_be_long_enough_for_hmac_sha256";
+        var key = _config["Jwt:Key"];
+        if (string.IsNullOrEmpty(key)) throw new InvalidOperationException("JWT Secret Key is missing from configuration.");
+        
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
         {
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Sub, user.Username),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim("uid", user.Id.ToString()),
             new Claim(ClaimTypes.Role, user.Role),
-            new Claim(ClaimTypes.Name, user.FullName)
+            new Claim("FullName", user.FullName)
         };
 
+        var expiryMinutes = double.Parse(_config["Jwt:ExpiryMinutes"] ?? "30");
+
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"] ?? "ALIkhlasPOS",
-            audience: _config["Jwt:Audience"] ?? "ALIkhlasClient",
+            issuer: _config["Jwt:Issuer"],
+            audience: _config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
+            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static string GenerateRefreshToken()
+    {
+        var randomNumber = new byte[64];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomNumber);
+        return Convert.ToBase64String(randomNumber);
+    }
+
+    private ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
+    {
+        var key = _config["Jwt:Key"];
+        if (string.IsNullOrEmpty(key)) return null;
+
+        var tokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateAudience = false,
+            ValidateIssuer = false,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+            ValidateLifetime = false // Here we are saying that we don't care about the token's expiration date
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
+        var jwtSecurityToken = securityToken as JwtSecurityToken;
+
+        if (jwtSecurityToken == null || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            throw new SecurityTokenException("Invalid token");
+
+        return principal;
     }
 
     /// <summary>Hashes a plaintext password using BCrypt (work factor 12).</summary>
@@ -138,6 +234,12 @@ public class LoginRequest
 {
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+}
+
+public class RefreshTokenRequest
+{
+    public string Token { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
 }
 
 public class ChangePasswordRequest

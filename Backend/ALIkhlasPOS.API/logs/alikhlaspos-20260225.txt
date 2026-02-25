@@ -1,0 +1,1220 @@
+2026-02-25 03:13:52.830 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'Bundle'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:13:52.898 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'InvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:13:52.899 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ProductUnit'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:13:52.899 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'PurchaseInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:13:52.899 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ReturnInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:13:53.333 +02:00 [INF] Executed DbCommand (23ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 03:13:53.741 +02:00 [INF] Executed DbCommand (7ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" character varying(150) NOT NULL,
+    "ProductVersion" character varying(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+);
+2026-02-25 03:13:53.751 +02:00 [INF] Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+2026-02-25 03:13:53.754 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+LOCK TABLE "__EFMigrationsHistory" IN ACCESS EXCLUSIVE MODE
+2026-02-25 03:13:53.756 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 03:13:53.770 +02:00 [INF] Applying migration '20260225001339_AddRefreshTokens'.
+2026-02-25 03:13:53.837 +02:00 [INF] Executed DbCommand (27ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE "RefreshTokens" (
+    "Id" uuid NOT NULL,
+    "Token" text NOT NULL,
+    "Expires" timestamp with time zone NOT NULL,
+    "Created" timestamp with time zone NOT NULL,
+    "Revoked" timestamp with time zone,
+    "UserId" uuid NOT NULL,
+    CONSTRAINT "PK_RefreshTokens" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_RefreshTokens_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+2026-02-25 03:13:53.841 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE INDEX "IX_RefreshTokens_UserId" ON "RefreshTokens" ("UserId");
+2026-02-25 03:13:53.843 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260225001339_AddRefreshTokens', '9.0.0');
+2026-02-25 03:13:53.843 +02:00 [INF] Applying migration '20260225001423_AddProductIsActive'.
+2026-02-25 03:13:53.875 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+ALTER TABLE "Products" ADD "IsActive" boolean NOT NULL DEFAULT FALSE;
+2026-02-25 03:13:53.878 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260225001423_AddProductIsActive', '9.0.0');
+2026-02-25 03:13:54.162 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT EXISTS (
+    SELECT 1
+    FROM "Users" AS u)
+2026-02-25 03:13:54.284 +02:00 [INF] Executed DbCommand (16ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Category", p."CreatedAt", p."Description", p."ExpiryDate", p."GlobalBarcode", p."ImageUrl", p."InternalBarcode", p."IsActive", p."MinStockAlert", p."Name", p."Price", p."PurchasePrice", p."StockQuantity", p."UpdatedAt", p."WholesalePrice"
+FROM "Products" AS p
+WHERE p."IsActive" AND (p."StockQuantity" > 0.0 OR p."Price" > 0.0)
+2026-02-25 03:13:54.393 +02:00 [INF] User profile is available. Using '/home/el3laimy/.aspnet/DataProtection-Keys' as key repository; keys will not be encrypted at rest.
+2026-02-25 03:13:54.452 +02:00 [INF] Installment Reminder Service started.
+2026-02-25 03:13:54.452 +02:00 [INF] Database Backup Service is starting.
+2026-02-25 03:13:54.457 +02:00 [INF] Next database backup scheduled in 22.77 hours (at 2/26/2026 2:00:00 AM).
+2026-02-25 03:13:54.503 +02:00 [WRN] The WebRootPath was not found: /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/wwwroot. Static files may be unavailable.
+2026-02-25 03:13:54.519 +02:00 [INF] Now listening on: http://localhost:5290
+2026-02-25 03:13:54.520 +02:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-02-25 03:13:54.521 +02:00 [INF] Hosting environment: Development
+2026-02-25 03:13:54.521 +02:00 [INF] Content root path: /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API
+2026-02-25 03:13:54.530 +02:00 [INF] Executed DbCommand (17ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."Amount", i."CreatedAt", i."CustomerId", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status"
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:13:54.628 +02:00 [INF] Executed DbCommand (8ms) [Parameters=[@__upcoming_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."Amount", i."CreatedAt", i."CustomerId", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status", i0."Id", i0."CashierId", i0."CreatedAt", i0."CreatedBy", i0."CustomerId", i0."DiscountAmount", i0."InvoiceNo", i0."Notes", i0."PaidAmount", i0."PaymentType", i0."RemainingAmount", i0."Status", i0."SubTotal", i0."TotalAmount", i0."VatAmount", i0."VatRate", c0."Id", c0."Address", c0."CreatedAt", c0."IsActive", c0."Name", c0."Notes", c0."Phone", c0."TotalPaid", c0."TotalPurchases"
+FROM "Installments" AS i
+INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Address", c."CreatedAt", c."IsActive", c."Name", c."Notes", c."Phone", c."TotalPaid", c."TotalPurchases"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+WHERE i."Status" = 2 OR (i."Status" = 0 AND NOT (i."ReminderSent") AND i."DueDate" <= @__upcoming_0)
+2026-02-25 03:13:54.632 +02:00 [WRN] The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.
+2026-02-25 03:13:54.670 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."Address", s."CommercialRegNo", s."CurrencyCode", s."CurrencySymbol", s."DefaultVatRate", s."LogoBase64", s."Phone", s."Phone2", s."ReceiptFooter", s."ShopName", s."SmsApiKey", s."SmsSenderId", s."TaxNumber", s."UpdatedAt", s."VatEnabled"
+FROM "ShopSettings" AS s
+LIMIT 1
+2026-02-25 03:13:54.733 +02:00 [INF] Reminder cycle complete: 0 reminders sent, 0 auto-marked overdue. SMS=false
+2026-02-25 03:14:16.252 +02:00 [INF] Request starting HTTP/1.1 POST http://localhost:5290/api/auth/login - application/json 45
+2026-02-25 03:14:16.303 +02:00 [WRN] Failed to determine the https port for redirect.
+2026-02-25 03:14:16.338 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API)'
+2026-02-25 03:14:16.359 +02:00 [INF] Route matched with {action = "Login", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] Login(ALIkhlasPOS.API.Controllers.LoginRequest) on controller ALIkhlasPOS.API.Controllers.AuthController (ALIkhlasPOS.API).
+2026-02-25 03:14:16.490 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[@__request_Username_0='?'], CommandType='"Text"', CommandTimeout='30']
+SELECT u."Id", u."CreatedAt", u."FullName", u."IsActive", u."PasswordHash", u."Role", u."Username"
+FROM "Users" AS u
+WHERE u."Username" = @__request_Username_0
+LIMIT 1
+2026-02-25 03:14:17.357 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[@p1='?' (DbType = Guid), @p0='?'], CommandType='"Text"', CommandTimeout='30']
+UPDATE "Users" SET "PasswordHash" = @p0
+WHERE "Id" = @p1;
+2026-02-25 03:14:17.462 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTime), @p2='?' (DbType = DateTime), @p3='?' (DbType = DateTime), @p4='?', @p5='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "RefreshTokens" ("Id", "Created", "Expires", "Revoked", "Token", "UserId")
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5);
+2026-02-25 03:14:17.468 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType1`3[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType2`4[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:14:17.500 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API) in 1137.7724ms
+2026-02-25 03:14:17.505 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API)'
+2026-02-25 03:14:17.509 +02:00 [INF] HTTP POST /api/auth/login responded 200 in 1205.9058 ms
+2026-02-25 03:14:17.516 +02:00 [INF] Request finished HTTP/1.1 POST http://localhost:5290/api/auth/login - 200 null application/json; charset=utf-8 1266.348ms
+2026-02-25 03:14:17.555 +02:00 [INF] Request starting HTTP/1.1 POST http://localhost:5290/api/shifts/open - application/json 22
+2026-02-25 03:14:17.600 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API)'
+2026-02-25 03:14:17.610 +02:00 [INF] Route matched with {action = "OpenShift", controller = "Shifts"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] OpenShift(OpenShiftDto, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ShiftsController (ALIkhlasPOS.API).
+2026-02-25 03:14:17.630 +02:00 [INF] Executing ObjectResult, writing value of type '<>f__AnonymousType0`1[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:14:17.632 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API) in 21.3268ms
+2026-02-25 03:14:17.632 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API)'
+2026-02-25 03:14:17.632 +02:00 [ERR] HTTP POST /api/shifts/open responded 500 in 73.9355 ms
+2026-02-25 03:14:17.633 +02:00 [INF] Request finished HTTP/1.1 POST http://localhost:5290/api/shifts/open - 500 null application/json; charset=utf-8 78.2419ms
+2026-02-25 03:14:26.169 +02:00 [INF] Request starting HTTP/1.1 POST http://localhost:5290/api/auth/login - application/json 45
+2026-02-25 03:14:26.175 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API)'
+2026-02-25 03:14:26.175 +02:00 [INF] Route matched with {action = "Login", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] Login(ALIkhlasPOS.API.Controllers.LoginRequest) on controller ALIkhlasPOS.API.Controllers.AuthController (ALIkhlasPOS.API).
+2026-02-25 03:14:26.184 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__request_Username_0='?'], CommandType='"Text"', CommandTimeout='30']
+SELECT u."Id", u."CreatedAt", u."FullName", u."IsActive", u."PasswordHash", u."Role", u."Username"
+FROM "Users" AS u
+WHERE u."Username" = @__request_Username_0
+LIMIT 1
+2026-02-25 03:14:26.483 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTime), @p2='?' (DbType = DateTime), @p3='?' (DbType = DateTime), @p4='?', @p5='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "RefreshTokens" ("Id", "Created", "Expires", "Revoked", "Token", "UserId")
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5);
+2026-02-25 03:14:26.484 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType1`3[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType2`4[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:14:26.485 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API) in 308.9219ms
+2026-02-25 03:14:26.485 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API)'
+2026-02-25 03:14:26.486 +02:00 [INF] HTTP POST /api/auth/login responded 200 in 314.3689 ms
+2026-02-25 03:14:26.486 +02:00 [INF] Request finished HTTP/1.1 POST http://localhost:5290/api/auth/login - 200 null application/json; charset=utf-8 316.8939ms
+2026-02-25 03:14:26.518 +02:00 [INF] Request starting HTTP/1.1 POST http://localhost:5290/api/shifts/open - application/json 22
+2026-02-25 03:14:26.521 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API)'
+2026-02-25 03:14:26.522 +02:00 [INF] Route matched with {action = "OpenShift", controller = "Shifts"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] OpenShift(OpenShiftDto, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ShiftsController (ALIkhlasPOS.API).
+2026-02-25 03:14:26.523 +02:00 [INF] Executing ObjectResult, writing value of type '<>f__AnonymousType0`1[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:14:26.523 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API) in 1.4376ms
+2026-02-25 03:14:26.524 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API)'
+2026-02-25 03:14:26.524 +02:00 [ERR] HTTP POST /api/shifts/open responded 500 in 4.4848 ms
+2026-02-25 03:14:26.524 +02:00 [INF] Request finished HTTP/1.1 POST http://localhost:5290/api/shifts/open - 500 null application/json; charset=utf-8 6.0045ms
+2026-02-25 03:15:49.459 +02:00 [INF] Application is shutting down...
+2026-02-25 03:16:02.573 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'Bundle'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:16:02.647 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'InvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:16:02.648 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ProductUnit'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:16:02.648 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'PurchaseInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:16:02.648 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ReturnInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:16:03.028 +02:00 [INF] Executed DbCommand (19ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 03:16:03.413 +02:00 [INF] Executed DbCommand (6ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" character varying(150) NOT NULL,
+    "ProductVersion" character varying(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+);
+2026-02-25 03:16:03.421 +02:00 [INF] Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+2026-02-25 03:16:03.423 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+LOCK TABLE "__EFMigrationsHistory" IN ACCESS EXCLUSIVE MODE
+2026-02-25 03:16:03.424 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 03:16:03.434 +02:00 [INF] No migrations were applied. The database is already up to date.
+2026-02-25 03:16:04.124 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT EXISTS (
+    SELECT 1
+    FROM "Users" AS u)
+2026-02-25 03:16:04.241 +02:00 [INF] Executed DbCommand (18ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Category", p."CreatedAt", p."Description", p."ExpiryDate", p."GlobalBarcode", p."ImageUrl", p."InternalBarcode", p."IsActive", p."MinStockAlert", p."Name", p."Price", p."PurchasePrice", p."StockQuantity", p."UpdatedAt", p."WholesalePrice"
+FROM "Products" AS p
+WHERE p."IsActive" AND (p."StockQuantity" > 0.0 OR p."Price" > 0.0)
+2026-02-25 03:16:04.394 +02:00 [INF] User profile is available. Using '/home/el3laimy/.aspnet/DataProtection-Keys' as key repository; keys will not be encrypted at rest.
+2026-02-25 03:16:04.442 +02:00 [INF] Installment Reminder Service started.
+2026-02-25 03:16:04.443 +02:00 [INF] Database Backup Service is starting.
+2026-02-25 03:16:04.450 +02:00 [INF] Next database backup scheduled in 22.73 hours (at 2/26/2026 2:00:00 AM).
+2026-02-25 03:16:04.503 +02:00 [WRN] The WebRootPath was not found: /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/wwwroot. Static files may be unavailable.
+2026-02-25 03:16:04.524 +02:00 [INF] Executed DbCommand (19ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."Amount", i."CreatedAt", i."CustomerId", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status"
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:16:04.525 +02:00 [INF] Now listening on: http://localhost:5290
+2026-02-25 03:16:04.525 +02:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-02-25 03:16:04.527 +02:00 [INF] Hosting environment: Development
+2026-02-25 03:16:04.527 +02:00 [INF] Content root path: /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API
+2026-02-25 03:16:04.645 +02:00 [INF] Executed DbCommand (10ms) [Parameters=[@__upcoming_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."Amount", i."CreatedAt", i."CustomerId", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status", i0."Id", i0."CashierId", i0."CreatedAt", i0."CreatedBy", i0."CustomerId", i0."DiscountAmount", i0."InvoiceNo", i0."Notes", i0."PaidAmount", i0."PaymentType", i0."RemainingAmount", i0."Status", i0."SubTotal", i0."TotalAmount", i0."VatAmount", i0."VatRate", c0."Id", c0."Address", c0."CreatedAt", c0."IsActive", c0."Name", c0."Notes", c0."Phone", c0."TotalPaid", c0."TotalPurchases"
+FROM "Installments" AS i
+INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Address", c."CreatedAt", c."IsActive", c."Name", c."Notes", c."Phone", c."TotalPaid", c."TotalPurchases"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+WHERE i."Status" = 2 OR (i."Status" = 0 AND NOT (i."ReminderSent") AND i."DueDate" <= @__upcoming_0)
+2026-02-25 03:16:04.649 +02:00 [WRN] The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.
+2026-02-25 03:16:04.680 +02:00 [INF] Executed DbCommand (22ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."Address", s."CommercialRegNo", s."CurrencyCode", s."CurrencySymbol", s."DefaultVatRate", s."LogoBase64", s."Phone", s."Phone2", s."ReceiptFooter", s."ShopName", s."SmsApiKey", s."SmsSenderId", s."TaxNumber", s."UpdatedAt", s."VatEnabled"
+FROM "ShopSettings" AS s
+LIMIT 1
+2026-02-25 03:16:04.759 +02:00 [INF] Reminder cycle complete: 0 reminders sent, 0 auto-marked overdue. SMS=false
+2026-02-25 03:16:18.562 +02:00 [INF] Application is shutting down...
+2026-02-25 03:24:39.138 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'Bundle'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:24:39.218 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'InvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:24:39.219 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ProductUnit'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:24:39.219 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'PurchaseInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:24:39.219 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ReturnInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 03:24:39.587 +02:00 [INF] Executed DbCommand (17ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 03:24:39.932 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" character varying(150) NOT NULL,
+    "ProductVersion" character varying(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+);
+2026-02-25 03:24:39.944 +02:00 [INF] Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+2026-02-25 03:24:39.946 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+LOCK TABLE "__EFMigrationsHistory" IN ACCESS EXCLUSIVE MODE
+2026-02-25 03:24:39.947 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 03:24:39.957 +02:00 [INF] No migrations were applied. The database is already up to date.
+2026-02-25 03:24:40.197 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT EXISTS (
+    SELECT 1
+    FROM "Users" AS u)
+2026-02-25 03:24:40.304 +02:00 [INF] Executed DbCommand (12ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Category", p."CreatedAt", p."Description", p."ExpiryDate", p."GlobalBarcode", p."ImageUrl", p."InternalBarcode", p."IsActive", p."MinStockAlert", p."Name", p."Price", p."PurchasePrice", p."StockQuantity", p."UpdatedAt", p."WholesalePrice"
+FROM "Products" AS p
+WHERE p."IsActive" AND (p."StockQuantity" > 0.0 OR p."Price" > 0.0)
+2026-02-25 03:24:40.438 +02:00 [INF] User profile is available. Using '/home/el3laimy/.aspnet/DataProtection-Keys' as key repository; keys will not be encrypted at rest.
+2026-02-25 03:24:40.484 +02:00 [INF] Installment Reminder Service started.
+2026-02-25 03:24:40.485 +02:00 [INF] Database Backup Service is starting.
+2026-02-25 03:24:40.494 +02:00 [INF] Next database backup scheduled in 22.59 hours (at 2/26/2026 2:00:00 AM).
+2026-02-25 03:24:40.559 +02:00 [WRN] The WebRootPath was not found: /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/wwwroot. Static files may be unavailable.
+2026-02-25 03:24:40.568 +02:00 [INF] Executed DbCommand (16ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."Amount", i."CreatedAt", i."CustomerId", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status"
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:24:40.581 +02:00 [INF] Now listening on: http://localhost:5290
+2026-02-25 03:24:40.582 +02:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-02-25 03:24:40.582 +02:00 [INF] Hosting environment: Development
+2026-02-25 03:24:40.582 +02:00 [INF] Content root path: /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API
+2026-02-25 03:24:40.723 +02:00 [INF] Executed DbCommand (8ms) [Parameters=[@__upcoming_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."Amount", i."CreatedAt", i."CustomerId", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status", i0."Id", i0."CashierId", i0."CreatedAt", i0."CreatedBy", i0."CustomerId", i0."DiscountAmount", i0."InvoiceNo", i0."Notes", i0."PaidAmount", i0."PaymentType", i0."RemainingAmount", i0."Status", i0."SubTotal", i0."TotalAmount", i0."VatAmount", i0."VatRate", c0."Id", c0."Address", c0."CreatedAt", c0."IsActive", c0."Name", c0."Notes", c0."Phone", c0."TotalPaid", c0."TotalPurchases"
+FROM "Installments" AS i
+INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Address", c."CreatedAt", c."IsActive", c."Name", c."Notes", c."Phone", c."TotalPaid", c."TotalPurchases"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+WHERE i."Status" = 2 OR (i."Status" = 0 AND NOT (i."ReminderSent") AND i."DueDate" <= @__upcoming_0)
+2026-02-25 03:24:40.727 +02:00 [WRN] The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.
+2026-02-25 03:24:40.738 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."Address", s."CommercialRegNo", s."CurrencyCode", s."CurrencySymbol", s."DefaultVatRate", s."LogoBase64", s."Phone", s."Phone2", s."ReceiptFooter", s."ShopName", s."SmsApiKey", s."SmsSenderId", s."TaxNumber", s."UpdatedAt", s."VatEnabled"
+FROM "ShopSettings" AS s
+LIMIT 1
+2026-02-25 03:24:40.813 +02:00 [INF] Reminder cycle complete: 0 reminders sent, 0 auto-marked overdue. SMS=false
+2026-02-25 03:25:25.924 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/notifications - application/json null
+2026-02-25 03:25:25.924 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/dashboard/summary - application/json null
+2026-02-25 03:25:25.978 +02:00 [WRN] Failed to determine the https port for redirect.
+2026-02-25 03:25:26.118 +02:00 [INF] Failed to validate the token.
+Microsoft.IdentityModel.Tokens.SecurityTokenSignatureKeyNotFoundException: IDX10517: Signature validation failed. The token's kid is missing. Keys tried: 'Microsoft.IdentityModel.Tokens.SymmetricSecurityKey, KeyId: '', InternalId: 'hhf6NGDvHlfy_4XUsTMRxQIZDjxzRmewZgqKDzySUk0'. , KeyId: \n'.
+Number of keys in TokenValidationParameters: '1'. 
+Number of keys in Configuration: '0'.
+Exceptions caught:
+ '[PII of type 'System.String' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'.
+token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'. See https://aka.ms/IDX10503 for details.
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ValidateSignature(JsonWebToken jwtToken, TokenValidationParameters validationParameters, BaseConfiguration configuration)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ValidateSignatureAndIssuerSecurityKey(JsonWebToken jsonWebToken, TokenValidationParameters validationParameters, BaseConfiguration configuration)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ValidateJWSAsync(JsonWebToken jsonWebToken, TokenValidationParameters validationParameters, BaseConfiguration configuration)
+2026-02-25 03:25:26.118 +02:00 [INF] Failed to validate the token.
+Microsoft.IdentityModel.Tokens.SecurityTokenSignatureKeyNotFoundException: IDX10517: Signature validation failed. The token's kid is missing. Keys tried: 'Microsoft.IdentityModel.Tokens.SymmetricSecurityKey, KeyId: '', InternalId: 'hhf6NGDvHlfy_4XUsTMRxQIZDjxzRmewZgqKDzySUk0'. , KeyId: \n'.
+Number of keys in TokenValidationParameters: '1'. 
+Number of keys in Configuration: '0'.
+Exceptions caught:
+ '[PII of type 'System.String' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'.
+token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'. See https://aka.ms/IDX10503 for details.
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ValidateSignature(JsonWebToken jwtToken, TokenValidationParameters validationParameters, BaseConfiguration configuration)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ValidateSignatureAndIssuerSecurityKey(JsonWebToken jsonWebToken, TokenValidationParameters validationParameters, BaseConfiguration configuration)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ValidateJWSAsync(JsonWebToken jsonWebToken, TokenValidationParameters validationParameters, BaseConfiguration configuration)
+2026-02-25 03:25:26.134 +02:00 [INF] Bearer was not authenticated. Failure message: IDX10517: Signature validation failed. The token's kid is missing. Keys tried: 'Microsoft.IdentityModel.Tokens.SymmetricSecurityKey, KeyId: '', InternalId: 'hhf6NGDvHlfy_4XUsTMRxQIZDjxzRmewZgqKDzySUk0'. , KeyId: \n'.
+Number of keys in TokenValidationParameters: '1'. 
+Number of keys in Configuration: '0'.
+Exceptions caught:
+ '[PII of type 'System.String' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'.
+token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'. See https://aka.ms/IDX10503 for details.
+2026-02-25 03:25:26.134 +02:00 [INF] Bearer was not authenticated. Failure message: IDX10517: Signature validation failed. The token's kid is missing. Keys tried: 'Microsoft.IdentityModel.Tokens.SymmetricSecurityKey, KeyId: '', InternalId: 'hhf6NGDvHlfy_4XUsTMRxQIZDjxzRmewZgqKDzySUk0'. , KeyId: \n'.
+Number of keys in TokenValidationParameters: '1'. 
+Number of keys in Configuration: '0'.
+Exceptions caught:
+ '[PII of type 'System.String' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'.
+token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'. See https://aka.ms/IDX10503 for details.
+2026-02-25 03:25:26.147 +02:00 [INF] Authorization failed. These requirements were not met:
+DenyAnonymousAuthorizationRequirement: Requires an authenticated user.
+2026-02-25 03:25:26.147 +02:00 [INF] Authorization failed. These requirements were not met:
+DenyAnonymousAuthorizationRequirement: Requires an authenticated user.
+2026-02-25 03:25:26.156 +02:00 [INF] AuthenticationScheme: Bearer was challenged.
+2026-02-25 03:25:26.156 +02:00 [INF] AuthenticationScheme: Bearer was challenged.
+2026-02-25 03:25:26.159 +02:00 [INF] HTTP GET /api/notifications responded 401 in 180.8385 ms
+2026-02-25 03:25:26.159 +02:00 [INF] HTTP GET /api/dashboard/summary responded 401 in 180.8578 ms
+2026-02-25 03:25:26.172 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/dashboard/summary - 401 0 null 250.7255ms
+2026-02-25 03:25:26.172 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/notifications - 401 0 null 250.729ms
+2026-02-25 03:25:33.644 +02:00 [INF] Request starting HTTP/1.1 POST http://localhost:5290/api/auth/login - application/json 42
+2026-02-25 03:25:33.652 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API)'
+2026-02-25 03:25:33.688 +02:00 [INF] Route matched with {action = "Login", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] Login(ALIkhlasPOS.API.Controllers.LoginRequest) on controller ALIkhlasPOS.API.Controllers.AuthController (ALIkhlasPOS.API).
+2026-02-25 03:25:33.898 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[@__request_Username_0='?'], CommandType='"Text"', CommandTimeout='30']
+SELECT u."Id", u."CreatedAt", u."FullName", u."IsActive", u."PasswordHash", u."Role", u."Username"
+FROM "Users" AS u
+WHERE u."Username" = @__request_Username_0
+LIMIT 1
+2026-02-25 03:25:35.094 +02:00 [INF] Executed DbCommand (8ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTime), @p2='?' (DbType = DateTime), @p3='?' (DbType = DateTime), @p4='?', @p5='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "RefreshTokens" ("Id", "Created", "Expires", "Revoked", "Token", "UserId")
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5);
+2026-02-25 03:25:35.120 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType1`3[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType2`4[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:25:35.162 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API) in 1467.3298ms
+2026-02-25 03:25:35.163 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.AuthController.Login (ALIkhlasPOS.API)'
+2026-02-25 03:25:35.165 +02:00 [INF] HTTP POST /api/auth/login responded 200 in 1515.8079 ms
+2026-02-25 03:25:35.173 +02:00 [INF] Request finished HTTP/1.1 POST http://localhost:5290/api/auth/login - 200 null application/json; charset=utf-8 1529.0228ms
+2026-02-25 03:25:39.227 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/products?pageSize=24 - application/json null
+2026-02-25 03:25:39.229 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/products/categories - application/json null
+2026-02-25 03:25:39.230 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/shifts/current - application/json null
+2026-02-25 03:25:39.256 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetCategories (ALIkhlasPOS.API)'
+2026-02-25 03:25:39.256 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.GetCurrentShift (ALIkhlasPOS.API)'
+2026-02-25 03:25:39.258 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetAllProducts (ALIkhlasPOS.API)'
+2026-02-25 03:25:39.270 +02:00 [INF] Route matched with {action = "GetCurrentShift", controller = "Shifts"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetCurrentShift(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ShiftsController (ALIkhlasPOS.API).
+2026-02-25 03:25:39.270 +02:00 [INF] Route matched with {action = "GetCategories", controller = "Products"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetCategories(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ProductsController (ALIkhlasPOS.API).
+2026-02-25 03:25:39.270 +02:00 [INF] Route matched with {action = "GetAllProducts", controller = "Products"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAllProducts(System.String, System.String, System.Nullable`1[System.Boolean], Int32, Int32, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ProductsController (ALIkhlasPOS.API).
+2026-02-25 03:25:39.303 +02:00 [INF] Executed DbCommand (8ms) [Parameters=[@__userId_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."ActualCash", s."CashierId", s."Difference", s."EndTime", s."ExpectedCash", s."Notes", s."OpeningCash", s."StartTime", s."Status", s."TotalCashIn", s."TotalCashOut", s."TotalSales"
+FROM "Shifts" AS s
+WHERE s."CashierId" = @__userId_0 AND s."Status" = 0
+LIMIT 1
+2026-02-25 03:25:39.306 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType58`1[[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:25:39.314 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p0."Category"
+FROM (
+    SELECT DISTINCT p."Category"
+    FROM "Products" AS p
+    WHERE p."IsActive" AND p."Category" IS NOT NULL
+) AS p0
+ORDER BY p0."Category"
+2026-02-25 03:25:39.316 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:25:39.326 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ShiftsController.GetCurrentShift (ALIkhlasPOS.API) in 55.0993ms
+2026-02-25 03:25:39.326 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.GetCurrentShift (ALIkhlasPOS.API)'
+2026-02-25 03:25:39.326 +02:00 [INF] HTTP GET /api/shifts/current responded 200 in 95.4603 ms
+2026-02-25 03:25:39.327 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/shifts/current - 200 null application/json; charset=utf-8 96.8319ms
+2026-02-25 03:25:39.329 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ProductsController.GetCategories (ALIkhlasPOS.API) in 58.2664ms
+2026-02-25 03:25:39.330 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetCategories (ALIkhlasPOS.API)'
+2026-02-25 03:25:39.331 +02:00 [INF] HTTP GET /api/products/categories responded 200 in 101.1354 ms
+2026-02-25 03:25:39.332 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/products/categories - 200 null application/json; charset=utf-8 102.7086ms
+2026-02-25 03:25:39.343 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive"
+2026-02-25 03:25:39.367 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[@__p_1='?' (DbType = Int32), @__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Category", p."CreatedAt", p."Description", p."ExpiryDate", p."GlobalBarcode", p."ImageUrl", p."InternalBarcode", p."IsActive", p."MinStockAlert", p."Name", p."Price", p."PurchasePrice", p."StockQuantity", p."UpdatedAt", p."WholesalePrice"
+FROM "Products" AS p
+WHERE p."IsActive"
+ORDER BY p."Category", p."Name"
+LIMIT @__p_1 OFFSET @__p_0
+2026-02-25 03:25:39.368 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType29`4[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[ALIkhlasPOS.Domain.Entities.Product, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:25:39.393 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ProductsController.GetAllProducts (ALIkhlasPOS.API) in 121.2362ms
+2026-02-25 03:25:39.393 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetAllProducts (ALIkhlasPOS.API)'
+2026-02-25 03:25:39.394 +02:00 [INF] HTTP GET /api/products responded 200 in 165.6196 ms
+2026-02-25 03:25:39.394 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/products?pageSize=24 - 200 null application/json; charset=utf-8 166.6861ms
+2026-02-25 03:25:43.445 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/dashboard/summary - application/json null
+2026-02-25 03:25:43.446 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.DashboardController.GetSummary (ALIkhlasPOS.API)'
+2026-02-25 03:25:43.452 +02:00 [INF] Route matched with {action = "GetSummary", controller = "Dashboard"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetSummary(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.DashboardController (ALIkhlasPOS.API).
+2026-02-25 03:25:43.496 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."TotalAmount"), 0.0)
+FROM "Invoices" AS i
+WHERE i."CreatedAt" >= @__today_0 AND i."Status" = 0
+2026-02-25 03:25:43.512 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Invoices" AS i
+WHERE i."CreatedAt" >= @__today_0 AND i."Status" = 0
+2026-02-25 03:25:43.518 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__startOfMonth_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."TotalAmount"), 0.0)
+FROM "Invoices" AS i
+WHERE i."CreatedAt" >= @__startOfMonth_0 AND i."Status" = 0
+2026-02-25 03:25:43.523 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive"
+2026-02-25 03:25:43.532 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive" AND p."StockQuantity" <= p."MinStockAlert"
+2026-02-25 03:25:43.537 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Customers" AS c
+WHERE c."IsActive"
+2026-02-25 03:25:43.595 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i0."Id", i0."InvoiceNo", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Name"
+    ELSE 'عميل نقدي'
+END AS "CustomerName", i0."TotalAmount", i0."CreatedAt", CASE i0."PaymentType"
+    WHEN 0 THEN 'Cash'
+    WHEN 1 THEN 'Card'
+    WHEN 2 THEN 'Installment'
+    ELSE i0."PaymentType"::text
+END AS "PaymentType"
+FROM (
+    SELECT i."Id", i."CreatedAt", i."CustomerId", i."InvoiceNo", i."PaymentType", i."TotalAmount"
+    FROM "Invoices" AS i
+    WHERE i."Status" = 0
+    ORDER BY i."CreatedAt" DESC
+    LIMIT @__p_0
+) AS i0
+LEFT JOIN (
+    SELECT c."Id", c."Name"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+ORDER BY i0."CreatedAt" DESC
+2026-02-25 03:25:43.639 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[@__weekAgo_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i0."Key" AS "Date", COALESCE(sum(i0."TotalAmount"), 0.0) AS "Total"
+FROM (
+    SELECT i."TotalAmount", date_trunc('day', i."CreatedAt", 'UTC') AS "Key"
+    FROM "Invoices" AS i
+    WHERE i."CreatedAt" >= @__weekAgo_0 AND i."Status" = 0
+) AS i0
+GROUP BY i0."Key"
+2026-02-25 03:25:43.668 +02:00 [INF] Executed DbCommand (6ms) [Parameters=[@__weekAgo_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Key" AS "Date", (
+    SELECT COALESCE(sum(round(s0."Quantity"::numeric(18,2) * p0."PurchasePrice", 2)), 0.0)
+    FROM (
+        SELECT i1."ProductId", i1."Quantity", date_trunc('day', i2."CreatedAt", 'UTC') AS "Key"
+        FROM "InvoiceItems" AS i1
+        INNER JOIN "Invoices" AS i2 ON i1."InvoiceId" = i2."Id"
+        WHERE i2."CreatedAt" >= @__weekAgo_0 AND i2."Status" = 0
+    ) AS s0
+    INNER JOIN (
+        SELECT p."Id", p."PurchasePrice"
+        FROM "Products" AS p
+        WHERE p."IsActive"
+    ) AS p0 ON s0."ProductId" = p0."Id"
+    WHERE s."Key" = s0."Key" OR (s."Key" IS NULL AND s0."Key" IS NULL)) AS "TotalCogs"
+FROM (
+    SELECT date_trunc('day', i0."CreatedAt", 'UTC') AS "Key"
+    FROM "InvoiceItems" AS i
+    INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+    WHERE i0."CreatedAt" >= @__weekAgo_0 AND i0."Status" = 0
+) AS s
+GROUP BY s."Key"
+2026-02-25 03:25:43.674 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__prevMonthStart_0='?' (DbType = DateTime), @__prevMonthEnd_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."TotalAmount"), 0.0)
+FROM "Invoices" AS i
+WHERE i."CreatedAt" >= @__prevMonthStart_0 AND i."CreatedAt" <= @__prevMonthEnd_1 AND i."Status" = 0
+2026-02-25 03:25:43.684 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__startOfMonth_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(round(i."Quantity"::numeric(18,2) * p0."PurchasePrice", 2)), 0.0)
+FROM "InvoiceItems" AS i
+INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+INNER JOIN (
+    SELECT p."Id", p."PurchasePrice"
+    FROM "Products" AS p
+    WHERE p."IsActive"
+) AS p0 ON i."ProductId" = p0."Id"
+WHERE i0."CreatedAt" >= @__startOfMonth_0 AND i0."Status" = 0
+2026-02-25 03:25:43.695 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[@__startOfMonth_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(e."Amount"), 0.0)
+FROM "Expenses" AS e
+WHERE e."Date" >= @__startOfMonth_0
+2026-02-25 03:25:43.728 +02:00 [INF] Executed DbCommand (17ms) [Parameters=[@__startOfMonth_0='?' (DbType = DateTime), @__p_1='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."ProductId", p0."Name" AS "ProductName", (
+    SELECT COALESCE(sum(round((i1."UnitPrice" - p4."PurchasePrice") * i1."Quantity"::numeric(18,2), 2)), 0.0)
+    FROM "InvoiceItems" AS i1
+    INNER JOIN "Invoices" AS i2 ON i1."InvoiceId" = i2."Id"
+    INNER JOIN (
+        SELECT p2."Id", p2."Name"
+        FROM "Products" AS p2
+        WHERE p2."IsActive"
+    ) AS p1 ON i1."ProductId" = p1."Id"
+    INNER JOIN (
+        SELECT p3."Id", p3."PurchasePrice"
+        FROM "Products" AS p3
+        WHERE p3."IsActive"
+    ) AS p4 ON i1."ProductId" = p4."Id"
+    WHERE i2."CreatedAt" >= @__startOfMonth_0 AND i2."Status" = 0 AND i."ProductId" = i1."ProductId" AND p0."Name" = p1."Name") AS "TotalProfit", COALESCE(sum(i."Quantity"), 0)::int AS "QuantitySold"
+FROM "InvoiceItems" AS i
+INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+INNER JOIN (
+    SELECT p."Id", p."Name"
+    FROM "Products" AS p
+    WHERE p."IsActive"
+) AS p0 ON i."ProductId" = p0."Id"
+WHERE i0."CreatedAt" >= @__startOfMonth_0 AND i0."Status" = 0
+GROUP BY i."ProductId", p0."Name"
+ORDER BY (
+    SELECT COALESCE(sum(round((i1."UnitPrice" - p4."PurchasePrice") * i1."Quantity"::numeric(18,2), 2)), 0.0)
+    FROM "InvoiceItems" AS i1
+    INNER JOIN "Invoices" AS i2 ON i1."InvoiceId" = i2."Id"
+    INNER JOIN (
+        SELECT p2."Id", p2."Name"
+        FROM "Products" AS p2
+        WHERE p2."IsActive"
+    ) AS p1 ON i1."ProductId" = p1."Id"
+    INNER JOIN (
+        SELECT p3."Id", p3."PurchasePrice"
+        FROM "Products" AS p3
+        WHERE p3."IsActive"
+    ) AS p4 ON i1."ProductId" = p4."Id"
+    WHERE i2."CreatedAt" >= @__startOfMonth_0 AND i2."Status" = 0 AND i."ProductId" = i1."ProductId" AND p0."Name" = p1."Name") DESC
+LIMIT @__p_1
+2026-02-25 03:25:43.736 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:25:43.743 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:25:43.753 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__AddDays_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" >= @__today_0 AND i."DueDate" <= @__AddDays_1
+2026-02-25 03:25:43.755 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType17`19[[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Double, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Double, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Double, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Double, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Double, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType11`6[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType16`4[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[System.Object, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:25:43.781 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.DashboardController.GetSummary (ALIkhlasPOS.API) in 328.8327ms
+2026-02-25 03:25:43.782 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.DashboardController.GetSummary (ALIkhlasPOS.API)'
+2026-02-25 03:25:43.782 +02:00 [INF] HTTP GET /api/dashboard/summary responded 200 in 337.0577 ms
+2026-02-25 03:25:43.783 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/dashboard/summary - 200 null application/json; charset=utf-8 338.3111ms
+2026-02-25 03:25:52.787 +02:00 [INF] Request starting HTTP/1.1 POST http://localhost:5290/api/shifts/open - application/json 23
+2026-02-25 03:25:52.792 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API)'
+2026-02-25 03:25:52.798 +02:00 [INF] Route matched with {action = "OpenShift", controller = "Shifts"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] OpenShift(OpenShiftDto, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ShiftsController (ALIkhlasPOS.API).
+2026-02-25 03:25:52.825 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__userId_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT EXISTS (
+    SELECT 1
+    FROM "Shifts" AS s
+    WHERE s."CashierId" = @__userId_0 AND s."Status" = 0)
+2026-02-25 03:25:52.902 +02:00 [INF] Executed DbCommand (7ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = Decimal), @p2='?' (DbType = Guid), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTime), @p5='?' (DbType = Decimal), @p6='?', @p7='?' (DbType = Decimal), @p8='?' (DbType = DateTime), @p9='?' (DbType = Int32), @p10='?' (DbType = Decimal), @p11='?' (DbType = Decimal), @p12='?' (DbType = Decimal)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "Shifts" ("Id", "ActualCash", "CashierId", "Difference", "EndTime", "ExpectedCash", "Notes", "OpeningCash", "StartTime", "Status", "TotalCashIn", "TotalCashOut", "TotalSales")
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12);
+2026-02-25 03:25:52.906 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType60`2[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[ALIkhlasPOS.Domain.Entities.Shift, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:25:52.931 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API) in 132.5514ms
+2026-02-25 03:25:52.932 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ShiftsController.OpenShift (ALIkhlasPOS.API)'
+2026-02-25 03:25:52.932 +02:00 [INF] HTTP POST /api/shifts/open responded 200 in 140.3965 ms
+2026-02-25 03:25:52.932 +02:00 [INF] Request finished HTTP/1.1 POST http://localhost:5290/api/shifts/open - 200 null application/json; charset=utf-8 145.406ms
+2026-02-25 03:26:02.708 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/customers - application/json null
+2026-02-25 03:26:02.709 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.CustomersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:02.713 +02:00 [INF] Route matched with {action = "GetAll", controller = "Customers"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.String, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.CustomersController (ALIkhlasPOS.API).
+2026-02-25 03:26:02.726 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT c."Id", c."Address", c."CreatedAt", c."IsActive", c."Name", c."Notes", c."Phone", c."TotalPaid", c."TotalPurchases"
+FROM "Customers" AS c
+WHERE c."IsActive"
+ORDER BY c."Name"
+2026-02-25 03:26:02.727 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[ALIkhlasPOS.Domain.Entities.Customer, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:02.750 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.CustomersController.GetAll (ALIkhlasPOS.API) in 36.3934ms
+2026-02-25 03:26:02.750 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.CustomersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:02.750 +02:00 [INF] HTTP GET /api/customers responded 200 in 42.0268 ms
+2026-02-25 03:26:02.752 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/customers - 200 null application/json; charset=utf-8 43.61ms
+2026-02-25 03:26:04.323 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/erp/suppliers - application/json null
+2026-02-25 03:26:04.324 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ERP.SuppliersController.GetSuppliers (ALIkhlasPOS.API)'
+2026-02-25 03:26:04.326 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/erp/purchases - application/json null
+2026-02-25 03:26:04.327 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ERP.PurchasesController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:04.328 +02:00 [INF] Route matched with {action = "GetSuppliers", controller = "Suppliers"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.ActionResult`1[System.Collections.Generic.IEnumerable`1[System.Object]]] GetSuppliers(System.String, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ERP.SuppliersController (ALIkhlasPOS.API).
+2026-02-25 03:26:04.331 +02:00 [INF] Route matched with {action = "GetAll", controller = "Purchases"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.Nullable`1[System.Guid], System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ERP.PurchasesController (ALIkhlasPOS.API).
+2026-02-25 03:26:04.347 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."AccountId", s."Address", s."CompanyName", s."CreatedAt", s."Name", s."OpeningBalance", s."Phone", s."Type"
+FROM "Suppliers" AS s
+ORDER BY s."Name"
+2026-02-25 03:26:04.394 +02:00 [INF] Executed DbCommand (13ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."InvoiceNo", p."Date", s."Name" AS "SupplierName", p."TotalAmount", p."NetAmount", p."PaidAmount", p."RemainingAmount"
+FROM "PurchaseInvoices" AS p
+INNER JOIN "Suppliers" AS s ON p."SupplierId" = s."Id"
+ORDER BY p."Date" DESC
+2026-02-25 03:26:04.395 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[<>f__AnonymousType21`8[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:04.396 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ERP.PurchasesController.GetAll (ALIkhlasPOS.API) in 64.7969ms
+2026-02-25 03:26:04.397 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ERP.PurchasesController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:04.397 +02:00 [INF] HTTP GET /api/erp/purchases responded 200 in 70.0638 ms
+2026-02-25 03:26:04.399 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/erp/purchases - 200 null application/json; charset=utf-8 72.5976ms
+2026-02-25 03:26:04.407 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.416 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.418 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.420 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.422 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.424 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.426 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.428 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.429 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.434 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.436 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__s_Id_0='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(p."NetAmount"), 0.0)
+FROM "PurchaseInvoices" AS p
+WHERE p."SupplierId" = @__s_Id_0
+2026-02-25 03:26:04.437 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[System.Object, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:04.442 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ERP.SuppliersController.GetSuppliers (ALIkhlasPOS.API) in 113.8609ms
+2026-02-25 03:26:04.442 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ERP.SuppliersController.GetSuppliers (ALIkhlasPOS.API)'
+2026-02-25 03:26:04.442 +02:00 [INF] HTTP GET /api/erp/suppliers responded 200 in 118.8454 ms
+2026-02-25 03:26:04.443 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/erp/suppliers - 200 null application/json; charset=utf-8 119.6047ms
+2026-02-25 03:26:06.437 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/erp/finance/summary - application/json null
+2026-02-25 03:26:06.438 +02:00 [INF] HTTP GET /api/erp/finance/summary responded 404 in 0.7474 ms
+2026-02-25 03:26:06.439 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/erp/finance/summary - 404 0 null 2.1178ms
+2026-02-25 03:26:06.440 +02:00 [INF] Request reached the end of the middleware pipeline without being handled by application code. Request path: GET http://localhost:5290/api/erp/finance/summary, Response status code: 404
+2026-02-25 03:26:07.553 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/customers - application/json null
+2026-02-25 03:26:07.553 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.CustomersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:07.554 +02:00 [INF] Route matched with {action = "GetAll", controller = "Customers"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.String, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.CustomersController (ALIkhlasPOS.API).
+2026-02-25 03:26:07.562 +02:00 [INF] Executed DbCommand (6ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT c."Id", c."Address", c."CreatedAt", c."IsActive", c."Name", c."Notes", c."Phone", c."TotalPaid", c."TotalPurchases"
+FROM "Customers" AS c
+WHERE c."IsActive"
+ORDER BY c."Name"
+2026-02-25 03:26:07.563 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[ALIkhlasPOS.Domain.Entities.Customer, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:07.564 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.CustomersController.GetAll (ALIkhlasPOS.API) in 10.0531ms
+2026-02-25 03:26:07.565 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.CustomersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:07.565 +02:00 [INF] HTTP GET /api/customers responded 200 in 11.9923 ms
+2026-02-25 03:26:07.566 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/customers - 200 null application/json; charset=utf-8 13.1383ms
+2026-02-25 03:26:10.898 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/reports/sales?startDate=2026-01-26&endDate=2026-02-26 - application/json null
+2026-02-25 03:26:10.899 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/reports/inventory-value - application/json null
+2026-02-25 03:26:10.899 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/reports/top-products?limit=10 - application/json null
+2026-02-25 03:26:10.900 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ReportsController.GetSalesReport (ALIkhlasPOS.API)'
+2026-02-25 03:26:10.902 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ReportsController.GetInventoryValue (ALIkhlasPOS.API)'
+2026-02-25 03:26:10.902 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ReportsController.GetTopProducts (ALIkhlasPOS.API)'
+2026-02-25 03:26:10.905 +02:00 [INF] Route matched with {action = "GetSalesReport", controller = "Reports"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetSalesReport(System.Nullable`1[System.DateTime], System.Nullable`1[System.DateTime], System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ReportsController (ALIkhlasPOS.API).
+2026-02-25 03:26:10.905 +02:00 [INF] Route matched with {action = "GetTopProducts", controller = "Reports"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetTopProducts(Int32, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ReportsController (ALIkhlasPOS.API).
+2026-02-25 03:26:10.907 +02:00 [INF] Route matched with {action = "GetInventoryValue", controller = "Reports"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetInventoryValue(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ReportsController (ALIkhlasPOS.API).
+2026-02-25 03:26:10.919 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Category", p."StockQuantity" * p."PurchasePrice" AS "Value", p."StockQuantity" * p."Price" AS "RetailValue"
+FROM "Products" AS p
+WHERE p."IsActive" AND p."StockQuantity" > 0.0
+2026-02-25 03:26:10.925 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType54`4[[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType53`2[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:10.938 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ReportsController.GetInventoryValue (ALIkhlasPOS.API) in 30.1954ms
+2026-02-25 03:26:10.938 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ReportsController.GetInventoryValue (ALIkhlasPOS.API)'
+2026-02-25 03:26:10.938 +02:00 [INF] HTTP GET /api/reports/inventory-value responded 200 in 36.8989 ms
+2026-02-25 03:26:10.938 +02:00 [INF] Executed DbCommand (11ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."ProductId", p0."Name" AS "ProductName", COALESCE(sum(i."Quantity"), 0)::int AS "QuantitySold", COALESCE(sum(i."Quantity"::numeric(18,2) * i."UnitPrice"), 0.0) AS "TotalRevenue"
+FROM "InvoiceItems" AS i
+INNER JOIN "Invoices" AS i0 ON i."InvoiceId" = i0."Id"
+INNER JOIN (
+    SELECT p."Id", p."Name"
+    FROM "Products" AS p
+    WHERE p."IsActive"
+) AS p0 ON i."ProductId" = p0."Id"
+WHERE i0."Status" = 0
+GROUP BY i."ProductId", p0."Name"
+ORDER BY COALESCE(sum(i."Quantity"), 0)::int DESC
+LIMIT @__p_0
+2026-02-25 03:26:10.945 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/reports/inventory-value - 200 null application/json; charset=utf-8 45.9565ms
+2026-02-25 03:26:10.945 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[<>f__AnonymousType55`4[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:10.949 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ReportsController.GetTopProducts (ALIkhlasPOS.API) in 42.9922ms
+2026-02-25 03:26:10.950 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ReportsController.GetTopProducts (ALIkhlasPOS.API)'
+2026-02-25 03:26:10.951 +02:00 [INF] HTTP GET /api/reports/top-products responded 200 in 50.0023 ms
+2026-02-25 03:26:10.956 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/reports/top-products?limit=10 - 200 null application/json; charset=utf-8 57.1496ms
+2026-02-25 03:26:10.976 +02:00 [ERR] Failed executing DbCommand (4ms) [Parameters=[@__start_0='?' (DbType = DateTime), @__end_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT i."Id", i."CashierId", i."CreatedAt", i."CreatedBy", i."CustomerId", i."DiscountAmount", i."InvoiceNo", i."Notes", i."PaidAmount", i."PaymentType", i."RemainingAmount", i."Status", i."SubTotal", i."TotalAmount", i."VatAmount", i."VatRate", s."Id", s."InvoiceId", s."ProductId", s."Quantity", s."UnitPrice", s."Id0", s."Category", s."CreatedAt", s."Description", s."ExpiryDate", s."GlobalBarcode", s."ImageUrl", s."InternalBarcode", s."IsActive", s."MinStockAlert", s."Name", s."Price", s."PurchasePrice", s."StockQuantity", s."UpdatedAt", s."WholesalePrice"
+FROM "Invoices" AS i
+LEFT JOIN (
+    SELECT i0."Id", i0."InvoiceId", i0."ProductId", i0."Quantity", i0."UnitPrice", p0."Id" AS "Id0", p0."Category", p0."CreatedAt", p0."Description", p0."ExpiryDate", p0."GlobalBarcode", p0."ImageUrl", p0."InternalBarcode", p0."IsActive", p0."MinStockAlert", p0."Name", p0."Price", p0."PurchasePrice", p0."StockQuantity", p0."UpdatedAt", p0."WholesalePrice"
+    FROM "InvoiceItems" AS i0
+    INNER JOIN (
+        SELECT p."Id", p."Category", p."CreatedAt", p."Description", p."ExpiryDate", p."GlobalBarcode", p."ImageUrl", p."InternalBarcode", p."IsActive", p."MinStockAlert", p."Name", p."Price", p."PurchasePrice", p."StockQuantity", p."UpdatedAt", p."WholesalePrice"
+        FROM "Products" AS p
+        WHERE p."IsActive"
+    ) AS p0 ON i0."ProductId" = p0."Id"
+) AS s ON i."Id" = s."InvoiceId"
+WHERE i."CreatedAt" >= @__start_0 AND i."CreatedAt" <= @__end_1 AND i."Status" = 0
+ORDER BY i."Id", s."Id"
+2026-02-25 03:26:10.998 +02:00 [ERR] An exception occurred while iterating over the results of a query for context type 'ALIkhlasPOS.Infrastructure.Data.ApplicationDbContext'.
+System.ArgumentException: Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp with time zone', only UTC is supported. Note that it's not possible to mix DateTimes with different Kinds in an array, range, or multirange. (Parameter 'value')
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(DateTime value, Nullable`1 expectedPgTypeId, Boolean validateOnly)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver.<>c.<CreateResolver>b__0_0(DateTimeConverterResolver`1 resolver, DateTime value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(T value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgConverterResolver`1.GetAsObjectInternal(PgTypeInfo typeInfo, Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgResolverTypeInfo.GetResolutionAsObject(Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgTypeInfo.GetObjectResolution(Object value)
+   at Npgsql.NpgsqlParameter.ResolveConverter(PgTypeInfo typeInfo)
+   at Npgsql.NpgsqlParameter.ResolveTypeInfo(PgSerializerOptions options)
+   at Npgsql.NpgsqlParameterCollection.ProcessParameters(PgSerializerOptions options, Boolean validateValues, CommandType commandType)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+System.ArgumentException: Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp with time zone', only UTC is supported. Note that it's not possible to mix DateTimes with different Kinds in an array, range, or multirange. (Parameter 'value')
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(DateTime value, Nullable`1 expectedPgTypeId, Boolean validateOnly)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver.<>c.<CreateResolver>b__0_0(DateTimeConverterResolver`1 resolver, DateTime value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(T value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgConverterResolver`1.GetAsObjectInternal(PgTypeInfo typeInfo, Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgResolverTypeInfo.GetResolutionAsObject(Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgTypeInfo.GetObjectResolution(Object value)
+   at Npgsql.NpgsqlParameter.ResolveConverter(PgTypeInfo typeInfo)
+   at Npgsql.NpgsqlParameter.ResolveTypeInfo(PgSerializerOptions options)
+   at Npgsql.NpgsqlParameterCollection.ProcessParameters(PgSerializerOptions options, Boolean validateValues, CommandType commandType)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+2026-02-25 03:26:11.003 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ReportsController.GetSalesReport (ALIkhlasPOS.API) in 96.9491ms
+2026-02-25 03:26:11.003 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ReportsController.GetSalesReport (ALIkhlasPOS.API)'
+2026-02-25 03:26:11.004 +02:00 [ERR] HTTP GET /api/reports/sales responded 500 in 105.1005 ms
+System.ArgumentException: Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp with time zone', only UTC is supported. Note that it's not possible to mix DateTimes with different Kinds in an array, range, or multirange. (Parameter 'value')
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(DateTime value, Nullable`1 expectedPgTypeId, Boolean validateOnly)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver.<>c.<CreateResolver>b__0_0(DateTimeConverterResolver`1 resolver, DateTime value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(T value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgConverterResolver`1.GetAsObjectInternal(PgTypeInfo typeInfo, Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgResolverTypeInfo.GetResolutionAsObject(Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgTypeInfo.GetObjectResolution(Object value)
+   at Npgsql.NpgsqlParameter.ResolveConverter(PgTypeInfo typeInfo)
+   at Npgsql.NpgsqlParameter.ResolveTypeInfo(PgSerializerOptions options)
+   at Npgsql.NpgsqlParameterCollection.ProcessParameters(PgSerializerOptions options, Boolean validateValues, CommandType commandType)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at ALIkhlasPOS.API.Controllers.ReportsController.GetSalesReport(Nullable`1 startDate, Nullable`1 endDate, CancellationToken cancellationToken) in /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/Controllers/ReportsController.cs:line 90
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Logged|17_1(ResourceInvoker invoker)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Logged|17_1(ResourceInvoker invoker)
+   at Microsoft.AspNetCore.Routing.EndpointMiddleware.<Invoke>g__AwaitRequestTask|7_0(Endpoint endpoint, Task requestTask, ILogger logger)
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+   at Serilog.AspNetCore.RequestLoggingMiddleware.Invoke(HttpContext httpContext)
+2026-02-25 03:26:11.018 +02:00 [ERR] An unhandled exception has occurred.
+System.ArgumentException: Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp with time zone', only UTC is supported. Note that it's not possible to mix DateTimes with different Kinds in an array, range, or multirange. (Parameter 'value')
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(DateTime value, Nullable`1 expectedPgTypeId, Boolean validateOnly)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver.<>c.<CreateResolver>b__0_0(DateTimeConverterResolver`1 resolver, DateTime value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.Converters.DateTimeConverterResolver`1.Get(T value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgConverterResolver`1.GetAsObjectInternal(PgTypeInfo typeInfo, Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgResolverTypeInfo.GetResolutionAsObject(Object value, Nullable`1 expectedPgTypeId)
+   at Npgsql.Internal.PgTypeInfo.GetObjectResolution(Object value)
+   at Npgsql.NpgsqlParameter.ResolveConverter(PgTypeInfo typeInfo)
+   at Npgsql.NpgsqlParameter.ResolveTypeInfo(PgSerializerOptions options)
+   at Npgsql.NpgsqlParameterCollection.ProcessParameters(PgSerializerOptions options, Boolean validateValues, CommandType commandType)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteReader(Boolean async, CommandBehavior behavior, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at ALIkhlasPOS.API.Controllers.ReportsController.GetSalesReport(Nullable`1 startDate, Nullable`1 endDate, CancellationToken cancellationToken) in /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/Controllers/ReportsController.cs:line 90
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Logged|17_1(ResourceInvoker invoker)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Logged|17_1(ResourceInvoker invoker)
+   at Microsoft.AspNetCore.Routing.EndpointMiddleware.<Invoke>g__AwaitRequestTask|7_0(Endpoint endpoint, Task requestTask, ILogger logger)
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+   at Serilog.AspNetCore.RequestLoggingMiddleware.Invoke(HttpContext httpContext)
+   at ALIkhlasPOS.API.Middleware.GlobalExceptionMiddleware.InvokeAsync(HttpContext context) in /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/Middleware/GlobalExceptionMiddleware.cs:line 24
+2026-02-25 03:26:11.069 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/reports/sales?startDate=2026-01-26&endDate=2026-02-26 - 500 null application/problem+json 170.4948ms
+2026-02-25 03:26:19.779 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/shopsettings - application/json null
+2026-02-25 03:26:19.780 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/backup/stats - application/json null
+2026-02-25 03:26:19.782 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ShopSettingsController.Get (ALIkhlasPOS.API)'
+2026-02-25 03:26:19.784 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.BackupController.GetStats (ALIkhlasPOS.API)'
+2026-02-25 03:26:19.789 +02:00 [INF] Route matched with {action = "Get", controller = "ShopSettings"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] Get(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ShopSettingsController (ALIkhlasPOS.API).
+2026-02-25 03:26:19.791 +02:00 [INF] Route matched with {action = "GetStats", controller = "Backup"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetStats(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.BackupController (ALIkhlasPOS.API).
+2026-02-25 03:26:19.796 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."Address", s."CommercialRegNo", s."CurrencyCode", s."CurrencySymbol", s."DefaultVatRate", s."LogoBase64", s."Phone", s."Phone2", s."ReceiptFooter", s."ShopName", s."SmsApiKey", s."SmsSenderId", s."TaxNumber", s."UpdatedAt", s."VatEnabled"
+FROM "ShopSettings" AS s
+LIMIT 1
+2026-02-25 03:26:19.800 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Users" AS u
+2026-02-25 03:26:19.800 +02:00 [INF] Executing OkObjectResult, writing value of type 'ALIkhlasPOS.Domain.Entities.ShopSettings'.
+2026-02-25 03:26:19.802 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive"
+2026-02-25 03:26:19.804 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ShopSettingsController.Get (ALIkhlasPOS.API) in 14.9581ms
+2026-02-25 03:26:19.807 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ShopSettingsController.Get (ALIkhlasPOS.API)'
+2026-02-25 03:26:19.807 +02:00 [INF] HTTP GET /api/shopsettings responded 200 in 27.8945 ms
+2026-02-25 03:26:19.808 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Invoices" AS i
+2026-02-25 03:26:19.808 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/shopsettings - 200 null application/json; charset=utf-8 28.8324ms
+2026-02-25 03:26:19.813 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Customers" AS c
+WHERE c."IsActive"
+2026-02-25 03:26:19.817 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+2026-02-25 03:26:19.821 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "PurchaseInvoices" AS p
+2026-02-25 03:26:19.826 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Expenses" AS e
+2026-02-25 03:26:19.828 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType5`5[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType4`7[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:19.831 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.BackupController.GetStats (ALIkhlasPOS.API) in 39.6101ms
+2026-02-25 03:26:19.832 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.BackupController.GetStats (ALIkhlasPOS.API)'
+2026-02-25 03:26:19.832 +02:00 [INF] HTTP GET /api/backup/stats responded 200 in 50.7370 ms
+2026-02-25 03:26:19.832 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/backup/stats - 200 null application/json; charset=utf-8 51.8295ms
+2026-02-25 03:26:21.888 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/users - application/json null
+2026-02-25 03:26:21.889 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.UsersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:21.895 +02:00 [INF] Route matched with {action = "GetAll", controller = "Users"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.UsersController (ALIkhlasPOS.API).
+2026-02-25 03:26:21.914 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT u."Id", u."Username", u."FullName", u."Role", u."IsActive", u."PasswordHash" <> '' AS "PasswordSet"
+FROM "Users" AS u
+ORDER BY u."FullName"
+2026-02-25 03:26:21.915 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[<>f__AnonymousType62`6[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:21.918 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.UsersController.GetAll (ALIkhlasPOS.API) in 21.7548ms
+2026-02-25 03:26:21.918 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.UsersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:21.918 +02:00 [INF] HTTP GET /api/users responded 200 in 30.2485 ms
+2026-02-25 03:26:21.919 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/users - 200 null application/json; charset=utf-8 31.2249ms
+2026-02-25 03:26:22.860 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/installments - application/json null
+2026-02-25 03:26:22.861 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:22.869 +02:00 [INF] Route matched with {action = "GetAll", controller = "Installments"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.Nullable`1[ALIkhlasPOS.Domain.Entities.InstallmentStatus], System.Nullable`1[System.Guid], System.Nullable`1[System.DateTime], System.Nullable`1[System.DateTime], System.String, Int32, Int32, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.InstallmentsController (ALIkhlasPOS.API).
+2026-02-25 03:26:22.880 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+2026-02-25 03:26:22.881 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/installments/summary - application/json null
+2026-02-25 03:26:22.883 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetSummary (ALIkhlasPOS.API)'
+2026-02-25 03:26:22.889 +02:00 [INF] Route matched with {action = "GetSummary", controller = "Installments"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetSummary(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.InstallmentsController (ALIkhlasPOS.API).
+2026-02-25 03:26:22.898 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:26:22.901 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:26:22.907 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[@__today_2='?' (DbType = DateTime), @__p_1='?' (DbType = Int32), @__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i1."Id", i1."Amount", i1."DueDate", i1."Status", i1."PaidAt", i1."ReminderSent", CASE
+    WHEN i1."DueDate" < @__today_2 AND i1."Status" = 0 THEN floor(date_part('day', @__today_2 - date_trunc('day', i1."DueDate", 'UTC')))::int
+    ELSE 0
+END AS "DaysOverdue", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Name"
+    ELSE 'عميل نقدي'
+END AS "CustomerName", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Phone"
+END AS "CustomerPhone", i0."InvoiceNo", i1."InvoiceId"
+FROM (
+    SELECT i."Id", i."Amount", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status"
+    FROM "Installments" AS i
+    ORDER BY i."DueDate"
+    LIMIT @__p_1 OFFSET @__p_0
+) AS i1
+INNER JOIN "Invoices" AS i0 ON i1."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Name", c."Phone"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+ORDER BY i1."DueDate"
+2026-02-25 03:26:22.909 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType29`4[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType28`11[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[ALIkhlasPOS.Domain.Entities.InstallmentStatus, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null],[System.Nullable`1[[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:22.911 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 0
+2026-02-25 03:26:22.918 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 1
+2026-02-25 03:26:22.922 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__AddDays_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" >= @__today_0 AND i."DueDate" <= @__AddDays_1
+2026-02-25 03:26:22.924 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType30`5[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:22.929 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.InstallmentsController.GetAll (ALIkhlasPOS.API) in 60.1622ms
+2026-02-25 03:26:22.930 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:22.930 +02:00 [INF] HTTP GET /api/installments responded 200 in 69.8742 ms
+2026-02-25 03:26:22.931 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/installments - 200 null application/json; charset=utf-8 70.6618ms
+2026-02-25 03:26:22.933 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.InstallmentsController.GetSummary (ALIkhlasPOS.API) in 42.8842ms
+2026-02-25 03:26:22.933 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetSummary (ALIkhlasPOS.API)'
+2026-02-25 03:26:22.936 +02:00 [INF] HTTP GET /api/installments/summary responded 200 in 53.0812 ms
+2026-02-25 03:26:22.937 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/installments/summary - 200 null application/json; charset=utf-8 55.4414ms
+2026-02-25 03:26:25.071 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/shopsettings - application/json null
+2026-02-25 03:26:25.071 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/backup/stats - application/json null
+2026-02-25 03:26:25.073 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ShopSettingsController.Get (ALIkhlasPOS.API)'
+2026-02-25 03:26:25.076 +02:00 [INF] Route matched with {action = "Get", controller = "ShopSettings"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] Get(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ShopSettingsController (ALIkhlasPOS.API).
+2026-02-25 03:26:25.074 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.BackupController.GetStats (ALIkhlasPOS.API)'
+2026-02-25 03:26:25.077 +02:00 [INF] Route matched with {action = "GetStats", controller = "Backup"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetStats(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.BackupController (ALIkhlasPOS.API).
+2026-02-25 03:26:25.079 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT s."Id", s."Address", s."CommercialRegNo", s."CurrencyCode", s."CurrencySymbol", s."DefaultVatRate", s."LogoBase64", s."Phone", s."Phone2", s."ReceiptFooter", s."ShopName", s."SmsApiKey", s."SmsSenderId", s."TaxNumber", s."UpdatedAt", s."VatEnabled"
+FROM "ShopSettings" AS s
+LIMIT 1
+2026-02-25 03:26:25.079 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Users" AS u
+2026-02-25 03:26:25.080 +02:00 [INF] Executing OkObjectResult, writing value of type 'ALIkhlasPOS.Domain.Entities.ShopSettings'.
+2026-02-25 03:26:25.081 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ShopSettingsController.Get (ALIkhlasPOS.API) in 4.7968ms
+2026-02-25 03:26:25.082 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive"
+2026-02-25 03:26:25.083 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ShopSettingsController.Get (ALIkhlasPOS.API)'
+2026-02-25 03:26:25.085 +02:00 [INF] HTTP GET /api/shopsettings responded 200 in 12.4974 ms
+2026-02-25 03:26:25.086 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/shopsettings - 200 null application/json; charset=utf-8 15.255ms
+2026-02-25 03:26:25.085 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Invoices" AS i
+2026-02-25 03:26:25.090 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Customers" AS c
+WHERE c."IsActive"
+2026-02-25 03:26:25.092 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+2026-02-25 03:26:25.094 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "PurchaseInvoices" AS p
+2026-02-25 03:26:25.096 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Expenses" AS e
+2026-02-25 03:26:25.097 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType5`5[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType4`7[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:25.098 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.BackupController.GetStats (ALIkhlasPOS.API) in 20.7144ms
+2026-02-25 03:26:25.099 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.BackupController.GetStats (ALIkhlasPOS.API)'
+2026-02-25 03:26:25.099 +02:00 [INF] HTTP GET /api/backup/stats responded 200 in 24.9850 ms
+2026-02-25 03:26:25.099 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/backup/stats - 200 null application/json; charset=utf-8 28.3012ms
+2026-02-25 03:26:25.757 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/users - application/json null
+2026-02-25 03:26:25.760 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.UsersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:25.760 +02:00 [INF] Route matched with {action = "GetAll", controller = "Users"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.UsersController (ALIkhlasPOS.API).
+2026-02-25 03:26:25.768 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT u."Id", u."Username", u."FullName", u."Role", u."IsActive", u."PasswordHash" <> '' AS "PasswordSet"
+FROM "Users" AS u
+ORDER BY u."FullName"
+2026-02-25 03:26:25.770 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[<>f__AnonymousType62`6[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:26:25.770 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.UsersController.GetAll (ALIkhlasPOS.API) in 9.4819ms
+2026-02-25 03:26:25.770 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.UsersController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:25.771 +02:00 [INF] HTTP GET /api/users responded 200 in 11.2891 ms
+2026-02-25 03:26:25.771 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/users - 200 null application/json; charset=utf-8 13.7835ms
+2026-02-25 03:26:32.016 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/installments - application/json null
+2026-02-25 03:26:32.017 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:32.017 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/installments/summary - application/json null
+2026-02-25 03:26:32.017 +02:00 [INF] Route matched with {action = "GetAll", controller = "Installments"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAll(System.Nullable`1[ALIkhlasPOS.Domain.Entities.InstallmentStatus], System.Nullable`1[System.Guid], System.Nullable`1[System.DateTime], System.Nullable`1[System.DateTime], System.String, Int32, Int32, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.InstallmentsController (ALIkhlasPOS.API).
+2026-02-25 03:26:32.019 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetSummary (ALIkhlasPOS.API)'
+2026-02-25 03:26:32.019 +02:00 [INF] Route matched with {action = "GetSummary", controller = "Installments"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetSummary(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.InstallmentsController (ALIkhlasPOS.API).
+2026-02-25 03:26:32.021 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+2026-02-25 03:26:32.022 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:26:32.025 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+2026-02-25 03:26:32.026 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[@__today_2='?' (DbType = DateTime), @__p_1='?' (DbType = Int32), @__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i1."Id", i1."Amount", i1."DueDate", i1."Status", i1."PaidAt", i1."ReminderSent", CASE
+    WHEN i1."DueDate" < @__today_2 AND i1."Status" = 0 THEN floor(date_part('day', @__today_2 - date_trunc('day', i1."DueDate", 'UTC')))::int
+    ELSE 0
+END AS "DaysOverdue", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Name"
+    ELSE 'عميل نقدي'
+END AS "CustomerName", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Phone"
+END AS "CustomerPhone", i0."InvoiceNo", i1."InvoiceId"
+FROM (
+    SELECT i."Id", i."Amount", i."DueDate", i."InvoiceId", i."PaidAt", i."ReminderSent", i."Status"
+    FROM "Installments" AS i
+    ORDER BY i."DueDate"
+    LIMIT @__p_1 OFFSET @__p_0
+) AS i1
+INNER JOIN "Invoices" AS i0 ON i1."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Name", c."Phone"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+ORDER BY i1."DueDate"
+2026-02-25 03:26:32.026 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType29`4[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType28`11[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[ALIkhlasPOS.Domain.Entities.InstallmentStatus, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null],[System.Nullable`1[[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Boolean, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:32.027 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 0
+2026-02-25 03:26:32.027 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.InstallmentsController.GetAll (ALIkhlasPOS.API) in 8.9289ms
+2026-02-25 03:26:32.028 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetAll (ALIkhlasPOS.API)'
+2026-02-25 03:26:32.028 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT COALESCE(sum(i."Amount"), 0.0)
+FROM "Installments" AS i
+WHERE i."Status" = 1
+2026-02-25 03:26:32.028 +02:00 [INF] HTTP GET /api/installments responded 200 in 11.9732 ms
+2026-02-25 03:26:32.029 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/installments - 200 null application/json; charset=utf-8 12.7109ms
+2026-02-25 03:26:32.030 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__AddDays_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" >= @__today_0 AND i."DueDate" <= @__AddDays_1
+2026-02-25 03:26:32.031 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType30`5[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:32.031 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.InstallmentsController.GetSummary (ALIkhlasPOS.API) in 11.4054ms
+2026-02-25 03:26:32.031 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.InstallmentsController.GetSummary (ALIkhlasPOS.API)'
+2026-02-25 03:26:32.031 +02:00 [INF] HTTP GET /api/installments/summary responded 200 in 12.7441 ms
+2026-02-25 03:26:32.032 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/installments/summary - 200 null application/json; charset=utf-8 14.5526ms
+2026-02-25 03:26:34.770 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/products?page=1&pageSize=50 - application/json null
+2026-02-25 03:26:34.771 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/products/categories - application/json null
+2026-02-25 03:26:34.771 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetAllProducts (ALIkhlasPOS.API)'
+2026-02-25 03:26:34.773 +02:00 [INF] Route matched with {action = "GetAllProducts", controller = "Products"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetAllProducts(System.String, System.String, System.Nullable`1[System.Boolean], Int32, Int32, System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ProductsController (ALIkhlasPOS.API).
+2026-02-25 03:26:34.774 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetCategories (ALIkhlasPOS.API)'
+2026-02-25 03:26:34.775 +02:00 [INF] Route matched with {action = "GetCategories", controller = "Products"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetCategories(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ProductsController (ALIkhlasPOS.API).
+2026-02-25 03:26:34.785 +02:00 [INF] Executed DbCommand (4ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT p0."Category"
+FROM (
+    SELECT DISTINCT p."Category"
+    FROM "Products" AS p
+    WHERE p."IsActive" AND p."Category" IS NOT NULL
+) AS p0
+ORDER BY p0."Category"
+2026-02-25 03:26:34.785 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive"
+2026-02-25 03:26:34.786 +02:00 [INF] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:34.786 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ProductsController.GetCategories (ALIkhlasPOS.API) in 10.7044ms
+2026-02-25 03:26:34.786 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetCategories (ALIkhlasPOS.API)'
+2026-02-25 03:26:34.787 +02:00 [INF] HTTP GET /api/products/categories responded 200 in 13.8765 ms
+2026-02-25 03:26:34.790 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/products/categories - 200 null application/json; charset=utf-8 18.6405ms
+2026-02-25 03:26:34.789 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[@__p_1='?' (DbType = Int32), @__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Category", p."CreatedAt", p."Description", p."ExpiryDate", p."GlobalBarcode", p."ImageUrl", p."InternalBarcode", p."IsActive", p."MinStockAlert", p."Name", p."Price", p."PurchasePrice", p."StockQuantity", p."UpdatedAt", p."WholesalePrice"
+FROM "Products" AS p
+WHERE p."IsActive"
+ORDER BY p."Category", p."Name"
+LIMIT @__p_1 OFFSET @__p_0
+2026-02-25 03:26:34.793 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType29`4[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[ALIkhlasPOS.Domain.Entities.Product, ALIkhlasPOS.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:34.795 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ProductsController.GetAllProducts (ALIkhlasPOS.API) in 21.9069ms
+2026-02-25 03:26:34.796 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetAllProducts (ALIkhlasPOS.API)'
+2026-02-25 03:26:34.796 +02:00 [INF] HTTP GET /api/products responded 200 in 25.8413 ms
+2026-02-25 03:26:34.797 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/products?page=1&pageSize=50 - 200 null application/json; charset=utf-8 27.3983ms
+2026-02-25 03:26:34.822 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/products/next-barcode - application/json null
+2026-02-25 03:26:34.823 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetNextBarcode (ALIkhlasPOS.API)'
+2026-02-25 03:26:34.828 +02:00 [INF] Route matched with {action = "GetNextBarcode", controller = "Products"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetNextBarcode(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.ProductsController (ALIkhlasPOS.API).
+2026-02-25 03:26:34.849 +02:00 [INF] Executed DbCommand (5ms) [Parameters=[@__prefix_0_startswith='?'], CommandType='"Text"', CommandTimeout='30']
+SELECT p."InternalBarcode"
+FROM "Products" AS p
+WHERE p."IsActive" AND p."InternalBarcode" IS NOT NULL AND p."InternalBarcode" LIKE @__prefix_0_startswith
+ORDER BY p."InternalBarcode" DESC
+LIMIT 1
+2026-02-25 03:26:34.850 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType41`1[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-02-25 03:26:34.851 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.ProductsController.GetNextBarcode (ALIkhlasPOS.API) in 22.2449ms
+2026-02-25 03:26:34.852 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.ProductsController.GetNextBarcode (ALIkhlasPOS.API)'
+2026-02-25 03:26:34.852 +02:00 [INF] HTTP GET /api/products/next-barcode responded 200 in 28.7089 ms
+2026-02-25 03:26:34.853 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/products/next-barcode - 200 null application/json; charset=utf-8 31.0688ms
+2026-02-25 03:30:24.793 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/notifications - application/json null
+2026-02-25 03:30:24.794 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.NotificationsController.GetNotifications (ALIkhlasPOS.API)'
+2026-02-25 03:30:24.797 +02:00 [INF] Route matched with {action = "GetNotifications", controller = "Notifications"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetNotifications(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.NotificationsController (ALIkhlasPOS.API).
+2026-02-25 03:30:24.825 +02:00 [INF] Executed DbCommand (7ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__p_1='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i1."Id", i1."Amount", i1."DueDate", floor(date_part('day', @__today_0 - date_trunc('day', i1."DueDate", 'UTC')))::int AS "DaysOverdue", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Name"
+    ELSE 'عميل نقدي'
+END AS "CustomerName", i0."InvoiceNo"
+FROM (
+    SELECT i."Id", i."Amount", i."DueDate", i."InvoiceId"
+    FROM "Installments" AS i
+    WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+    ORDER BY i."DueDate"
+    LIMIT @__p_1
+) AS i1
+INNER JOIN "Invoices" AS i0 ON i1."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Name"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+ORDER BY i1."DueDate"
+2026-02-25 03:30:24.832 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__AddDays_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" >= @__today_0 AND i."DueDate" <= @__AddDays_1
+2026-02-25 03:30:24.842 +02:00 [INF] Executed DbCommand (6ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Name", p."StockQuantity", p."MinStockAlert", p."Category"
+FROM "Products" AS p
+WHERE p."IsActive" AND p."StockQuantity" <= p."MinStockAlert" AND p."StockQuantity" >= 0.0
+ORDER BY p."StockQuantity"
+LIMIT @__p_0
+2026-02-25 03:30:24.846 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive" AND p."StockQuantity" <= 0.0
+2026-02-25 03:30:24.846 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType38`3[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType39`4[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType36`6[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null],[<>f__AnonymousType40`3[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType37`5[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:30:24.853 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.NotificationsController.GetNotifications (ALIkhlasPOS.API) in 54.9613ms
+2026-02-25 03:30:24.853 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.NotificationsController.GetNotifications (ALIkhlasPOS.API)'
+2026-02-25 03:30:24.853 +02:00 [INF] HTTP GET /api/notifications responded 200 in 59.2227 ms
+2026-02-25 03:30:24.853 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/notifications - 200 null application/json; charset=utf-8 60.1636ms
+2026-02-25 03:35:24.792 +02:00 [INF] Request starting HTTP/1.1 GET http://localhost:5290/api/notifications - application/json null
+2026-02-25 03:35:24.793 +02:00 [INF] Executing endpoint 'ALIkhlasPOS.API.Controllers.NotificationsController.GetNotifications (ALIkhlasPOS.API)'
+2026-02-25 03:35:24.794 +02:00 [INF] Route matched with {action = "GetNotifications", controller = "Notifications"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetNotifications(System.Threading.CancellationToken) on controller ALIkhlasPOS.API.Controllers.NotificationsController (ALIkhlasPOS.API).
+2026-02-25 03:35:24.797 +02:00 [INF] Executed DbCommand (2ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__p_1='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT i1."Id", i1."Amount", i1."DueDate", floor(date_part('day', @__today_0 - date_trunc('day', i1."DueDate", 'UTC')))::int AS "DaysOverdue", CASE
+    WHEN c0."Id" IS NOT NULL THEN c0."Name"
+    ELSE 'عميل نقدي'
+END AS "CustomerName", i0."InvoiceNo"
+FROM (
+    SELECT i."Id", i."Amount", i."DueDate", i."InvoiceId"
+    FROM "Installments" AS i
+    WHERE i."Status" = 0 AND i."DueDate" < @__today_0
+    ORDER BY i."DueDate"
+    LIMIT @__p_1
+) AS i1
+INNER JOIN "Invoices" AS i0 ON i1."InvoiceId" = i0."Id"
+LEFT JOIN (
+    SELECT c."Id", c."Name"
+    FROM "Customers" AS c
+    WHERE c."IsActive"
+) AS c0 ON i0."CustomerId" = c0."Id"
+ORDER BY i1."DueDate"
+2026-02-25 03:35:24.799 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__today_0='?' (DbType = DateTime), @__AddDays_1='?' (DbType = DateTime)], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Installments" AS i
+WHERE i."Status" = 0 AND i."DueDate" >= @__today_0 AND i."DueDate" <= @__AddDays_1
+2026-02-25 03:35:24.801 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+SELECT p."Id", p."Name", p."StockQuantity", p."MinStockAlert", p."Category"
+FROM "Products" AS p
+WHERE p."IsActive" AND p."StockQuantity" <= p."MinStockAlert" AND p."StockQuantity" >= 0.0
+ORDER BY p."StockQuantity"
+LIMIT @__p_0
+2026-02-25 03:35:24.803 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT count(*)::int
+FROM "Products" AS p
+WHERE p."IsActive" AND p."StockQuantity" <= 0.0
+2026-02-25 03:35:24.803 +02:00 [INF] Executing OkObjectResult, writing value of type '<>f__AnonymousType38`3[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[<>f__AnonymousType39`4[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType36`6[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.DateTime, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null],[<>f__AnonymousType40`3[[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType37`5[[System.Guid, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Decimal, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], ALIkhlasPOS.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+2026-02-25 03:35:24.804 +02:00 [INF] Executed action ALIkhlasPOS.API.Controllers.NotificationsController.GetNotifications (ALIkhlasPOS.API) in 9.9488ms
+2026-02-25 03:35:24.804 +02:00 [INF] Executed endpoint 'ALIkhlasPOS.API.Controllers.NotificationsController.GetNotifications (ALIkhlasPOS.API)'
+2026-02-25 03:35:24.805 +02:00 [INF] HTTP GET /api/notifications responded 200 in 11.6816 ms
+2026-02-25 03:35:24.805 +02:00 [INF] Request finished HTTP/1.1 GET http://localhost:5290/api/notifications - 200 null application/json; charset=utf-8 13.0651ms
+2026-02-25 04:39:27.348 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'Bundle'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:39:27.422 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'InvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:39:27.423 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ProductUnit'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:39:27.423 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'PurchaseInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:39:27.423 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ReturnInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:39:27.424 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'StockAdjustment'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:39:28.006 +02:00 [INF] Executed DbCommand (44ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 04:40:34.631 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'Bundle'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:40:34.687 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'InvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:40:34.688 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ProductUnit'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:40:34.688 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'PurchaseInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:40:34.688 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ReturnInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:40:34.688 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'StockAdjustment'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.128 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'Bundle'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.232 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'InvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.233 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ProductUnit'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.234 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'PurchaseInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.234 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'ReturnInvoiceItem'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.234 +02:00 [WRN] Entity 'Product' has a global query filter defined and is the required end of a relationship with the entity 'StockAdjustment'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-02-25 04:53:22.843 +02:00 [INF] Executed DbCommand (30ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 04:53:23.362 +02:00 [INF] Executed DbCommand (11ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" character varying(150) NOT NULL,
+    "ProductVersion" character varying(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+);
+2026-02-25 04:53:23.380 +02:00 [INF] Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+2026-02-25 04:53:23.382 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+LOCK TABLE "__EFMigrationsHistory" IN ACCESS EXCLUSIVE MODE
+2026-02-25 04:53:23.384 +02:00 [INF] Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT "MigrationId", "ProductVersion"
+FROM "__EFMigrationsHistory"
+ORDER BY "MigrationId";
+2026-02-25 04:53:23.404 +02:00 [INF] Applying migration '20260225024035_AddStockAdjustments'.
+2026-02-25 04:53:23.650 +02:00 [INF] Executed DbCommand (180ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE "StockAdjustments" (
+    "Id" uuid NOT NULL,
+    "ProductId" uuid NOT NULL,
+    "Type" integer NOT NULL,
+    "QuantityAdjusted" integer NOT NULL,
+    "Cost" numeric NOT NULL,
+    "Reason" character varying(500) NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "CreatedBy" character varying(100) NOT NULL,
+    CONSTRAINT "PK_StockAdjustments" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_StockAdjustments_Products_ProductId" FOREIGN KEY ("ProductId") REFERENCES "Products" ("Id") ON DELETE CASCADE
+);
+2026-02-25 04:53:23.659 +02:00 [INF] Executed DbCommand (7ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE INDEX "IX_StockAdjustments_ProductId" ON "StockAdjustments" ("ProductId");
+2026-02-25 04:53:23.663 +02:00 [INF] Executed DbCommand (3ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260225024035_AddStockAdjustments', '9.0.0');

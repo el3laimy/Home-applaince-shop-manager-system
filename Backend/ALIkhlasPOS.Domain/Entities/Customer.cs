@@ -17,5 +17,6 @@ public class Customer
     public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
 
     // Audit
+    public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

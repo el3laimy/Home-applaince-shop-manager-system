@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shimmer/shimmer.dart';
 import '../controllers/dashboard_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/formatters.dart';
@@ -35,7 +36,7 @@ class DashboardScreen extends StatelessWidget {
               
               Expanded(
                 child: Obx(() {
-                  if (ctrl.isLoading.value) return const Center(child: CircularProgressIndicator());
+                  if (ctrl.isLoading.value) return _buildShimmerLoading(isDark);
                   if (ctrl.errorMessage.isNotEmpty) return Center(child: Text(ctrl.errorMessage.value, style: const TextStyle(color: Colors.red)));
 
                   return Row(
@@ -573,6 +574,55 @@ class DashboardScreen extends StatelessWidget {
           ),
           child: child,
         ),
+      ),
+    );
+  }
+
+  Widget _buildShimmerLoading(bool isDark) {
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+    
+    Widget box(double height) => Container(
+      height: height,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+    );
+
+    return Shimmer.fromColors(
+      baseColor: baseColor,
+      highlightColor: highlightColor,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 7,
+            child: Column(
+              children: [
+                Row(
+                  children: List.generate(4, (i) => Expanded(child: Padding(padding: const EdgeInsets.only(left: 16), child: box(100)))),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: List.generate(3, (i) => Expanded(child: Padding(padding: const EdgeInsets.only(left: 16), child: box(130)))),
+                ),
+                const SizedBox(height: 20),
+                Expanded(child: box(300)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            flex: 3,
+            child: Column(
+              children: [
+                 Expanded(flex: 3, child: box(double.infinity)),
+                 const SizedBox(height: 20),
+                 Expanded(flex: 2, child: box(double.infinity)),
+                 const SizedBox(height: 20),
+                 Expanded(flex: 1, child: box(double.infinity)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

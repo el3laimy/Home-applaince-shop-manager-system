@@ -23,7 +23,7 @@ public class InvoicesController : ControllerBase
     }
 
     // ── Request DTOs ─────────────────────────────────────────────────────────
-    public record ScanItemRequest(string Barcode, int Quantity = 1);
+    public record ScanItemRequest(string Barcode, int Quantity = 1, decimal? CustomPrice = null);
 
     public record InvoiceCreateRequest(
         List<ScanItemRequest> ScannedItems,
@@ -111,15 +111,17 @@ public class InvoicesController : ControllerBase
             CreatedBy = User.FindFirstValue(ClaimTypes.Name) ?? "System"
         };
 
-        // ── Scanner Aggregation (group repeated scans of the same barcode) ──
+        // ── Scanner Aggregation (group repeated scans of the same barcode & price) ──
         var groupedScans = request.ScannedItems
-            .GroupBy(i => i.Barcode)
-            .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+            .GroupBy(i => new { i.Barcode, i.CustomPrice })
+            .Select(g => new { g.Key.Barcode, g.Key.CustomPrice, Quantity = g.Sum(x => x.Quantity) })
+            .ToList();
 
         foreach (var scan in groupedScans)
         {
-            var barcode = scan.Key;
-            var quantity = scan.Value;
+            var barcode = scan.Barcode;
+            var quantity = scan.Quantity;
+            var customPrice = scan.CustomPrice;
 
             var product = await _productCacheService.GetProductByBarcodeAsync(barcode, cancellationToken);
             if (product == null)
@@ -160,11 +162,27 @@ public class InvoicesController : ControllerBase
 
             await _productCacheService.SetProductCacheAsync(product, cancellationToken);
 
+            // Verify Custom Price is not below Purchase Price (if applicable)
+            decimal finalPrice = product.Price;
+            if (customPrice.HasValue)
+            {
+                if (customPrice.Value < product.PurchasePrice)
+                {
+                    // Allow admin to override, but for now we reject if below cost
+                    var role = User.FindFirstValue(ClaimTypes.Role);
+                    if (role != "Admin")
+                    {
+                        return BadRequest(new { message = $"لا يمكن بيع المنتج {product.Name} بسعر أقل من التكلفة ({product.PurchasePrice})." });
+                    }
+                }
+                finalPrice = customPrice.Value;
+            }
+
             invoice.Items.Add(new InvoiceItem
             {
                 ProductId = product.Id,
                 Quantity = quantity,
-                UnitPrice = product.Price
+                UnitPrice = finalPrice
             });
         }
 

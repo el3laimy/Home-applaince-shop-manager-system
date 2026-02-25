@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/customer_model.dart';
 import '../services/api_service.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/toast_service.dart';
 
 class CustomerController extends GetxController {
   final RxList<CustomerModel> customers = <CustomerModel>[].obs;
@@ -57,8 +58,11 @@ class CustomerController extends GetxController {
     } on ApiException catch (e) { _snap(ctx, e.message, Colors.red); return false; }
   }
 
-  void _snap(BuildContext ctx, String msg, Color color) {
-    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
+  void _snap(BuildContext $1, String msg, Color color) {
+    if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
+    else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }
+    else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
+    else { ToastService.showInfo(msg); }
   }
 }
 

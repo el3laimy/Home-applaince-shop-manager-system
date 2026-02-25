@@ -142,6 +142,9 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -410,6 +413,9 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<string>("InternalBarcode")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<decimal>("MinStockAlert")
                         .HasColumnType("numeric");
 
@@ -549,6 +555,35 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.HasIndex("PurchaseInvoiceId");
 
                     b.ToTable("PurchaseInvoiceItems");
+                });
+
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Expires")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("Revoked")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.ReturnInvoice", b =>
@@ -733,6 +768,44 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.ToTable("ShopSettings");
                 });
 
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.StockAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Cost")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("QuantityAdjusted")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("StockAdjustments");
+                });
+
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Supplier", b =>
                 {
                     b.Property<Guid>("Id")
@@ -876,7 +949,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.HasOne("ALIkhlasPOS.Domain.Entities.Customer", "Customer")
                         .WithMany("Invoices")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Customer");
                 });
@@ -966,6 +1039,17 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Navigation("PurchaseInvoice");
                 });
 
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("ALIkhlasPOS.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.ReturnInvoice", b =>
                 {
                     b.HasOne("ALIkhlasPOS.Domain.Entities.Invoice", "OriginalInvoice")
@@ -1003,6 +1087,17 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Cashier");
+                });
+
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.StockAdjustment", b =>
+                {
+                    b.HasOne("ALIkhlasPOS.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Supplier", b =>

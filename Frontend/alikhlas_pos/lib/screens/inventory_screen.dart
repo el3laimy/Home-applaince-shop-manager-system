@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../controllers/inventory_controller.dart';
@@ -7,6 +8,8 @@ import '../models/product_model.dart';
 import '../core/theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/barcode_print_service.dart';
+import 'package:pluto_grid/pluto_grid.dart';
+import '../core/utils/toast_service.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -225,26 +228,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   if (ctrl.products.isEmpty) {
                      return Center(child: Text('لا توجد منتجات', style: TextStyle(color: Colors.grey[500])));
                   }
-                  return SingleChildScrollView(
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(
-                          isDark ? Colors.black.withAlpha(50) : AppTheme.primaryColor.withAlpha(15),
-                        ),
-                        columnSpacing: 16,
-                        columns: const [
-                          DataColumn(label: Text('صورة', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('الباركود', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('اسم المنتج', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('الفئة', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('الرصيد', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('سعر الشراء', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('سعر البيع', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('إجراءات', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                        rows: ctrl.products.map((p) => _buildProductRow(p, ctrl, isDark, context)).toList(),
-                      ),
+                  return PlutoGrid(
+                    columns: _getColumns(isDark, ctrl, context),
+                    rows: ctrl.products.map((p) => _getPlutoRow(p, isDark, ctrl, context)).toList(),
+                    onLoaded: (PlutoGridOnLoadedEvent event) {
+                      event.stateManager.setShowColumnFilter(true);
+                      event.stateManager.setPageSize(30);
+                    },
+                    configuration: PlutoGridConfiguration(
+                      style: isDark ? PlutoGridStyleConfig.dark() : const PlutoGridStyleConfig(),
+                      localeText: const PlutoGridLocaleText.arabic(),
                     ),
                   );
                 }),
@@ -256,70 +249,134 @@ class _InventoryScreenState extends State<InventoryScreen> {
     ).animate().fadeIn().slideY(begin: 0.05);
   }
 
-  DataRow _buildProductRow(ProductModel p, InventoryController ctrl, bool isDark, BuildContext context) {
-    final isLow = p.isLowStock;
-    String hostUrl = ApiService.baseUrl.replaceAll('/api', '');
-
-    return DataRow(
-      color: WidgetStateProperty.resolveWith((states) => isLow ? Colors.orange.withAlpha(15) : null),
-      cells: [
-        DataCell(
-          Container(
+  List<PlutoColumn> _getColumns(bool isDark, InventoryController ctrl, BuildContext context) {
+    return [
+      PlutoColumn(
+        title: 'صورة',
+        field: 'image',
+        type: PlutoColumnType.text(),
+        enableFilterMenuItem: false,
+        enableSorting: false,
+        width: 80,
+        renderer: (rendererContext) {
+          final imageUrl = rendererContext.cell.value as String?;
+          final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api').replaceAll('/api', '');
+          return Container(
              width: 40, height: 40,
              decoration: BoxDecoration(
                color: Colors.grey.withAlpha(50),
                borderRadius: BorderRadius.circular(8),
-               image: p.imageUrl != null && p.imageUrl!.isNotEmpty
-                   ? DecorationImage(
-                       image: NetworkImage('$hostUrl${p.imageUrl}'),
-                       fit: BoxFit.cover,
-                     )
+               image: imageUrl != null && imageUrl.isNotEmpty
+                   ? DecorationImage(image: NetworkImage('$hostUrl$imageUrl'), fit: BoxFit.cover)
                    : null,
              ),
-             child: p.imageUrl == null || p.imageUrl!.isEmpty
+             child: (imageUrl == null || imageUrl.isEmpty)
                  ? const Icon(Icons.image_not_supported, size: 20, color: Colors.grey)
                  : null,
-          ),
-        ),
-        DataCell(Text(p.globalBarcode.isEmpty ? p.internalBarcode ?? '-' : p.globalBarcode,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
-        DataCell(Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLow) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 16)),
-            Flexible(child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-          ],
-        )),
-        DataCell(Text(p.category ?? '-', style: TextStyle(color: Colors.grey[500]))),
-        DataCell(Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-             color: isLow ? Colors.red.withAlpha(30) : Colors.green.withAlpha(30),
-             borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text('${p.stockQuantity.toStringAsFixed(0)} قطعة',
-             style: TextStyle(color: isLow ? Colors.red : Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-        )),
-        DataCell(Text('${p.purchasePrice.toStringAsFixed(2)} ج.م', style: const TextStyle(fontSize: 13))),
-        DataCell(Text('${p.price.toStringAsFixed(2)} ج.م', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondaryColor))),
-        DataCell(Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-               icon: const Icon(Icons.print_outlined, color: Colors.orange, size: 20),
-               onPressed: () => _showPrintLabelDialog(context, p, isDark),
-               tooltip: 'طباعة ملصق الباركود',
+          );
+        },
+      ),
+      PlutoColumn(
+        title: 'الباركود',
+        field: 'barcode',
+        type: PlutoColumnType.text(),
+        width: 150,
+      ),
+      PlutoColumn(
+        title: 'اسم المنتج',
+        field: 'name',
+        type: PlutoColumnType.text(),
+        width: 250,
+      ),
+      PlutoColumn(
+        title: 'الفئة',
+        field: 'category',
+        type: PlutoColumnType.text(),
+        width: 120,
+      ),
+      PlutoColumn(
+        title: 'الرصيد',
+        field: 'stock',
+        type: PlutoColumnType.number(),
+        width: 100,
+        renderer: (ctx) {
+          final isLow = ctx.row.cells['isLow']?.value as bool;
+          final stock = ctx.cell.value as num;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+               color: isLow ? Colors.red.withAlpha(30) : Colors.green.withAlpha(30),
+               borderRadius: BorderRadius.circular(8),
             ),
-            IconButton(
-               icon: const Icon(Icons.camera_alt_outlined, color: Colors.purple, size: 20),
-               onPressed: () => ctrl.pickAndUploadImage(p.id, context),
-               tooltip: 'تغيير الصورة',
-            ),
-            IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20), onPressed: () {}, tooltip: 'تعديل'),
-            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => ctrl.deleteProduct(p.id, context), tooltip: 'حذف'),
-          ],
-        )),
-      ],
+            child: Text('${stock.toStringAsFixed(0)} قطعة',
+               style: TextStyle(color: isLow ? Colors.red : Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+          );
+        },
+      ),
+      PlutoColumn(
+        title: 'سعر الشراء',
+        field: 'purchase',
+        type: PlutoColumnType.number(),
+        width: 100,
+        renderer: (ctx) => Text('${(ctx.cell.value as num).toStringAsFixed(2)} ج.م', style: const TextStyle(fontSize: 13)),
+      ),
+      PlutoColumn(
+        title: 'سعر البيع',
+        field: 'price',
+        type: PlutoColumnType.number(),
+        width: 100,
+        renderer: (ctx) => Text('${(ctx.cell.value as num).toStringAsFixed(2)} ج.م', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondaryColor)),
+      ),
+      PlutoColumn(
+        title: '',
+        field: 'isLow',
+        type: PlutoColumnType.text(),
+        hide: true, // Hid isLow column
+      ),
+      PlutoColumn(
+        title: 'ID',
+        field: 'id',
+        type: PlutoColumnType.text(),
+        hide: true, // Hid Action context column
+      ),
+      PlutoColumn(
+        title: 'إجراءات',
+        field: 'actions',
+        type: PlutoColumnType.text(),
+        enableFilterMenuItem: false,
+        enableSorting: false,
+        width: 160,
+        renderer: (ctx) {
+          final id = ctx.row.cells['id']!.value.toString();
+          final p = ctrl.products.firstWhere((prod) => prod.id == id);
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(icon: const Icon(Icons.print_outlined, color: Colors.orange, size: 20), onPressed: () => _showPrintLabelDialog(context, p, isDark), tooltip: 'طباعة ملصق الباركود'),
+              IconButton(icon: const Icon(Icons.camera_alt_outlined, color: Colors.purple, size: 20), onPressed: () => ctrl.pickAndUploadImage(p.id, context), tooltip: 'تغيير الصورة'),
+              IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20), onPressed: () {}, tooltip: 'تعديل'),
+              IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => ctrl.deleteProduct(p.id, context), tooltip: 'حذف'),
+            ],
+          );
+        }
+      ),
+    ];
+  }
+
+  PlutoRow _getPlutoRow(ProductModel p, bool isDark, InventoryController ctrl, BuildContext context) {
+    return PlutoRow(
+      cells: {
+        'image': PlutoCell(value: p.imageUrl ?? ''),
+        'barcode': PlutoCell(value: p.globalBarcode.isEmpty ? (p.internalBarcode ?? '-') : p.globalBarcode),
+        'name': PlutoCell(value: p.name),
+        'category': PlutoCell(value: p.category ?? '-'),
+        'stock': PlutoCell(value: p.stockQuantity),
+        'isLow': PlutoCell(value: p.isLowStock),
+        'purchase': PlutoCell(value: p.purchasePrice),
+        'price': PlutoCell(value: p.price),
+        'actions': PlutoCell(value: ''),
+        'id': PlutoCell(value: p.id),
+      },
     );
   }
 
@@ -329,7 +386,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
      // Validate if the product has any barcode to print
      final barcode = p.globalBarcode.isNotEmpty ? p.globalBarcode : p.internalBarcode ?? '';
      if (barcode.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('المنتج ليس له باركود للطباعة'), backgroundColor: Colors.red));
+        ToastService.showError('المنتج ليس له باركود للطباعة');
         return;
      }
 

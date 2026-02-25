@@ -26,6 +26,7 @@ public class Product
     public string? ImageUrl { get; set; }
 
     // Audit fields
+    public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

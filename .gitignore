@@ -21,6 +21,10 @@
 **/.fvm/
 *.log
 
+# Environment files
+.env
+.env.*
+
 # Mac
 .DS_Store
 

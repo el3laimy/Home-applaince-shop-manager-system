@@ -11,6 +11,7 @@ public class ApplicationDbContext : DbContext
 
     // ===== Core POS Entities =====
     public DbSet<User> Users { get; set; } = null!;
+    public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
     public DbSet<Bundle> Bundles { get; set; }
     public DbSet<ProductUnit> ProductUnits { get; set; }
@@ -37,6 +38,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<PurchaseInvoice> PurchaseInvoices { get; set; }
     public DbSet<PurchaseInvoiceItem> PurchaseInvoiceItems { get; set; }
 
+    // ERP - Inventory / Stock
+    public DbSet<StockAdjustment> StockAdjustments { get; set; }
+
     // ===== Shop Configuration =====
     public DbSet<ShopSettings> ShopSettings { get; set; } = null!;
 
@@ -56,6 +60,7 @@ public class ApplicationDbContext : DbContext
 
 
         // --- Product ---
+        modelBuilder.Entity<Product>().HasQueryFilter(p => p.IsActive);
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.GlobalBarcode)
             .IsUnique();
@@ -91,7 +96,7 @@ public class ApplicationDbContext : DbContext
             .HasOne(i => i.Customer)
             .WithMany(c => c.Invoices)
             .HasForeignKey(i => i.CustomerId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
 
         // --- Return Invoice ---
         modelBuilder.Entity<ReturnInvoice>()
@@ -107,6 +112,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Installment>().Property(i => i.Amount).HasColumnType("numeric(18,2)");
 
         // --- Customer ---
+        modelBuilder.Entity<Customer>().HasQueryFilter(c => c.IsActive);
         modelBuilder.Entity<Customer>().Property(c => c.TotalPurchases).HasColumnType("numeric(18,2)");
         modelBuilder.Entity<Customer>().Property(c => c.TotalPaid).HasColumnType("numeric(18,2)");
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
+import '../core/utils/toast_service.dart';
 
 class FinanceController extends GetxController {
   final RxBool isLoading = false.obs;
@@ -64,9 +65,11 @@ class FinanceController extends GetxController {
     }
   }
 
-  void _snap(BuildContext context, String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating,
-    ));
+  void _snap(BuildContext $1, String msg, Color color) {
+    if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
+    else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }
+    else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
+    else { ToastService.showInfo(msg); }
   }
+
 }
