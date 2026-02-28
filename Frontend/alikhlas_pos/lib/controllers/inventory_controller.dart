@@ -93,6 +93,7 @@ class InventoryController extends GetxController {
   }
 
   Future<bool> addProduct(Map<String, dynamic> productData, BuildContext context) async {
+    if (isLoading.value) return false;
     isLoading.value = true;
     try {
       await ApiService.post('products', productData);

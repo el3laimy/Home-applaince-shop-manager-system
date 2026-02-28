@@ -5,7 +5,11 @@ class SupplierModel {
   final String name;
   final String? phone;
   final String? address;
+  final String? companyName;
+  final double? openingBalance;
   final double? currentBalance;
+  final double? totalPurchases;
+  final double? totalPayments;
   final DateTime createdAt;
 
   SupplierModel({
@@ -13,7 +17,11 @@ class SupplierModel {
     required this.name,
     this.phone,
     this.address,
+    this.companyName,
+    this.openingBalance,
     this.currentBalance,
+    this.totalPurchases,
+    this.totalPayments,
     required this.createdAt,
   });
 
@@ -22,7 +30,11 @@ class SupplierModel {
     name: json['name'] as String,
     phone: json['phone'] as String?,
     address: json['address'] as String?,
+    companyName: json['companyName'] as String?,
+    openingBalance: (json['openingBalance'] as num?)?.toDouble(),
     currentBalance: (json['currentBalance'] as num?)?.toDouble(),
+    totalPurchases: (json['totalPurchases'] as num?)?.toDouble(),
+    totalPayments: (json['totalPayments'] as num?)?.toDouble(),
     createdAt: DateTime.parse(json['createdAt'] as String),
   );
 
@@ -30,6 +42,8 @@ class SupplierModel {
     'name': name,
     'phone': phone,
     'address': address,
+    'companyName': companyName,
+    'openingBalance': openingBalance,
   };
 }
 

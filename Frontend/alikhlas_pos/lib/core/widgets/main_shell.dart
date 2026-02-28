@@ -13,6 +13,8 @@ import '../../screens/purchasing_screen.dart';
 import '../../screens/finance_screen.dart';
 import '../../screens/bridal_screen.dart';
 import '../../screens/customers_screen.dart';
+import '../../screens/suppliers_screen.dart';
+import '../../screens/purchasing_screen.dart';
 import '../../screens/returns_screen.dart';
 import '../../screens/reports_screen.dart';
 import '../../screens/settings_screen.dart';
@@ -37,14 +39,15 @@ class _MainShellState extends State<MainShell> {
     const InventoryScreen(),
     const StockAdjustmentsScreen(), // index 3
     const CustomersScreen(),
-    const PurchasingScreen(),
+    const SuppliersScreen(), // index 5
+    const PurchasingScreen(), // index 6
     const ReturnsScreen(),
     const FinanceScreen(),
     const BridalOrdersScreen(),
     const ReportsScreen(),
     const SettingsScreen(),
-    const UsersScreen(), // index 11 — Admin only
-    const InstallmentsScreen(), // index 12 — Admin or Manager only
+    const UsersScreen(), // index 12 — Admin only
+    const InstallmentsScreen(), // index 13 — Admin or Manager only
   ];
 
   final List<_NavItem> _coreNavItems = [
@@ -53,16 +56,17 @@ class _MainShellState extends State<MainShell> {
     _NavItem(2, 'إدارة المخزون', Icons.inventory_2_rounded, Color(0xFF43E97B)),
     _NavItem(3, 'تسوية المخزون', Icons.inventory_rounded, Color(0xFFFBBC05)),
     _NavItem(4, 'العملاء', Icons.people_alt_rounded, Color(0xFF4FACFE)),
-    _NavItem(5, 'الموردين والمشتريات', Icons.local_shipping_rounded, Color(0xFFFA709A)),
-    _NavItem(6, 'إدارة المرتجعات', Icons.assignment_return_rounded, Color(0xFFFF5E5E)),
-    _NavItem(7, 'الخزينة والمحاسبة', Icons.account_balance_wallet_rounded, Color(0xFFFFB800)),
-    _NavItem(8, 'طلبيات العرائس', Icons.auto_awesome_rounded, Color(0xFFF093FB)),
-    _NavItem(9, 'التقارير التحليلية', Icons.insights_rounded, Color(0xFF6C63FF)),
-    _NavItem(10, 'إعدادات النظام', Icons.settings_rounded, Color(0xFF9E9E9E)),
+    _NavItem(5, 'الموردين والديون', Icons.domain, Color(0xFFFA709A)),
+    _NavItem(6, 'فواتير المشتريات', Icons.local_shipping_rounded, Color(0xFF00B4D8)),
+    _NavItem(7, 'إدارة المرتجعات', Icons.assignment_return_rounded, Color(0xFFFF5E5E)),
+    _NavItem(8, 'الخزينة والمحاسبة', Icons.account_balance_wallet_rounded, Color(0xFFFFB800)),
+    _NavItem(9, 'طلبيات العرائس', Icons.auto_awesome_rounded, Color(0xFFF093FB)),
+    _NavItem(10, 'التقارير التحليلية', Icons.insights_rounded, Color(0xFF6C63FF)),
+    _NavItem(11, 'إعدادات النظام', Icons.settings_rounded, Color(0xFF9E9E9E)),
   ];
 
-  static const _adminNavItem = _NavItem(11, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
-  static const _installmentsNavItem = _NavItem(12, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
+  static const _adminNavItem = _NavItem(12, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
+  static const _installmentsNavItem = _NavItem(13, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
 
   @override
   Widget build(BuildContext context) {

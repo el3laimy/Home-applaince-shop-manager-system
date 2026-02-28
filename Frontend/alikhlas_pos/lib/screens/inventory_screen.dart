@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:collection/collection.dart';
 import '../controllers/inventory_controller.dart';
 import '../models/product_model.dart';
 import '../core/theme/app_theme.dart';
@@ -30,6 +31,34 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String? selectedFormCategory;
   final customCategoryCtrl = TextEditingController();
   bool isCustomCategory = false;
+
+  PlutoGridStateManager? stateManager;
+  Worker? _worker;
+
+  @override
+  void initState() {
+    super.initState();
+    final ctrl = Get.put(InventoryController());
+    _worker = ever(ctrl.products, (products) {
+      if (stateManager != null) {
+        stateManager!.removeAllRows();
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        stateManager!.appendRows(products.map((p) => _getPlutoRow(p, isDark, ctrl, context)).toList());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _worker?.dispose();
+    nameCtrl.dispose();
+    barcodeCtrl.dispose();
+    purchasePriceCtrl.dispose();
+    salePriceCtrl.dispose();
+    stockCtrl.dispose();
+    customCategoryCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -345,17 +374,47 @@ class _InventoryScreenState extends State<InventoryScreen> {
         type: PlutoColumnType.text(),
         enableFilterMenuItem: false,
         enableSorting: false,
-        width: 160,
+        width: 170,
         renderer: (ctx) {
           final id = ctx.row.cells['id']!.value.toString();
-          final p = ctrl.products.firstWhere((prod) => prod.id == id);
+          final p = ctrl.products.firstWhereOrNull((prod) => prod.id == id);
+          if (p == null) return const SizedBox.shrink();
+
           return Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              IconButton(icon: const Icon(Icons.print_outlined, color: Colors.orange, size: 20), onPressed: () => _showPrintLabelDialog(context, p, isDark), tooltip: 'طباعة ملصق الباركود'),
-              IconButton(icon: const Icon(Icons.camera_alt_outlined, color: Colors.purple, size: 20), onPressed: () => ctrl.pickAndUploadImage(p.id, context), tooltip: 'تغيير الصورة'),
-              IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20), onPressed: () {}, tooltip: 'تعديل'),
-              IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => ctrl.deleteProduct(p.id, context), tooltip: 'حذف'),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.print_outlined, color: Colors.orange, size: 22), 
+                onPressed: () => _showPrintLabelDialog(context, p, Theme.of(context).brightness == Brightness.dark), 
+                tooltip: 'طباعة ملصق'
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.camera_alt_outlined, color: Colors.purple, size: 22), 
+                onPressed: () => ctrl.pickAndUploadImage(p.id, context), 
+                tooltip: 'تغيير الصورة'
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 22), 
+                onPressed: () => _showEditProductDialog(context, p, Theme.of(context).brightness == Brightness.dark, ctrl), 
+                tooltip: 'تعديل'
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22), 
+                onPressed: () => _showDeleteConfirmationDialog(context, p, ctrl), 
+                tooltip: 'حذف'
+              ),
             ],
           );
         }
@@ -538,35 +597,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                        backgroundColor: AppTheme.primaryColor,
                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                      ),
-                     onPressed: ctrl.isLoading.value ? null : () async {
-                       if (nameCtrl.text.isEmpty || salePriceCtrl.text.isEmpty) return;
-                       
-                       String? finalCategory;
-                       if (isCustomCategory && customCategoryCtrl.text.isNotEmpty) {
-                          finalCategory = customCategoryCtrl.text;
-                       } else if (!isCustomCategory && selectedFormCategory != null) {
-                          finalCategory = selectedFormCategory;
-                       }
-
-                       bool success = await ctrl.addProduct({
-                         'name': nameCtrl.text,
-                         'globalBarcode': barcodeCtrl.text.isEmpty ? null : barcodeCtrl.text,
-                         'category': finalCategory,
-                         'purchasePrice': double.tryParse(purchasePriceCtrl.text) ?? 0,
-                         'wholesalePrice': double.tryParse(purchasePriceCtrl.text) ?? 0,
-                         'price': double.tryParse(salePriceCtrl.text) ?? 0,
-                         'stockQuantity': int.tryParse(stockCtrl.text) ?? 0,
-                       }, context);
-
-                       if (success) {
-                          nameCtrl.clear(); barcodeCtrl.clear(); customCategoryCtrl.clear();
-                          purchasePriceCtrl.clear(); salePriceCtrl.clear(); stockCtrl.clear();
-                          setState(() {
-                             isCustomCategory = false;
-                             selectedFormCategory = null;
-                          });
-                       }
-                     },
+                     onPressed: ctrl.isLoading.value ? null : () => _showConfirmAddProductDialog(context, ctrl, isDark),
                      child: ctrl.isLoading.value
                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                          : const Text('حفظ المنتج', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -583,6 +614,91 @@ class _InventoryScreenState extends State<InventoryScreen> {
     ).animate().fadeIn(delay: 200.ms).slideX(begin: 0.1);
   }
 
+  void _showConfirmAddProductDialog(BuildContext context, InventoryController ctrl, bool isDark) {
+    if (nameCtrl.text.isEmpty || salePriceCtrl.text.isEmpty) {
+        ToastService.showError('يرجى ملء الحقول الإلزامية (اسم المنتج وسعر البيع)');
+        return;
+    }
+
+    String? finalCategory;
+    if (isCustomCategory && customCategoryCtrl.text.isNotEmpty) {
+      finalCategory = customCategoryCtrl.text;
+    } else if (!isCustomCategory && selectedFormCategory != null) {
+      finalCategory = selectedFormCategory;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد إضافة منتج', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('هل أنت متأكد من إضافة هذا المنتج بالبيانات التالية؟'),
+            const SizedBox(height: 16),
+            _buildDialogRow('الاسم:', nameCtrl.text),
+            _buildDialogRow('الباركود:', barcodeCtrl.text.isEmpty ? (ctrl.nextBarcode.value.isNotEmpty ? '${ctrl.nextBarcode.value} (تلقائي)' : 'تلقائي') : barcodeCtrl.text),
+            _buildDialogRow('الفئة:', finalCategory ?? 'غير محدد'),
+            _buildDialogRow('الشراء:', '${purchasePriceCtrl.text.isEmpty ? '0' : purchasePriceCtrl.text} ج.م'),
+            _buildDialogRow('البيع:', '${salePriceCtrl.text} ج.م'),
+            _buildDialogRow('الرصيد:', '${stockCtrl.text.isEmpty ? '0' : stockCtrl.text} قطعة'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('تعديل البيانات', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+               backgroundColor: AppTheme.primaryColor, 
+               foregroundColor: Colors.white,
+               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.check, size: 20),
+            label: const Text('تأكيد وإضافة'),
+            onPressed: () async {
+              Navigator.pop(ctx);
+
+              bool success = await ctrl.addProduct({
+                'name': nameCtrl.text,
+                'globalBarcode': barcodeCtrl.text.isEmpty ? null : barcodeCtrl.text,
+                'category': finalCategory,
+                'purchasePrice': double.tryParse(purchasePriceCtrl.text) ?? 0,
+                'wholesalePrice': double.tryParse(purchasePriceCtrl.text) ?? 0,
+                'price': double.tryParse(salePriceCtrl.text) ?? 0,
+                'stockQuantity': int.tryParse(stockCtrl.text) ?? 0,
+              }, context);
+
+              if (success) {
+                nameCtrl.clear(); barcodeCtrl.clear(); customCategoryCtrl.clear();
+                purchasePriceCtrl.clear(); salePriceCtrl.clear(); stockCtrl.clear();
+                setState(() {
+                  isCustomCategory = false;
+                  selectedFormCategory = null;
+                });
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDialogRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 70, child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, color: Colors.blueGrey))),
+        ],
+      ),
+    );
+  }
+
   Widget _input(TextEditingController ctrl, String label, IconData icon, bool isDark, {bool isNumber = false}) {
     return TextField(
       controller: ctrl,
@@ -594,6 +710,117 @@ class _InventoryScreenState extends State<InventoryScreen> {
         fillColor: isDark ? Colors.black.withAlpha(40) : Colors.white,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.withAlpha(40))),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmationDialog(BuildContext context, ProductModel p, InventoryController ctrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد الحذف', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: Text('هل أنت متأكد من رغبتك في حذف المنتج "${p.name}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            icon: const Icon(Icons.delete, size: 18),
+            label: const Text('نعم، احذف'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              ctrl.deleteProduct(p.id, context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditProductDialog(BuildContext context, ProductModel p, bool isDark, InventoryController ctrl) {
+    final editNameCtrl = TextEditingController(text: p.name);
+    final editBarcodeCtrl = TextEditingController(text: p.globalBarcode.isEmpty ? p.internalBarcode : p.globalBarcode);
+    final editPurchaseCtrl = TextEditingController(text: p.purchasePrice.toString());
+    final editSaleCtrl = TextEditingController(text: p.price.toString());
+    final editStockCtrl = TextEditingController(text: p.stockQuantity.toString());
+    String selectedCat = p.category ?? '';
+    if (selectedCat.isEmpty && ctrl.categories.isNotEmpty) selectedCat = ctrl.categories.first;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateBuilder) {
+          return AlertDialog(
+            title: const Text('تعديل المنتج', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _input(editNameCtrl, 'اسم المنتج *', Icons.text_fields, isDark),
+                    const SizedBox(height: 12),
+                    _input(editBarcodeCtrl, 'الباركود', Icons.qr_code, isDark),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: ctrl.categories.contains(selectedCat) ? selectedCat : null,
+                      decoration: InputDecoration(
+                        labelText: 'الفئة',
+                        filled: true,
+                        fillColor: isDark ? Colors.black.withAlpha(40) : Colors.white,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      items: ctrl.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setStateBuilder(() => selectedCat = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _input(editPurchaseCtrl, 'سعر الشراء', Icons.money_off, isDark, isNumber: true)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _input(editSaleCtrl, 'سعر البيع *', Icons.attach_money, isDark, isNumber: true)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _input(editStockCtrl, 'الرصيد', Icons.inventory, isDark, isNumber: true),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor, foregroundColor: Colors.white),
+                icon: const Icon(Icons.save, size: 18),
+                label: const Text('حفظ التعديلات'),
+                onPressed: () async {
+                  if (editNameCtrl.text.isEmpty || editSaleCtrl.text.isEmpty) {
+                    ToastService.showError('الاسم وسعر البيع مطلوبان');
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  await ctrl.updateProduct(p.id, {
+                    'name': editNameCtrl.text,
+                    'globalBarcode': editBarcodeCtrl.text.isEmpty ? null : editBarcodeCtrl.text,
+                    'category': selectedCat.isEmpty ? null : selectedCat,
+                    'purchasePrice': double.tryParse(editPurchaseCtrl.text) ?? 0,
+                    'wholesalePrice': double.tryParse(editPurchaseCtrl.text) ?? 0,
+                    'price': double.tryParse(editSaleCtrl.text) ?? 0,
+                    'stockQuantity': double.tryParse(editStockCtrl.text) ?? 0,
+                  }, context);
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }

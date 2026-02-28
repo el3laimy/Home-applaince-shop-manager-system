@@ -55,6 +55,15 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             });
         }
 
+        [HttpGet("safe-balance")]
+        public async Task<IActionResult> GetSafeBalance()
+        {
+            var totalCash = await _dbContext.CashTransactions
+                .SumAsync(t => t.Type == TransactionType.CashIn ? t.Amount : -t.Amount);
+
+            return Ok(new { SafeBalance = totalCash });
+        }
+
         [HttpPost("expenses")]
         public async Task<IActionResult> RecordExpense([FromBody] Expense expense)
         {

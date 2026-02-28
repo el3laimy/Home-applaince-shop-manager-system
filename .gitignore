@@ -30,3 +30,7 @@
 
 # Windows
 Thumbs.db
+
+# Local Logs and Artifacts
+Backend/ALIkhlasPOS.API/logs/
+artifacts/

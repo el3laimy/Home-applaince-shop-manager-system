@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/stock_adjustment_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/toast_service.dart';
 import '../models/product_model.dart';
 import 'package:intl/intl.dart';
 
@@ -15,7 +16,7 @@ class StockAdjustmentsScreen extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
+        color: Theme.of(context).scaffoldBackgroundColor,
       ),
       child: SafeArea(
         child: Padding(
@@ -68,7 +69,7 @@ class StockAdjustmentsScreen extends StatelessWidget {
 
                   return Container(
                      decoration: BoxDecoration(
-                        color: isDark ? AppTheme.darkCardColor : Colors.white,
+                        color: isDark ? AppTheme.surfaceDark : Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.grey.withAlpha(40)),
                      ),

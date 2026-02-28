@@ -54,6 +54,8 @@ dependencies:
   shimmer: ^3.0.0
   cherry_toast: ^1.13.0
   pluto_grid: ^8.1.0
+  easy_debounce: ^2.0.3
+  dropdown_search: ^6.0.2
 
 dev_dependencies:
   flutter_test:

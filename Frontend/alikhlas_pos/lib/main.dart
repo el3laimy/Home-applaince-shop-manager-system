@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:toastification/toastification.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/main_shell.dart';
 import 'screens/login_screen.dart';
@@ -48,30 +49,32 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeCtrl = Get.find<ThemeController>();
 
-    return Obx(() => GetMaterialApp(
-      title: 'ALIkhlasPOS',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeCtrl.themeMode.value,
+    return ToastificationWrapper(
+      child: Obx(() => GetMaterialApp(
+        title: 'ALIkhlasPOS',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: themeCtrl.themeMode.value,
 
-      home: Obx(() {
-        final authCtrl = Get.find<AuthController>();
-        if (authCtrl.isAuthenticated.value) {
-          return const MainShell();
-        } else {
-          return const LoginScreen();
-        }
-      }),
+        home: Obx(() {
+          final authCtrl = Get.find<AuthController>();
+          if (authCtrl.isAuthenticated.value) {
+            return const MainShell();
+          } else {
+            return const LoginScreen();
+          }
+        }),
 
-      locale: const Locale('ar', 'EG'),
-      builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: child ?? const SizedBox(),
-        );
-      },
-    ));
+        locale: const Locale('ar', 'EG'),
+        builder: (context, child) {
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: child ?? const SizedBox(),
+          );
+        },
+      )),
+    );
   }
 }
 

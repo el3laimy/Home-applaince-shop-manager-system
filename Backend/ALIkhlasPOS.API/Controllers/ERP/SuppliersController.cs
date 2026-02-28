@@ -160,5 +160,34 @@ namespace ALIkhlasPOS.API.Controllers.ERP
 
             return Ok(new { message = "تم تسجيل الدفعة بنجاح.", tx.Id, tx.Amount });
         }
+
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> DeleteSupplier(Guid id, CancellationToken ct = default)
+        {
+            var supplier = await _dbContext.Suppliers
+                .Include(s => s.PurchaseInvoices)
+                .FirstOrDefaultAsync(s => s.Id == id, ct);
+                
+            if (supplier == null) return NotFound();
+
+            if (supplier.PurchaseInvoices.Any())
+            {
+                return BadRequest(new { message = "لا يمكن حذف هذا المورد لوجود فواتير مشتريات أو حركات مالية سابقة مرتبطة به." });
+            }
+
+            // Also check for any direct CashTransactions linked to supplier's AccountId if they have one
+            if (supplier.AccountId.HasValue)
+            {
+                bool hasTransactions = await _dbContext.CashTransactions.AnyAsync(c => c.TargetAccountId == supplier.AccountId, ct);
+                if (hasTransactions)
+                {
+                    return BadRequest(new { message = "لا يمكن حذف هذا المورد لوجود حركات خزينة (مدفوعات) سابقة مرتبطة به." });
+                }
+            }
+
+            _dbContext.Suppliers.Remove(supplier);
+            await _dbContext.SaveChangesAsync(ct);
+            return NoContent();
+        }
     }
 }

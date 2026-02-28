@@ -63,7 +63,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Product>().HasQueryFilter(p => p.IsActive);
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.GlobalBarcode)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"GlobalBarcode\" IS NOT NULL");
         modelBuilder.Entity<Product>().Property(p => p.Price).HasColumnType("numeric(18,2)");
         modelBuilder.Entity<Product>().Property(p => p.PurchasePrice).HasColumnType("numeric(18,2)");
         modelBuilder.Entity<Product>().Property(p => p.WholesalePrice).HasColumnType("numeric(18,2)");

@@ -25,8 +25,8 @@ namespace ALIkhlasPOS.API.Controllers.ERP
     {
         public Guid ProductId { get; set; }
         public decimal Quantity { get; set; }
-        public decimal UnitPrice { get; set; }
-        public decimal TotalPrice => Quantity * UnitPrice;
+        public decimal UnitCost { get; set; }
+        public decimal TotalPrice => Quantity * UnitCost;
     }
 
     [ApiController]
@@ -53,8 +53,8 @@ namespace ALIkhlasPOS.API.Controllers.ERP
                 .OrderByDescending(p => p.Date)
                 .Select(p => new
                 {
-                    p.Id, p.InvoiceNo, p.Date,
-                    SupplierName = p.Supplier != null ? p.Supplier.Name : "",
+                    p.Id, p.InvoiceNo, CreatedAt = p.Date,
+                    Supplier = new { Name = p.Supplier != null ? p.Supplier.Name : "غير معروف" },
                     p.TotalAmount, p.NetAmount, p.PaidAmount, p.RemainingAmount
                 })
                 .ToListAsync(ct);
@@ -69,6 +69,17 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
+                if (dto.PaidAmount > 0)
+                {
+                    var totalCash = await _dbContext.CashTransactions
+                        .SumAsync(t => t.Type == TransactionType.CashIn ? t.Amount : -t.Amount);
+                    
+                    if (dto.PaidAmount > totalCash)
+                    {
+                        return BadRequest(new { message = $"عذراً، الرصيد الحالي للخزينة ({totalCash} ج.م) لا يكفي لتسديد هذه الدفعة النقدية." });
+                    }
+                }
+
                 var totalAmount = dto.Items.Sum(i => i.TotalPrice);
                 var netAmount = totalAmount - dto.Discount;
                 var remainingAmount = netAmount - dto.PaidAmount;
@@ -92,13 +103,13 @@ namespace ALIkhlasPOS.API.Controllers.ERP
                     if (product != null)
                     {
                         product.StockQuantity += item.Quantity;
-                        product.PurchasePrice = item.UnitPrice; // تحديث متوسط التكلفة
+                        product.PurchasePrice = item.UnitCost; // تحديث متوسط التكلفة
 
                         invoice.Items.Add(new PurchaseInvoiceItem
                         {
                             ProductId = product.Id,
                             Quantity = item.Quantity,
-                            UnitPrice = item.UnitPrice,
+                            UnitPrice = item.UnitCost,
                             TotalPrice = item.TotalPrice
                         });
                     }

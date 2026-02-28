@@ -5,44 +5,65 @@ import '../models/product_model.dart';
 import '../services/api_service.dart';
 import '../core/utils/toast_service.dart';
 
+class PurchaseItemRow {
+  String productId;
+  String productName;
+  double quantity;
+  double unitCost;
+
+  PurchaseItemRow({
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.unitCost,
+  });
+
+  double get total => quantity * unitCost;
+}
+
 class PurchasingController extends GetxController {
   // ----------------
-  // Tab 1: New Invoice
+  // Tab 1: New Invoice (Refactored for speed)
   // ----------------
   final Rx<SupplierModel?> selectedSupplier = Rx<SupplierModel?>(null);
-  final RxList<Map<String, dynamic>> purchaseItems = <Map<String, dynamic>>[].obs;
+  // Using an observable list of typed objects for inline editing
+  final RxList<PurchaseItemRow> purchaseItems = <PurchaseItemRow>[].obs;
   final RxString referenceNumber = ''.obs;
   
-  // Product search in Tab 1
+  // Product search
   final RxList<ProductModel> searchResults = <ProductModel>[].obs;
   final RxBool isSearchingProducts = false.obs;
+  
+  // Safe balance
+  final RxDouble safeBalance = 0.0.obs;
 
-  double get invoiceTotal => purchaseItems.fold(0, (s, i) => s + ((i['quantity'] as double) * (i['unitCost'] as double)));
+  double get invoiceTotal => purchaseItems.fold(0, (sum, item) => sum + item.total);
 
   // ----------------
-  // Tab 2: Suppliers List with Balances
+  // Suppliers & History
   // ----------------
-  // Since GetSuppliers now returns augmented objects (including balances), we store them as dynamic maps or a new model.
-  // Using dynamic maps for flexibility based on the backend response.
-  final RxList<Map<String, dynamic>> suppliersWithBalances = <Map<String, dynamic>>[].obs;
+  final RxList<SupplierModel> suppliersWithBalances = <SupplierModel>[].obs;
   final RxBool isLoadingSuppliers = false.obs;
 
-  // ----------------
-  // Tab 3: Invoice History
-  // ----------------
   final RxList<Map<String, dynamic>> allInvoices = <Map<String, dynamic>>[].obs;
   final RxBool isLoadingInvoices = false.obs;
 
-  // Global loading
   final RxBool isLoading = false.obs;
 
   @override
   void onInit() {
     super.onInit();
     fetchSuppliersWithBalances();
+    fetchSafeBalance();
+    fetchAllInvoices();
   }
 
-  // ==== API Calls ====
+  Future<void> fetchSafeBalance() async {
+    try {
+      final res = await ApiService.get('erp/finance/safe-balance');
+      safeBalance.value = (res['safeBalance'] as num?)?.toDouble() ?? 0.0;
+    } catch (_) {}
+  }
 
   Future<void> fetchSuppliersWithBalances({String? search}) async {
     isLoadingSuppliers.value = true;
@@ -50,9 +71,11 @@ class PurchasingController extends GetxController {
       final endpoint = 'erp/suppliers${search != null && search.isNotEmpty ? "?search=${Uri.encodeComponent(search)}" : ""}';
       final data = await ApiService.get(endpoint);
       if (data is List) {
-         suppliersWithBalances.assignAll((data as List).map((e) => e as Map<String, dynamic>).toList());
+         suppliersWithBalances.assignAll((data as List).map((e) => SupplierModel.fromJson(e as Map<String, dynamic>)).toList());
       }
-    } catch (_) {} finally {
+    } catch (e) {
+       print('Error in fetchSuppliersWithBalances: $e');
+    } finally {
       isLoadingSuppliers.value = false;
     }
   }
@@ -64,11 +87,30 @@ class PurchasingController extends GetxController {
     }
     isSearchingProducts.value = true;
     try {
-      final data = await ApiService.get('products?search=${Uri.encodeComponent(query)}&pageSize=10');
-      final list = (data['data'] as List<dynamic>? ?? [])
-          .map((p) => ProductModel.fromJson(p as Map<String, dynamic>))
-          .toList();
-      searchResults.assignAll(list);
+      // Changed to support barcode scanner instantly
+      final isLikelyBarcode = RegExp(r'^[0-9]+$').hasMatch(query) && query.length > 5;
+      final endpoint = isLikelyBarcode ? 'products/barcode/$query' : 'products?search=${Uri.encodeComponent(query)}&pageSize=15';
+      
+      final data = await ApiService.get(endpoint);
+      
+      if (isLikelyBarcode && data is Map<String, dynamic> && data.containsKey('id')) {
+          // Direct barcode hit
+          final p = ProductModel.fromJson(data);
+          addItemToInvoice(p, 1.0, p.purchasePrice);
+          searchResults.clear();
+          ToastService.showSuccess('تمت إضافة ${p.name}');
+      } else {
+          final list = (data['data'] as List<dynamic>? ?? [])
+              .map((p) => ProductModel.fromJson(p as Map<String, dynamic>))
+              .toList();
+          searchResults.assignAll(list);
+          
+          // Auto add if exactly 1 result and it's a barcode scan
+          if (isLikelyBarcode && list.length == 1) {
+             addItemToInvoice(list.first, 1.0, list.first.purchasePrice);
+             searchResults.clear();
+          }
+      }
     } catch (_) {
       searchResults.clear();
     } finally {
@@ -76,15 +118,142 @@ class PurchasingController extends GetxController {
     }
   }
 
-  Future<bool> addSupplier(Map<String, dynamic> data, BuildContext context) async {
+  // ==== Invoice Local State Management ====
+
+  void selectSupplierById(String id) {
+     final target = suppliersWithBalances.firstWhereOrNull((s) => s.id == id);
+     if (target != null) {
+        selectedSupplier.value = target;
+     } else {
+        selectedSupplier.value = null;
+     }
+  }
+
+  // ZERO-CLICK ADD: Directly adds to list
+  void addItemToInvoice(ProductModel product, double quantity, double unitCost) {
+    final existingIndex = purchaseItems.indexWhere((i) => i.productId == product.id);
+    if (existingIndex != -1) {
+      // Update existing
+      purchaseItems[existingIndex].quantity += quantity;
+      purchaseItems[existingIndex].unitCost = unitCost; // Update to latest cost
+      purchaseItems.refresh(); // force UI update
+    } else {
+      // Add new
+      purchaseItems.add(PurchaseItemRow(
+        productId: product.id,
+        productName: product.name,
+        quantity: quantity,
+        unitCost: unitCost,
+      ));
+    }
+  }
+
+  void updateItemQuantity(int index, double newQuantity) {
+     if (newQuantity <= 0) return removeItem(index);
+     purchaseItems[index].quantity = newQuantity;
+     purchaseItems.refresh();
+  }
+  
+  void updateItemCost(int index, double newCost) {
+     if (newCost < 0) return;
+     purchaseItems[index].unitCost = newCost;
+     purchaseItems.refresh();
+  }
+
+  void removeItem(int index) => purchaseItems.removeAt(index);
+
+  Future<bool> createNewProductForInvoice(Map<String, dynamic> data, BuildContext context) async {
     isLoading.value = true;
     try {
-       await ApiService.post('erp/suppliers', data);
+       final res = await ApiService.post('products', data);
+       if (res != null && res['id'] != null) {
+          final p = ProductModel.fromJson(res as Map<String, dynamic>);
+          addItemToInvoice(p, 1.0, data['purchasePrice'] as double);
+          ToastService.showSuccess('تم إضافة الصنف الجديد بنجاح للفاتورة');
+          return true;
+       }
+       return false;
+    } on ApiException catch (e) {
+       ToastService.showError(e.message);
+       return false;
+    } finally {
+       isLoading.value = false;
+    }
+  }
+
+  Future<bool> submitInvoice(double paidAmount, BuildContext context) async {
+    if (selectedSupplier.value == null || purchaseItems.isEmpty) {
+      ToastService.showWarning('يرجى اختيار مورد وإضافة أصناف');
+      return false;
+    }
+    isLoading.value = true;
+    try {
+      await ApiService.post('erp/purchases', {
+        'supplierId': selectedSupplier.value!.id,
+        'referenceNumber': referenceNumber.value.isEmpty ? null : referenceNumber.value,
+        'paidAmount': paidAmount,
+        'items': purchaseItems.map((i) => {
+          'productId': i.productId,
+          'quantity': i.quantity,
+          'unitCost': i.unitCost,
+        }).toList(),
+      });
+      purchaseItems.clear();
+      selectedSupplier.value = null;
+      referenceNumber.value = '';
+      ToastService.showSuccess('تم ترحيل الفاتورة بنجاح');
+      await fetchSuppliersWithBalances();
+      await fetchSafeBalance();
+      await fetchAllInvoices();
+      return true;
+    } on ApiException catch (e) {
+      ToastService.showError(e.message);
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+  
+  // Stubs for remaining functions to avoid breaking SuppliersScreen for now
+  Future<String?> addSupplier(Map<String, dynamic> data, BuildContext context) async {
+    isLoading.value = true;
+    try {
+       final res = await ApiService.post('erp/suppliers', data);
        await fetchSuppliersWithBalances();
-       _snap(context, 'تم إضافة المورد بنجاح', Colors.green);
+       ToastService.showSuccess('تم إضافة المورد بنجاح');
+       return res['id'] as String?;
+    } on ApiException catch (e) {
+       ToastService.showError(e.message);
+       return null;
+    } finally {
+       isLoading.value = false;
+    }
+  }
+
+  Future<bool> updateSupplier(String id, Map<String, dynamic> data, BuildContext context) async {
+    isLoading.value = true;
+    try {
+       await ApiService.put('erp/suppliers/$id', data);
+       await fetchSuppliersWithBalances();
+       ToastService.showSuccess('تم تعديل المورد بنجاح');
        return true;
     } on ApiException catch (e) {
-       _snap(context, e.message, Colors.red);
+       ToastService.showError(e.message);
+       return false;
+    } finally {
+       isLoading.value = false;
+    }
+  }
+
+  Future<bool> deleteSupplier(String id, BuildContext context) async {
+    isLoading.value = true;
+    try {
+       await ApiService.delete('erp/suppliers/$id');
+       await fetchSuppliersWithBalances();
+       ToastService.showWarning('تم حذف المورد بنجاح');
+       return true;
+    } on ApiException catch (e) {
+       ToastService.showError(e.message);
        return false;
     } finally {
        isLoading.value = false;
@@ -99,10 +268,10 @@ class PurchasingController extends GetxController {
         'notes': notes,
       });
       await fetchSuppliersWithBalances();
-      _snap(context, 'تم تسجيل الدفعة بنجاح', Colors.green);
+      ToastService.showSuccess('تم تسجيل الدفعة بنجاح');
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     } finally {
       isLoading.value = false;
@@ -112,97 +281,11 @@ class PurchasingController extends GetxController {
   Future<void> fetchAllInvoices() async {
      isLoadingInvoices.value = true;
      try {
-       // Since there's no global purchase history endpoint yet, we could either add one or mock it.
-       // Actually let's assume one exists or we just rely on supplier statement.
-       // The plan didn't explicitly request global invoice history endpoint on backend, but "سجل الفواتير" tab implies it.
-       // Let's call a generic endpoint or fetch from all suppliers.
-       // To hold up to the contract, I will fetch it if the backend has `GET /api/erp/purchases`.
-       // For now, I'll silently clear list or implement a basic fallback.
        final data = await ApiService.getList('erp/purchases');
        allInvoices.assignAll(data.cast<Map<String, dynamic>>());
      } catch (_) {
-       // Ignore if not implemented on backend
      } finally {
        isLoadingInvoices.value = false;
      }
   }
-
-  // ==== Invoice Local State Management ====
-
-  void selectSupplierById(String id) {
-     final target = suppliersWithBalances.firstWhereOrNull((s) => s['id'] == id);
-     if (target != null) {
-        selectedSupplier.value = SupplierModel(
-           id: target['id'], name: target['name'], phone: target['phone'],
-           address: target['address'],
-           currentBalance: (target['currentBalance'] as num?)?.toDouble() ?? 0,
-           createdAt: DateTime.parse(target['createdAt'])
-        );
-     }
-  }
-
-  void addItemToInvoice(ProductModel product, double quantity, double unitCost) {
-    final existingIndex = purchaseItems.indexWhere((i) => i['productId'] == product.id);
-    if (existingIndex != -1) {
-      purchaseItems[existingIndex] = {
-        ...purchaseItems[existingIndex],
-        'quantity': (purchaseItems[existingIndex]['quantity'] as double) + quantity,
-        'unitCost': unitCost // take latest cost
-      };
-    } else {
-      purchaseItems.add({
-        'productId': product.id,
-        'productName': product.name,
-        'quantity': quantity,
-        'unitCost': unitCost,
-      });
-    }
-    searchResults.clear();
-  }
-
-  void updateItemQuantity(int index, double newQuantity) {
-     if (newQuantity <= 0) return removeItem(index);
-     purchaseItems[index] = { ...purchaseItems[index], 'quantity': newQuantity };
-  }
-
-  void removeItem(int index) => purchaseItems.removeAt(index);
-
-  Future<bool> submitInvoice(double paidAmount, BuildContext context) async {
-    if (selectedSupplier.value == null || purchaseItems.isEmpty) {
-      _snap(context, 'يرجى اختيار مورد وإضافة أصناف', Colors.orange);
-      return false;
-    }
-    isLoading.value = true;
-    try {
-      await ApiService.post('erp/purchases', {
-        'supplierId': selectedSupplier.value!.id,
-        'referenceNumber': referenceNumber.value.isEmpty ? null : referenceNumber.value,
-        'paidAmount': paidAmount,
-        'items': purchaseItems.map((i) => {
-          'productId': i['productId'],
-          'quantity': i['quantity'],
-          'unitCost': i['unitCost'],
-        }).toList(),
-      });
-      purchaseItems.clear();
-      selectedSupplier.value = null;
-      referenceNumber.value = '';
-      _snap(context, 'تم ترحيل الفاتورة بنجاح', Colors.green);
-      await fetchSuppliersWithBalances(); // refresh balance
-      return true;
-    } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
-      return false;
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-  void _snap(BuildContext $1, String msg, Color color) {
-    if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
-    else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }
-    else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
-    else { ToastService.showInfo(msg); }
-  }
-
 }

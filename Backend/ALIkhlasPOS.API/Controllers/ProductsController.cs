@@ -116,18 +116,19 @@ public class ProductsController : ControllerBase
             Description = request.Description
         };
 
-        product.GlobalBarcode = string.IsNullOrWhiteSpace(request.GlobalBarcode)
-            ? await _barcodeService.GenerateInternalBarcodeAsync(cancellationToken)
-            : request.GlobalBarcode;
-
         if (!string.IsNullOrWhiteSpace(request.GlobalBarcode) && !_barcodeService.ValidateBarcodeFormat(request.GlobalBarcode))
             return BadRequest(new { message = "صيغة الباركود غير صحيحة." });
 
         if (string.IsNullOrWhiteSpace(request.GlobalBarcode))
-            product.InternalBarcode = product.GlobalBarcode;
-
-        if (!string.IsNullOrWhiteSpace(request.ImageUrl))
-            product.ImageUrl = request.ImageUrl;
+        {
+            product.GlobalBarcode = null;
+            product.InternalBarcode = await _barcodeService.GenerateInternalBarcodeAsync(cancellationToken);
+        }
+        else
+        {
+            product.GlobalBarcode = request.GlobalBarcode;
+            product.InternalBarcode = null;
+        }
 
         // Check for duplicate barcodes securely before saving
         var checkingBarcodes = new List<string>();
