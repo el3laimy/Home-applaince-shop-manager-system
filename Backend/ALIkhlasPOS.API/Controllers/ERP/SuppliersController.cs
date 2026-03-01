@@ -70,6 +70,16 @@ namespace ALIkhlasPOS.API.Controllers.ERP
         [HttpPost]
         public async Task<ActionResult<Supplier>> CreateSupplier([FromBody] Supplier supplier, CancellationToken ct = default)
         {
+            // Uniqueness check
+            bool nameExists = await _dbContext.Suppliers.AnyAsync(s => s.Name == supplier.Name, ct);
+            if (nameExists) return BadRequest(new { message = "عذراً، يوجد مورد مسجل بهذا الاسم بالفعل." });
+
+            if (!string.IsNullOrWhiteSpace(supplier.Phone))
+            {
+                bool phoneExists = await _dbContext.Suppliers.AnyAsync(s => s.Phone == supplier.Phone, ct);
+                if (phoneExists) return BadRequest(new { message = "عذراً، يوجد مورد مسجل بهذا الرقم بالفعل." });
+            }
+
             supplier.CreatedAt = DateTime.UtcNow;
             _dbContext.Suppliers.Add(supplier);
             await _dbContext.SaveChangesAsync(ct);

@@ -449,6 +449,15 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
+          // Checkout summary
+          _buildCheckoutSummary(isDark),
+        ],
+      ),
+    );
+  }
+
+  final TextEditingController _downPaymentCtrl = TextEditingController(text: '0');
+
   Widget _buildCheckoutSummary(bool isDark) {
     return Obx(() => Container(
       padding: const EdgeInsets.all(20),
@@ -473,6 +482,23 @@ class _PosScreenState extends State<PosScreen> {
             ],
           ),
           const SizedBox(height: 16),
+
+          if (_ctrl.selectedPaymentType.value == PaymentType.installment)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: TextField(
+                controller: _downPaymentCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'المبلغ المقدم (Down Payment)',
+                  prefixIcon: const Icon(Icons.payments_outlined),
+                  suffixText: 'ج.م',
+                  filled: true,
+                  fillColor: isDark ? Colors.black26 : Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ).animate().fadeIn().slideY(begin: -0.1),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -516,7 +542,14 @@ class _PosScreenState extends State<PosScreen> {
             child: ElevatedButton(
               onPressed: _ctrl.cartItems.isEmpty || _ctrl.isLoading.value
                   ? null
-                  : () => _ctrl.confirmCheckout(context),
+                  : () async {
+                      final downPayment = double.tryParse(_downPaymentCtrl.text) ?? 0.0;
+                      final success = await _ctrl.confirmCheckout(context, downPayment: downPayment);
+                      if (success && _ctrl.selectedPaymentType.value == PaymentType.installment) {
+                         // TODO: Auto-trigger installment scheduling UI if needed
+                         _downPaymentCtrl.text = '0';
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryColor,
                 foregroundColor: Colors.white,

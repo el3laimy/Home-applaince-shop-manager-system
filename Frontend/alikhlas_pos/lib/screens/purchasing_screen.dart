@@ -20,7 +20,7 @@ class PurchasingScreen extends StatefulWidget {
 
 class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final PurchasingController ctrl = Get.put(PurchasingController());
+  final PurchasingController ctrl = Get.find<PurchasingController>();
   final FocusNode _searchFocusNode = FocusNode();
 
   @override

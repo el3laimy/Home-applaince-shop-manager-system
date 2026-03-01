@@ -451,7 +451,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
      showDialog(context: context, builder: (ctx) {
         return AlertDialog(
-           title: Text('طباعة ملصق لـ: ${p.name}'),
+           title: Row(
+             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+             children: [
+               Text('طباعة ملصق لـ: ${p.name}'),
+               IconButton(
+                 icon: const Icon(Icons.help_outline, color: Colors.blue),
+                 onPressed: () => _showWindowsPrintHelp(context),
+                 tooltip: 'تعليمات إعدادات الويندوز',
+               ),
+             ],
+           ),
            content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -481,6 +491,48 @@ class _InventoryScreenState extends State<InventoryScreen> {
            ],
         );
      });
+  }
+
+  void _showWindowsPrintHelp(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إعدادات طابعة الباركود في Windows'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('لضمان جودة الطباعة وعدم خروج الباركود عن الملصق، يرجى التأكد من الإعدادات التالية في لوحة التحكم (Control Panel):', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              _bulletPoint('1. افتح "Devices and Printers" في Windows.'),
+              _bulletPoint('2. اضغط بيمين الماوس على الطابعة واختر "Printing Preferences".'),
+              _bulletPoint('3. في تبويب "Page Setup"، اختر مقاس الورق (New) وادخل: 50mm عرض و 25mm طول.'),
+              _bulletPoint('4. في تبويب "Stock"، تأكد من اختيار نوع "Labels with Gaps".'),
+              _bulletPoint('5. تأكد من إيقاف خيارات "Scaling" أو "Fit to Page"'),
+              const SizedBox(height: 12),
+              const Text('💡 نصيحة: استخدم زر "معايرة الباركود" في الإعدادات للتأكد من المحاذاة.', style: TextStyle(color: Colors.blue, fontStyle: FontStyle.italic)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسناً، فهمت')),
+        ],
+      ),
+    );
+  }
+
+  Widget _bulletPoint(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
   }
 
   Widget _buildAddProductPanel(BuildContext context, InventoryController ctrl, bool isDark) {

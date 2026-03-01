@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ALIkhlasPOS.Application.Interfaces;
+using ALIkhlasPOS.Application.Interfaces.Accounting;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -15,11 +16,13 @@ public class InvoicesController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IProductCacheService _productCacheService;
+    private readonly IAccountingService _accountingService;
 
-    public InvoicesController(ApplicationDbContext dbContext, IProductCacheService productCacheService)
+    public InvoicesController(ApplicationDbContext dbContext, IProductCacheService productCacheService, IAccountingService accountingService)
     {
         _dbContext = dbContext;
         _productCacheService = productCacheService;
+        _accountingService = accountingService;
     }
 
     // ── Request DTOs ─────────────────────────────────────────────────────────
@@ -221,6 +224,18 @@ public class InvoicesController : ControllerBase
 
         _dbContext.Invoices.Add(invoice);
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // ── Recording to Treasury & Accounting ──
+        try
+        {
+            await _accountingService.RecordCashSaleAsync(invoice, invoice.CreatedBy);
+        }
+        catch (Exception ex)
+        {
+            // Logging would go here. We don't want to fail the invoice if accounting fails,
+            // but for now we let it pass as the invoice is already saved.
+            Console.WriteLine($"Accounting Sync Error: {ex.Message}");
+        }
 
         return Ok(new
         {

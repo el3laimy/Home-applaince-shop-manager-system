@@ -80,7 +80,7 @@ class ApiService {
     return false;
   }
 
-  static Future<Map<String, dynamic>> get(String endpoint, {Map<String, dynamic>? queryParameters}) async {
+  static Future<dynamic> get(String endpoint, {Map<String, dynamic>? queryParameters}) async {
     try {
       final response = await _dio.get('/$endpoint', queryParameters: queryParameters);
       return _handleResponse(response);

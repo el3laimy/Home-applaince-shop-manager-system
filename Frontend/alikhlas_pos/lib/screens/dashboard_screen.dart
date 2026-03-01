@@ -35,41 +35,47 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 24),
               
               Expanded(
-                child: Obx(() {
-                  if (ctrl.isLoading.value) return _buildShimmerLoading(isDark);
-                  if (ctrl.errorMessage.isNotEmpty) return Center(child: Text(ctrl.errorMessage.value, style: const TextStyle(color: Colors.red)));
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Main Column
-                      Expanded(
-                        flex: 7,
-                        child: Column(
-                          children: [
-                            _buildStatCards(context, ctrl, isDark),
-                            const SizedBox(height: 20),
-                            Expanded(child: _buildSalesChart(context, ctrl, isDark)),
-                          ],
-                        ),
+                child: Column(
+                  children: [
+                    Obx(() {
+                      if (ctrl.isLoading.value && ctrl.todaySales.value == 0) return const SizedBox.shrink(); // Hide during initial load if really needed, but shimmer is better
+                      if (ctrl.errorMessage.isNotEmpty) return Center(child: Text(ctrl.errorMessage.value, style: const TextStyle(color: Colors.red)));
+                      return const SizedBox.shrink();
+                    }),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Main Column
+                          Expanded(
+                            flex: 7,
+                            child: Column(
+                              children: [
+                                _buildStatCards(context, ctrl, isDark),
+                                const SizedBox(height: 20),
+                                Expanded(child: _buildSalesChart(context, ctrl, isDark)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          // Side Column
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              children: [
+                                Expanded(flex: 3, child: _buildTopProducts(context, ctrl, isDark)),
+                                const SizedBox(height: 20),
+                                Expanded(flex: 2, child: _buildRecentInvoices(context, ctrl, isDark)),
+                                const SizedBox(height: 20),
+                                Expanded(flex: 1, child: _buildAlertsCard(context, ctrl, isDark)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 20),
-                      // Side Column
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          children: [
-                             Expanded(flex: 3, child: _buildTopProducts(context, ctrl, isDark)),
-                             const SizedBox(height: 20),
-                            Expanded(flex: 2, child: _buildRecentInvoices(context, ctrl, isDark)),
-                            const SizedBox(height: 20),
-                            Expanded(flex: 1, child: _buildAlertsCard(context, ctrl, isDark)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -125,7 +131,7 @@ class DashboardScreen extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _cardWithGrowth(
+              child: Obx(() => _cardWithGrowth(
                 'مبيعات اليوم',
                 AppFormatters.currency(ctrl.todaySales.value),
                 ctrl.dailySalesGrowth.value,
@@ -133,13 +139,13 @@ class DashboardScreen extends StatelessWidget {
                 const Color(0xFF00E5FF),
                 'النمو اليومي',
                 isDark,
-              ),
+              )),
             ),
             const SizedBox(width: 16),
-            Expanded(child: _statCard('فواتير اليوم', '${ctrl.dailyInvoicesCount.value}', Icons.receipt_long, const Color(0xFF4FACFE), isDark)),
+            Expanded(child: Obx(() => _statCard('فواتير اليوم', '${ctrl.dailyInvoicesCount.value}', Icons.receipt_long, const Color(0xFF4FACFE), isDark))),
             const SizedBox(width: 16),
             Expanded(
-              child: _cardWithGrowth(
+              child: Obx(() => _cardWithGrowth(
                 'مبيعات الشهر',
                 AppFormatters.currency(ctrl.monthlySales.value),
                 ctrl.monthlySalesGrowth.value,
@@ -147,10 +153,10 @@ class DashboardScreen extends StatelessWidget {
                 const Color(0xFF43E97B),
                 'النمو الشهري',
                 isDark,
-              ),
+              )),
             ),
             const SizedBox(width: 16),
-            Expanded(child: _statCard('العملاء', '${ctrl.totalCustomers.value}', Icons.people, const Color(0xFFF093FB), isDark)),
+            Expanded(child: Obx(() => _statCard('العملاء', '${ctrl.totalCustomers.value}', Icons.people, const Color(0xFFF093FB), isDark))),
           ],
         ),
         const SizedBox(height: 16),
@@ -158,11 +164,11 @@ class DashboardScreen extends StatelessWidget {
         // Row 2: Advanced Profit Margins (NEW)
         Row(
           children: [
-            Expanded(child: _marginCard('إجمالي الربح (الشهري)', AppFormatters.currency(ctrl.monthlyGrossProfit.value), ctrl.grossMargin.value, const Color(0xFF00C9FF), isDark)),
+            Expanded(child: Obx(() => _marginCard('إجمالي الربح (الشهري)', AppFormatters.currency(ctrl.monthlyGrossProfit.value), ctrl.grossMargin.value, const Color(0xFF00C9FF), isDark))),
             const SizedBox(width: 16),
-            Expanded(child: _marginCard('صافي الربح (الشهري)', AppFormatters.currency(ctrl.monthlyNetProfit.value), ctrl.netMargin.value, const Color(0xFF43E97B), isDark)),
+            Expanded(child: Obx(() => _marginCard('صافي الربح (الشهري)', AppFormatters.currency(ctrl.monthlyNetProfit.value), ctrl.netMargin.value, const Color(0xFF43E97B), isDark))),
             const SizedBox(width: 16),
-            Expanded(child: _marginCard('هيكلة المصروفات', '${ctrl.expenseRatio.value}% من المبيعات', ctrl.expenseRatio.value, Colors.orangeAccent, isDark, invertColor: true)),
+            Expanded(child: Obx(() => _marginCard('هيكلة المصروفات', '${ctrl.expenseRatio.value}% من المبيعات', ctrl.expenseRatio.value, Colors.orangeAccent, isDark, invertColor: true))),
           ],
         ),
       ],
@@ -326,7 +332,7 @@ class DashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Expanded(
-            child: ctrl.salesTrend.isEmpty
+            child: Obx(() => ctrl.salesTrend.isEmpty
                 ? Center(child: Text('لا توجد بيانات', style: TextStyle(color: Colors.grey[500])))
                 : LineChart(
                     LineChartData(
@@ -385,7 +391,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
+                  )),
           ),
         ],
       ),
@@ -417,7 +423,7 @@ class DashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: ctrl.topProfitableProducts.isEmpty
+            child: Obx(() => ctrl.topProfitableProducts.isEmpty
                 ? Center(child: Text('لا توجد بيانات أرباح للمنتجات', style: TextStyle(color: Colors.grey[500])))
                 : ListView.builder(
                     itemCount: ctrl.topProfitableProducts.length,
@@ -455,7 +461,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       );
                     },
-                  ),
+                  )),
           )
         ],
       ),
@@ -471,7 +477,7 @@ class DashboardScreen extends StatelessWidget {
           Text('أحدث الفواتير', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Expanded(
-            child: ctrl.recentInvoices.isEmpty
+            child: Obx(() => ctrl.recentInvoices.isEmpty
                 ? Center(child: Text('لا توجد فواتير حديثة', style: TextStyle(color: Colors.grey[500])))
                 : ListView.builder(
                     itemCount: ctrl.recentInvoices.length,
@@ -501,7 +507,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       );
                     },
-                  ),
+                  )),
           )
         ],
       ),
@@ -523,14 +529,14 @@ class DashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: ListView(
+            child: Obx(() => ListView(
               children: [
                 if (ctrl.lowStockProducts.value > 0)
                   _alertItem('المخزون', 'يوجد ${ctrl.lowStockProducts.value} منتج وصل للحد الأدنى للمخزون!', Colors.orange, isDark),
                 if (ctrl.lowStockProducts.value == 0)
                   const Center(child: Text('لا توجد تنبيهات', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
               ],
-            ),
+            )),
           )
         ],
       ),
@@ -549,9 +555,10 @@ class DashboardScreen extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // Added to prevent vertical growth
               children: [
                 Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 12)),
-                Text(msg, style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[800], fontSize: 12)),
+                Text(msg, style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[800], fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),

@@ -225,7 +225,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     }).toList();
 
     return PlutoGrid(
-      key: UniqueKey(), // Force rebuild on data change for now until full stateManager sync is implemented
+      key: ValueKey('suppliers_grid_${ctrl.suppliersWithBalances.length}_${ctrl.suppliersWithBalances.hashCode}'),
       columns: columns,
       rows: rows,
       onLoaded: (PlutoGridOnLoadedEvent event) {

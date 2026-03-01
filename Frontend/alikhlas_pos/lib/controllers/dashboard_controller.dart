@@ -47,6 +47,7 @@ class DashboardController extends GetxController {
       
       final data = await ApiService.get('dashboard/summary');
       
+      // Batch updates if possible or update one by one but in a controlled manner
       todaySales.value = (data['todaySales'] as num?)?.toDouble() ?? 0.0;
       dailySalesGrowth.value = (data['dailySalesGrowth'] as num?)?.toDouble() ?? 0.0;
       dailyInvoicesCount.value = (data['dailyInvoicesCount'] as num?)?.toInt() ?? 0;
@@ -68,9 +69,9 @@ class DashboardController extends GetxController {
       overdueInstallmentsTotal.value = (data['overdueInstallmentsTotal'] as num?)?.toDouble() ?? 0.0;
       dueSoonCount.value = (data['dueSoonCount'] as num?)?.toInt() ?? 0;
 
-      recentInvoices.value = data['recentInvoices'] ?? [];
-      topProfitableProducts.value = data['topProfitableProducts'] ?? [];
-      salesTrend.value = data['salesTrend'] ?? [];
+      recentInvoices.assignAll(data['recentInvoices'] ?? []);
+      topProfitableProducts.assignAll(data['topProfitableProducts'] ?? []);
+      salesTrend.assignAll(data['salesTrend'] ?? []);
 
     } catch (e) {
       errorMessage.value = 'فشل تحميل الإحصائيات: $e';

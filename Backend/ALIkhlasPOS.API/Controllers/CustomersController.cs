@@ -73,6 +73,16 @@ public class CustomersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCustomerRequest request, CancellationToken cancellationToken)
     {
+        // Uniqueness check
+        bool nameExists = await _dbContext.Customers.AnyAsync(c => c.Name == request.Name && c.IsActive, cancellationToken);
+        if (nameExists) return BadRequest(new { message = "عذراً، يوجد عميل مسجل بهذا الاسم بالفعل." });
+
+        if (!string.IsNullOrWhiteSpace(request.Phone))
+        {
+            bool phoneExists = await _dbContext.Customers.AnyAsync(c => c.Phone == request.Phone && c.IsActive, cancellationToken);
+            if (phoneExists) return BadRequest(new { message = "عذراً، يوجد عميل مسجل بهذا الرقم بالفعل." });
+        }
+
         var customer = new Customer
         {
             Name = request.Name,

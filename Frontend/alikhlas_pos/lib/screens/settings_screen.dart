@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:printing/printing.dart';
 import '../controllers/settings_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../services/receipt_service.dart';
+import '../services/barcode_print_service.dart';
 import '../services/api_service.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -187,25 +189,20 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          const Text('الطابعة الافتراضية للكاشير'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black.withAlpha(40) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.withAlpha(isDark ? 30 : 60)),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: ctrl.selectedPrinter.value,
-                isExpanded: true,
-                items: ['Default Printer', 'XP-80 Printer', 'Bixolon SRP', 'PDF Export']
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (v) => ctrl.selectedPrinter.value = v!,
-              ),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('طابعة الفواتير (Thermal 80mm)'),
+              IconButton(onPressed: ctrl.refreshPrinterList, icon: const Icon(Icons.refresh, size: 18), tooltip: 'تحديث قائمة الطابعات'),
+            ],
           ),
+          const SizedBox(height: 8),
+          _printerDropdown(ctrl.receiptPrinterName, ctrl.availablePrinters, isDark),
+
+          const SizedBox(height: 16),
+          const Text('طابعة الباركود (Label 50x25mm)'),
+          const SizedBox(height: 8),
+          _printerDropdown(ctrl.labelPrinterName, ctrl.availablePrinters, isDark),
 
           const SizedBox(height: 16),
           SwitchListTile(
@@ -226,18 +223,82 @@ class SettingsScreen extends StatelessWidget {
             activeColor: AppTheme.primaryColor,
           ),
 
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => ReceiptService.printTestPage(),
-              icon: const Icon(Icons.receipt_long),
-              label: const Text('طباعة صفحة اختبار'),
-            ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 12),
+          Text('أدوات المعايرة والاختبار', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[600], fontSize: 13)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => ReceiptService.printTestPage(),
+                  icon: const Icon(Icons.receipt_long, size: 18),
+                  label: const Text('اختبار الفاتورة', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showCalibrationHelp(context),
+                  icon: const Icon(Icons.straighten, size: 18),
+                  label: const Text('معايرة الباركود', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
           )
         ],
       ),
     ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1);
+  }
+
+  Widget _printerDropdown(RxString value, RxList<String> items, bool isDark) {
+    return Obx(() => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black.withAlpha(40) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withAlpha(isDark ? 30 : 60)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: items.contains(value.value) ? value.value : 'Default',
+          isExpanded: true,
+          items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+          onChanged: (v) => value.value = v!,
+        ),
+      ),
+    ));
+  }
+
+  void _showCalibrationHelp(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('معايرة طابعة الباركود'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('سيتم طباعة ملصق تجريبي بمقاس 50x25 ملم مع إطار خارجي.'),
+            SizedBox(height: 12),
+            Text('• إذا ظهر الإطار مقطوعاً: تأكد من ضبط مقاس الورق في إعدادات الويندوز.', style: TextStyle(fontSize: 12)),
+            Text('• إذا كان الباركود غير واضح: يرجى تنظيف رأس الطابعة أو تعديل الكثافة (Density).', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.print),
+            label: const Text('طباعة ملصق المعايرة'),
+            onPressed: () {
+              BarcodePrintService.printCalibrationLabel();
+              Navigator.pop(ctx);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildBehaviorSettings(BuildContext context, SettingsController ctrl, bool isDark) {

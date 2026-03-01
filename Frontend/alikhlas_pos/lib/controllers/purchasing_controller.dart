@@ -69,10 +69,8 @@ class PurchasingController extends GetxController {
     isLoadingSuppliers.value = true;
     try {
       final endpoint = 'erp/suppliers${search != null && search.isNotEmpty ? "?search=${Uri.encodeComponent(search)}" : ""}';
-      final data = await ApiService.get(endpoint);
-      if (data is List) {
-         suppliersWithBalances.assignAll((data as List).map((e) => SupplierModel.fromJson(e as Map<String, dynamic>)).toList());
-      }
+      final data = await ApiService.getList(endpoint);
+      suppliersWithBalances.assignAll(data.map((e) => SupplierModel.fromJson(e as Map<String, dynamic>)).toList());
     } catch (e) {
        print('Error in fetchSuppliersWithBalances: $e');
     } finally {

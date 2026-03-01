@@ -128,7 +128,7 @@ class PosController extends GetxController {
       );
     } else {
       cartItems.insert(0, CartItemModel(
-        barcode: product.globalBarcode,
+        barcode: product.globalBarcode.isNotEmpty ? product.globalBarcode : (product.internalBarcode ?? ''),
         productId: product.id,
         productName: product.name,
         unitPrice: product.price,
@@ -180,7 +180,7 @@ class PosController extends GetxController {
   }
 
   /// Submit the invoice to the backend and trigger receipt printing
-  Future<bool> confirmCheckout(BuildContext context) async {
+  Future<bool> confirmCheckout(BuildContext context, {double downPayment = 0.0}) async {
     if (cartItems.isEmpty) return false;
     isLoading.value = true;
 
@@ -201,10 +201,12 @@ class PosController extends GetxController {
         'paymentType': selectedPaymentType.value.index,
         'customerId': selectedCustomerId.value,
         'discountAmount': discountSnapshot,
+        'downPayment': downPayment, // Send down payment to backend
       };
 
       final result = await ApiService.post('invoices', body);
 
+      final invoiceId = result['id'] as String? ?? '';
       final invoiceNo = result['invoiceNo'] as String? ?? '';
       final total = (result['totalAmount'] as num?)?.toDouble() ?? 0.0;
       final paid = (result['paidAmount'] as num?)?.toDouble() ?? total;
@@ -216,6 +218,11 @@ class PosController extends GetxController {
       clearCart();
 
       _showSuccess(context, 'تم إنشاء الفاتورة $invoiceNo ✓\nالإجمالي: ${total.toStringAsFixed(2)} ج.م');
+
+      // If installment, we might want to return the invoiceId to show the scheduling dialog
+      if (selectedPaymentType.value == PaymentType.installment && remaining > 0) {
+        // We can handle this in the UI based on the return value or a specific state
+      }
 
       // Print receipt asynchronously (won't block UI)
       ReceiptService.printReceipt(

@@ -64,15 +64,31 @@ namespace ALIkhlasPOS.Application.Services.Accounting
             var inventoryAccountId = await GetSystemAccountIdAsync("INVENTORY");
 
             // 1. قيد المبيعات (من ح/ الخزينة إلى ح/ إيرادات المبيعات)
-            await CreateJournalEntryAsync(
+            var journal = await CreateJournalEntryAsync(
                 reference: invoice.InvoiceNo,
                 description: $"مبيعات ناتجة عن فاتورة {invoice.InvoiceNo}",
                 createdBy: createdBy,
-                (cashAccountId, Debit: invoice.TotalAmount, Credit: 0),
-                (salesAccountId, Debit: 0, Credit: invoice.TotalAmount)
+                (cashAccountId, Debit: invoice.PaidAmount, Credit: 0),
+                (salesAccountId, Debit: 0, Credit: invoice.PaidAmount)
             );
 
-            // 2. قيد التكلفة (من ح/ تكلفة البضاعة المباعة إلى ح/ المخزون)
+            // 2. تسجيل الحركة في الخزينة لتظهر في حركة الصندوق
+            if (invoice.PaidAmount > 0)
+            {
+                _dbContext.Set<CashTransaction>().Add(new CashTransaction
+                {
+                    Amount = invoice.PaidAmount,
+                    Type = TransactionType.CashIn,
+                    ReceiptNumber = invoice.InvoiceNo,
+                    Description = $"مبيعات فاتورة {invoice.InvoiceNo} - " + (invoice.PaymentType == PaymentType.Installment ? "مقدم قسط" : "نقدي"),
+                    TargetAccountId = salesAccountId,
+                    JournalEntryId = journal.Id,
+                    CreatedBy = createdBy,
+                    Date = DateTime.UtcNow
+                });
+            }
+
+            // 3. قيد التكلفة (من ح/ تكلفة البضاعة المباعة إلى ح/ المخزون)
             decimal actualCost = 0;
             if (invoice.Items != null && invoice.Items.Any())
             {

@@ -9,6 +9,8 @@ import 'screens/login_screen.dart';
 import 'services/api_service.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/theme_controller.dart';
+import 'controllers/purchasing_controller.dart';
+import 'controllers/customer_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +39,8 @@ void main() async {
   // Inject root-level controllers
   Get.put(AuthController());
   Get.put(ThemeController());
+  Get.lazyPut(() => PurchasingController());
+  Get.lazyPut(() => CustomerController());
 
   runApp(const MyApp());
 }
