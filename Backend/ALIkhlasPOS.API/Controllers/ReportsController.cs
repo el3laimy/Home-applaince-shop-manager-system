@@ -1,12 +1,13 @@
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ALIkhlasPOS.API.Controllers;
 
 [ApiController]
-[Microsoft.AspNetCore.Authorization.Authorize]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Manager")]
 [Route("api/[controller]")]
 public class ReportsController : ControllerBase
 {
@@ -98,15 +99,20 @@ public class ReportsController : ControllerBase
             .Where(r => r.CreatedAt >= start && r.CreatedAt <= end)
             .ToListAsync(cancellationToken);
 
+        var expenses = await _dbContext.Expenses
+            .Where(e => e.Date >= start && e.Date <= end)
+            .ToListAsync(cancellationToken);
+
         // Calculate Revenue and Cost
         decimal totalRevenue = sales.Sum(i => i.TotalAmount) - sales.Sum(i => i.DiscountAmount);
         decimal totalCost = sales.SelectMany(i => i.Items).Sum(item => item.Quantity * (item.Product?.PurchasePrice ?? 0));
         
-        // Subtract Returns
+        // Subtract Returns and Expenses
         decimal totalRefunds = returns.Sum(r => r.RefundAmount);
+        decimal totalExpenses = expenses.Sum(e => e.Amount);
         
         decimal netRevenue = totalRevenue - totalRefunds;
-        decimal netProfit = netRevenue - totalCost;
+        decimal netProfit = netRevenue - totalCost - totalExpenses;
 
         // Group by Day for chart
         var salesByDay = sales
@@ -127,12 +133,78 @@ public class ReportsController : ControllerBase
                 TotalRevenue = totalRevenue,
                 TotalCost = totalCost,
                 TotalRefunds = totalRefunds,
+                TotalExpenses = totalExpenses,
                 NetRevenue = netRevenue,
                 NetProfit = netProfit,
                 InvoiceCount = sales.Count
             },
             SalesTrend = salesByDay
         });
+    }
+
+    [HttpGet("sales/export")]
+    public async Task<IActionResult> ExportSalesToExcel([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate, CancellationToken cancellationToken)
+    {
+        var start = startDate ?? DateTime.UtcNow.Date.AddDays(-30);
+        var end = endDate ?? DateTime.UtcNow;
+
+        var sales = await _dbContext.Invoices
+            .Include(i => i.Items)
+            .ThenInclude(i => i.Product)
+            .Include(i => i.Customer)
+            .Where(i => i.CreatedAt >= start && i.CreatedAt <= end && i.Status == InvoiceStatus.Completed)
+            .OrderBy(i => i.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("تقرير المبيعات");
+
+        // Headers
+        worksheet.Cell(1, 1).Value = "رقم الفاتورة";
+        worksheet.Cell(1, 2).Value = "التاريخ";
+        worksheet.Cell(1, 3).Value = "العميل";
+        worksheet.Cell(1, 4).Value = "نوع الدفع";
+        worksheet.Cell(1, 5).Value = "الإجمالي قبل الخصم";
+        worksheet.Cell(1, 6).Value = "الخصم";
+        worksheet.Cell(1, 7).Value = "الصافي المدفوع";
+        worksheet.Cell(1, 8).Value = "تكلفة البضاعة";
+        worksheet.Cell(1, 9).Value = "الربح";
+
+        var headerRow = worksheet.Row(1);
+        headerRow.Style.Font.Bold = true;
+        headerRow.Style.Fill.BackgroundColor = XLColor.LightGray;
+
+        // Data Rows
+        int row = 2;
+        foreach (var invoice in sales)
+        {
+            decimal totalCost = invoice.Items.Sum(item => item.Quantity * (item.Product?.PurchasePrice ?? 0));
+            decimal netPaid = invoice.TotalAmount - invoice.DiscountAmount;
+            decimal profit = netPaid - totalCost;
+
+            worksheet.Cell(row, 1).Value = invoice.InvoiceNo;
+            worksheet.Cell(row, 2).Value = invoice.CreatedAt.ToString("yyyy-MM-dd HH:mm");
+            worksheet.Cell(row, 3).Value = invoice.Customer?.Name ?? "عميل نقدي";
+            worksheet.Cell(row, 4).Value = invoice.PaymentType.ToString();
+            worksheet.Cell(row, 5).Value = invoice.TotalAmount;
+            worksheet.Cell(row, 6).Value = invoice.DiscountAmount;
+            worksheet.Cell(row, 7).Value = netPaid;
+            worksheet.Cell(row, 8).Value = totalCost;
+            worksheet.Cell(row, 9).Value = profit;
+            
+            row++;
+        }
+
+        // Auto-Adjust Columns
+        worksheet.Columns().AdjustToContents();
+        worksheet.RightToLeft = true; // Arabic support
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var content = stream.ToArray();
+
+        string fileName = $"Sales_Report_{start:yyyyMMdd}_{end:yyyyMMdd}.xlsx";
+        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     [HttpGet("inventory-value")]

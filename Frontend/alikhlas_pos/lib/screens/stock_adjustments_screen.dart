@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/stock_adjustment_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 import '../core/utils/toast_service.dart';
 import '../models/product_model.dart';
 import 'package:intl/intl.dart';

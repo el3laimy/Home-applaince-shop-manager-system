@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../controllers/reports_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 import '../core/utils/formatters.dart';
 import '../services/report_pdf_service.dart';
 
@@ -21,7 +22,7 @@ class ReportsScreen extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
               : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
         ),
       ),
@@ -125,6 +126,11 @@ class ReportsScreen extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             IconButton(
+              icon: const Icon(Icons.table_chart_rounded, color: Colors.green),
+              onPressed: ctrl.salesMetrics.isNotEmpty ? () => ctrl.exportToExcel() : null,
+              tooltip: 'تصدير Excel',
+            ),
+            IconButton(
               icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.red),
               onPressed: ctrl.salesMetrics.isNotEmpty ? () => ReportPdfService.exportSalesReport(
                 from: ctrl.startDate.value,
@@ -147,11 +153,13 @@ class ReportsScreen extends StatelessWidget {
     final metrics = ctrl.salesMetrics;
     return Row(
       children: [
-        _statCard('المبيعات الإجمالية', AppFormatters.currency((metrics['totalRevenue'] as num).toDouble()), Icons.monetization_on, const Color(0xFF00E5FF), isDark),
+        _statCard('الإيرادات', AppFormatters.currency((metrics['totalRevenue'] as num).toDouble()), Icons.monetization_on, const Color(0xFF00E5FF), isDark),
         const SizedBox(width: 16),
-        _statCard('تكلفة البضاعة المباعة', AppFormatters.currency((metrics['totalCost'] as num).toDouble()), Icons.shopping_cart, Colors.orange, isDark),
+        _statCard('التكلفة', AppFormatters.currency((metrics['totalCost'] as num).toDouble()), Icons.shopping_cart, Colors.orange, isDark),
         const SizedBox(width: 16),
         _statCard('المرتجعات', AppFormatters.currency((metrics['totalRefunds'] as num).toDouble()), Icons.keyboard_return, Colors.redAccent, isDark),
+        const SizedBox(width: 16),
+        _statCard('المصروفات', AppFormatters.currency((metrics['totalExpenses'] ?? 0 as num).toDouble()), Icons.receipt_long, Colors.purpleAccent, isDark),
         const SizedBox(width: 16),
         _statCard('صافي الربح', AppFormatters.currency((metrics['netProfit'] as num).toDouble()), Icons.trending_up, const Color(0xFF43E97B), isDark),
       ],

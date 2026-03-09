@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../services/api_service.dart';
+import '../core/theme/design_tokens.dart';
 
 class _UserModel {
   final String id;
@@ -66,7 +67,7 @@ class _UsersScreenState extends State<UsersScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
               : [const Color(0xFFF8FAFC), const Color(0xFFEEF2FF)],
         ),
       ),

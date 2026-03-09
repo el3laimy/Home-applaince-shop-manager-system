@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/customer_model.dart';
-import '../services/api_service.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 import '../core/utils/toast_service.dart';
+import '../core/utils/formatters.dart';
 import '../controllers/customer_controller.dart';
+import 'customer_profile_screen.dart';
 
 class CustomersScreen extends StatelessWidget {
   const CustomersScreen({super.key});
@@ -20,7 +22,7 @@ class CustomersScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)] : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
+          colors: isDark ? [DesignTokens.bgDark, const Color(0xFF0F1629)] : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
         ),
       ),
       child: SafeArea(
@@ -37,7 +39,7 @@ class CustomersScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('إدارة العملاء', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      Text('كشف الحساب، المشتريات، والأرصدة', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                      Obx(() => Text('إجمالي: ${ctrl.totalCount.value} عميل', style: TextStyle(color: Colors.grey[500], fontSize: 13))),
                     ],
                   ).animate().fade().slideX(begin: 0.1),
                   ElevatedButton.icon(
@@ -51,22 +53,7 @@ class CustomersScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: Row(
-                  children: [
-                    // Customer list
-                    SizedBox(
-                      width: 300,
-                      child: _buildCustomerList(context, ctrl, isDark),
-                    ),
-                    const SizedBox(width: 20),
-                    // Detail panel
-                    Expanded(
-                      child: Obx(() => ctrl.selected.value == null
-                          ? _buildEmptyDetail(context)
-                          : _buildDetailPanel(context, ctrl, isDark)),
-                    ),
-                  ],
-                ),
+                child: _buildCustomerList(context, ctrl, isDark),
               ),
             ],
           ),
@@ -101,56 +88,104 @@ class CustomersScreen extends StatelessWidget {
                   onChanged: (v) => ctrl.fetch(search: v),
                 ),
               ),
+              // Sort bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Obx(() => Row(
+                  children: [
+                    Icon(Icons.sort, size: 16, color: Colors.grey[500]),
+                    const SizedBox(width: 6),
+                    _sortChip(ctrl, 'name', 'أبجدي', isDark),
+                    const SizedBox(width: 6),
+                    _sortChip(ctrl, 'balance', 'أعلى رصيد', isDark),
+                    const SizedBox(width: 6),
+                    _sortChip(ctrl, 'newest', 'الأحدث', isDark),
+                  ],
+                )),
+              ),
+              const SizedBox(height: 8),
               Expanded(
                 child: Obx(() {
                   if (ctrl.isLoading.value && ctrl.customers.isEmpty) return const Center(child: CircularProgressIndicator());
                   if (ctrl.customers.isEmpty) return Center(child: Text('لا يوجد عملاء', style: TextStyle(color: Colors.grey[500])));
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: ctrl.customers.length,
-                    itemBuilder: (ctx, i) {
-                      final c = ctrl.customers[i];
-                      return Obx(() {
-                        final isSelected = ctrl.selected.value?.id == c.id;
-                        return GestureDetector(
-                          onTap: () => ctrl.selectCustomer(c),
-                          child: AnimatedContainer(
-                            duration: 200.ms,
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isSelected ? AppTheme.primaryColor.withAlpha(25) : (isDark ? Colors.black.withAlpha(30) : Colors.white),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: isSelected ? AppTheme.primaryColor : Colors.grey.withAlpha(40)),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: AppTheme.primaryColor.withAlpha(isSelected ? 50 : 20), radius: 18,
-                                  child: Icon(Icons.person, color: AppTheme.primaryColor, size: 18),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
-                                      if (c.phone != null) Text(c.phone!, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-                                    ],
-                                  ),
-                                ),
-                                if (c.balance > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: Colors.red.withAlpha(25), borderRadius: BorderRadius.circular(8)),
-                                    child: Text('${c.balance.toStringAsFixed(0)} ج', style: const TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      });
+                  return NotificationListener<ScrollNotification>(
+                    onNotification: (n) {
+                      if (n is ScrollEndNotification &&
+                          n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+                        ctrl.loadMore();
+                      }
+                      return false;
                     },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: ctrl.customers.length + 1,
+                      itemBuilder: (ctx, i) {
+                        if (i == ctrl.customers.length) {
+                          return Obx(() {
+                            if (ctrl.isLoadingMore.value) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                              );
+                            }
+                            if (!ctrl.hasMore && ctrl.customers.isNotEmpty) {
+                              return Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Center(child: Text(
+                                  'تم عرض جميع العملاء (${ctrl.totalCount.value})',
+                                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                                )),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          });
+                        }
+                        return Obx(() {
+                          final c = ctrl.customers[i];
+                          return GestureDetector(
+                            onTap: () {
+                              ctrl.selected.value = c;
+                              Get.to(() => CustomerProfileScreen(customer: c));
+                            },
+                            child: AnimatedContainer(
+                              duration: 200.ms,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.black.withAlpha(30) : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.withAlpha(40)),
+                              ),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: AppTheme.primaryColor.withAlpha(20), radius: 18,
+                                    child: Text(c.name.isNotEmpty ? c.name[0] : '?',
+                                        style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                                        if (c.phone != null) Text(c.phone!, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                  if (c.balance > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.red.withAlpha(25), borderRadius: BorderRadius.circular(8)),
+                                      child: Text('${c.balance.toStringAsFixed(0)} ج', style: const TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        });
+                      },
+                    ),
                   );
                 }),
               ),
@@ -161,137 +196,65 @@ class CustomersScreen extends StatelessWidget {
     ).animate().fadeIn().slideX(begin: 0.05);
   }
 
-  Widget _buildEmptyDetail(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person_search_outlined, size: 80, color: Colors.grey.withAlpha(70)),
-          const SizedBox(height: 16),
-          Text('اختر عميلًا لعرض كشف حسابه', style: TextStyle(color: Colors.grey[500], fontSize: 18)),
-        ],
-      ),
-    ).animate().fade();
-  }
-
-  Widget _buildDetailPanel(BuildContext context, CustomerController ctrl, bool isDark) {
-    final c = ctrl.selected.value!;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withAlpha(8) : Colors.white.withAlpha(200),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withAlpha(isDark ? 20 : 60)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [AppTheme.primaryColor.withAlpha(180), AppTheme.secondaryColor.withAlpha(180)]),
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(c.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                      if (c.phone != null) Text(c.phone!, style: const TextStyle(color: Colors.white70)),
-                    ]),
-                    Row(children: [
-                      IconButton(icon: const Icon(Icons.delete_outline, color: Colors.white70), onPressed: () => ctrl.deleteCustomer(c.id, context)),
-                    ]),
-                  ],
-                ),
-              ),
-              // Stats
-              Obx(() => Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(children: [
-                  _statTile(context, 'إجمالي الشراء', '${ctrl.totalDue.value.toStringAsFixed(2)} ج.م', Colors.blue, isDark),
-                  const SizedBox(width: 12),
-                  _statTile(context, 'المدفوع', '${ctrl.totalPaid.value.toStringAsFixed(2)} ج.م', Colors.green, isDark),
-                  const SizedBox(width: 12),
-                  _statTile(context, 'الرصيد', '${(ctrl.totalDue.value - ctrl.totalPaid.value).toStringAsFixed(2)} ج.م',
-                      (ctrl.totalDue.value - ctrl.totalPaid.value) > 0 ? Colors.orange : Colors.grey, isDark),
-                ]),
-              )),
-              // Invoices
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text('سجل الفواتير', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Obx(() {
-                  if (ctrl.isLoading.value) return const Center(child: CircularProgressIndicator());
-                  if (ctrl.statement.isEmpty) return Center(child: Text('لا توجد فواتير', style: TextStyle(color: Colors.grey[500])));
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: ctrl.statement.length,
-                    itemBuilder: (ctx, i) {
-                      final inv = ctrl.statement[i];
-                      return Card(
-                        elevation: 0,
-                        color: isDark ? Colors.white.withAlpha(8) : Colors.white,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        child: ListTile(
-                          leading: CircleAvatar(backgroundColor: AppTheme.primaryColor.withAlpha(25), child: Icon(Icons.receipt, color: AppTheme.primaryColor, size: 20)),
-                          title: Text(inv['invoiceNo'] as String? ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(inv['createdAt'] as String? ?? ''),
-                          trailing: Text('${inv['totalAmount']} ج.م', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondaryColor)),
-                        ),
-                      );
-                    },
-                  );
-                }),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(delay: 100.ms);
-  }
-
-  Widget _statTile(BuildContext context, String label, String value, Color color, bool isDark) {
-    return Expanded(
+  Widget _sortChip(CustomerController ctrl, String value, String label, bool isDark) {
+    final isActive = ctrl.sortBy.value == value;
+    return GestureDetector(
+      onTap: () => ctrl.changeSort(value),
       child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: color.withAlpha(20), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withAlpha(60))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15)),
-        ]),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive ? AppTheme.primaryColor.withAlpha(30) : (isDark ? Colors.black.withAlpha(20) : Colors.grey.withAlpha(20)),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isActive ? AppTheme.primaryColor.withAlpha(80) : Colors.transparent),
+        ),
+        child: Text(label, style: TextStyle(
+          fontSize: 10, fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          color: isActive ? AppTheme.primaryColor : Colors.grey[500],
+        )),
       ),
     );
   }
 
+  // ─── Dialogs ──────────────────────────────────────────────────────────────────
+
   void _showAddDialog(BuildContext context, CustomerController ctrl) {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('إضافة عميل جديد'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم العميل *')),
-          const SizedBox(height: 12),
-          TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'رقم الهاتف'), keyboardType: TextInputType.phone),
+        title: const Row(children: [
+          Icon(Icons.person_add, size: 22),
+          SizedBox(width: 8),
+          Text('إضافة عميل جديد'),
         ]),
+        content: SizedBox(
+          width: 400,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم العميل *', prefixIcon: Icon(Icons.person))),
+            const SizedBox(height: 12),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'رقم الهاتف', prefixIcon: Icon(Icons.phone)), keyboardType: TextInputType.phone),
+            const SizedBox(height: 12),
+            TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'العنوان', prefixIcon: Icon(Icons.location_on))),
+            const SizedBox(height: 12),
+            TextField(controller: notesCtrl, decoration: const InputDecoration(labelText: 'ملاحظات', prefixIcon: Icon(Icons.notes)), maxLines: 2),
+          ]),
+        ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
             onPressed: () async {
               if (nameCtrl.text.isEmpty) return;
-              final ok = await ctrl.addCustomer(nameCtrl.text, phoneCtrl.text.isEmpty ? null : phoneCtrl.text, context);
+              final ok = await ctrl.addCustomer(
+                nameCtrl.text,
+                phoneCtrl.text.isEmpty ? null : phoneCtrl.text,
+                addressCtrl.text.isEmpty ? null : addressCtrl.text,
+                notesCtrl.text.isEmpty ? null : notesCtrl.text,
+                context,
+              );
               if (ok) Get.back();
             },
             child: const Text('حفظ', style: TextStyle(color: Colors.white)),
@@ -300,4 +263,80 @@ class CustomersScreen extends StatelessWidget {
       ),
     );
   }
+
+  void _showEditDialog(BuildContext context, CustomerController ctrl, CustomerModel c) {
+    final nameCtrl = TextEditingController(text: c.name);
+    final phoneCtrl = TextEditingController(text: c.phone ?? '');
+    final addressCtrl = TextEditingController(text: c.address ?? '');
+    final notesCtrl = TextEditingController(text: c.notes ?? '');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.edit, size: 22),
+          SizedBox(width: 8),
+          Text('تعديل بيانات العميل'),
+        ]),
+        content: SizedBox(
+          width: 400,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم العميل *', prefixIcon: Icon(Icons.person))),
+            const SizedBox(height: 12),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'رقم الهاتف', prefixIcon: Icon(Icons.phone)), keyboardType: TextInputType.phone),
+            const SizedBox(height: 12),
+            TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'العنوان', prefixIcon: Icon(Icons.location_on))),
+            const SizedBox(height: 12),
+            TextField(controller: notesCtrl, decoration: const InputDecoration(labelText: 'ملاحظات', prefixIcon: Icon(Icons.notes)), maxLines: 2),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+            onPressed: () async {
+              if (nameCtrl.text.isEmpty) return;
+              final ok = await ctrl.updateCustomer(
+                c.id,
+                nameCtrl.text,
+                phoneCtrl.text.isEmpty ? null : phoneCtrl.text,
+                addressCtrl.text.isEmpty ? null : addressCtrl.text,
+                notesCtrl.text.isEmpty ? null : notesCtrl.text,
+              );
+              if (ok) Get.back();
+            },
+            child: const Text('حفظ', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  void _showDeleteConfirm(BuildContext context, CustomerController ctrl, CustomerModel c) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.warning_amber, color: Colors.red, size: 22),
+          SizedBox(width: 8),
+          Text('تأكيد الحذف'),
+        ]),
+        content: Text('هل أنت متأكد من حذف العميل "${c.name}"?\nلن يتم حذف الفواتير السابقة.'),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await ctrl.deleteCustomer(c.id, context);
+              Get.back();
+            },
+            child: const Text('حذف', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+
 }

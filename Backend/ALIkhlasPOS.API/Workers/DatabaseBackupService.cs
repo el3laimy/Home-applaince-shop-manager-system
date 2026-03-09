@@ -10,18 +10,15 @@ public class DatabaseBackupService : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<DatabaseBackupService> _logger;
-    private readonly string _backupFolder;
+    private readonly string _defaultBackupFolder;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public DatabaseBackupService(IConfiguration configuration, ILogger<DatabaseBackupService> logger)
+    public DatabaseBackupService(IConfiguration configuration, ILogger<DatabaseBackupService> logger, IServiceScopeFactory scopeFactory)
     {
         _configuration = configuration;
         _logger = logger;
-        _backupFolder = Path.Combine(Directory.GetCurrentDirectory(), "Backups");
-        
-        if (!Directory.Exists(_backupFolder))
-        {
-            Directory.CreateDirectory(_backupFolder);
-        }
+        _scopeFactory = scopeFactory;
+        _defaultBackupFolder = Path.Combine(Directory.GetCurrentDirectory(), "Backups");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -67,6 +64,19 @@ public class DatabaseBackupService : BackgroundService
     {
         try
         {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ALIkhlasPOS.Infrastructure.Data.ApplicationDbContext>();
+            
+            var settings = dbContext.ShopSettings.FirstOrDefault();
+            var backupDir = !string.IsNullOrWhiteSpace(settings?.BackupPath) 
+                ? settings.BackupPath 
+                : _defaultBackupFolder;
+
+            if (!Directory.Exists(backupDir))
+            {
+                Directory.CreateDirectory(backupDir);
+            }
+
             var connString = _configuration.GetConnectionString("DefaultConnection");
             if (string.IsNullOrEmpty(connString))
             {
@@ -83,28 +93,27 @@ public class DatabaseBackupService : BackgroundService
 
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string backupFileName = $"backup_{database}_{timestamp}.sql";
-            string backupPath = Path.Combine(_backupFolder, backupFileName);
+            string backupPath = Path.Combine(backupDir, backupFileName);
 
             _logger.LogInformation($"Starting database backup for {database} to {backupPath}");
 
+            // Use docker to run pg_dump since postgres is in a container
+            var tmpFileName = $"/tmp/{backupFileName}";
             var processStartInfo = new ProcessStartInfo
             {
-                FileName = "pg_dump",
-                Arguments = $"-h {host} -p {port} -U {username} -F p -c -f \"{backupPath}\" {database}",
+                FileName = "docker",
+                Arguments = $"exec -e PGPASSWORD={password} alikhlaspos-postgres pg_dump -h {host} -p {port} -U {username} -F p -c -f \"{tmpFileName}\" {database}",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            // Pass the password via environment variable
-            processStartInfo.EnvironmentVariables["PGPASSWORD"] = password;
-
             using (var process = Process.Start(processStartInfo))
             {
                 if (process == null)
                 {
-                    _logger.LogError("Failed to start pg_dump process.");
+                    _logger.LogError("Failed to start docker exec pg_dump process.");
                     return;
                 }
 
@@ -112,6 +121,28 @@ public class DatabaseBackupService : BackgroundService
 
                 if (process.ExitCode == 0)
                 {
+                    // Copy file from container
+                    var copyStartInfo = new ProcessStartInfo
+                    {
+                        FileName = "docker",
+                        Arguments = $"cp alikhlaspos-postgres:{tmpFileName} \"{backupPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using var copyProcess = Process.Start(copyStartInfo);
+                    copyProcess?.WaitForExit();
+
+                    // Remove file from container
+                    var rmStartInfo = new ProcessStartInfo
+                    {
+                        FileName = "docker",
+                        Arguments = $"exec alikhlaspos-postgres rm \"{tmpFileName}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using var rmProcess = Process.Start(rmStartInfo);
+                    rmProcess?.WaitForExit();
+
                     _logger.LogInformation($"Database backup completed successfully: {backupPath}");
                     CleanOldBackups();
                 }

@@ -48,10 +48,21 @@ namespace ALIkhlasPOS.Domain.Entities
 
         // SMS notifications (optional — integrate with any SMS provider)
         [StringLength(500)]
-        public string? SmsApiKey { get; set; }  // API key for SMS provider
+        public string? SmsApiKey { get; set; }  // API key / username:password for SMS provider
 
         [StringLength(100)]
         public string? SmsSenderId { get; set; } // Sender ID shown on SMS
+
+        /// <summary>
+        /// BUG-07: اسم مزود SMS.
+        /// القيم المقبولة: "VictoryLink" | "Twilio" | "Unifonic"
+        /// يتم اختياره من شاشة الإعدادات في التطبيق.
+        /// </summary>
+        [StringLength(50)]
+        public string? SmsProvider { get; set; }
+
+        [StringLength(500)]
+        public string? BackupPath { get; set; }
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

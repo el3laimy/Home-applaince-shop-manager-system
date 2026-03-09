@@ -97,6 +97,19 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             _dbContext.StockAdjustments.Add(adjustment);
             _dbContext.Products.Update(product);
 
+            // Log stock movement
+            _dbContext.StockMovements.Add(new StockMovement
+            {
+                ProductId = product.Id,
+                Type = StockMovementType.Adjustment,
+                Quantity = (int)dto.QuantityAdjusted, // Can be positive or negative
+                BalanceAfter = (int)product.StockQuantity,
+                ReferenceId = adjustment.Id, // Note: adjustment.Id is empty Guid before save in EF Core sometimes unless Seq is used, but EF will fix it up on SaveChanges
+                ReferenceNumber = $"ADJ-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(100,999)}", // Temporary reference
+                CreatedBy = createdBy,
+                Notes = dto.Reason
+            });
+
             // In a full ERP, we would also generate JournalEntries for inventory write-offs (Damage).
             // For now, logging the cost in StockAdjustment is sufficient for financial reports.
 

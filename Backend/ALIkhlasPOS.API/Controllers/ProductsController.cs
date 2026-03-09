@@ -1,4 +1,5 @@
 using ALIkhlasPOS.Application.Interfaces;
+using ALIkhlasPOS.Application.Interfaces.Accounting;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
@@ -14,17 +15,23 @@ public class ProductsController : ControllerBase
     private readonly ApplicationDbContext _dbContext;
     private readonly IBarcodeService _barcodeService;
     private readonly IProductCacheService _productCacheService;
+    private readonly IAccountingService _accountingService;
 
-    public ProductsController(ApplicationDbContext dbContext, IBarcodeService barcodeService, IProductCacheService productCacheService)
+    public ProductsController(ApplicationDbContext dbContext, IBarcodeService barcodeService, IProductCacheService productCacheService, IAccountingService accountingService)
     {
         _dbContext = dbContext;
         _barcodeService = barcodeService;
         _productCacheService = productCacheService;
+        _accountingService = accountingService;
     }
 
-    public record CreateProductRequest(string Name, string? GlobalBarcode, decimal Price, decimal PurchasePrice, decimal WholesalePrice, int StockQuantity, decimal MinStockAlert = 5, string? Category = null, string? Description = null, string? ImageUrl = null);
-    public record UpdateProductRequest(string Name, decimal Price, decimal PurchasePrice, decimal WholesalePrice, decimal StockQuantity, decimal MinStockAlert, string? Category, string? Description);
-    public record AdjustStockRequest(decimal AdjustmentAmount, string Reason);
+    // DTOs defined at the bottom of the file
+    // BUG-13: Use int for stock quantity, not decimal
+    public record CreateProductRequest(string Name, string? Description, string? CategoryName, decimal Price, decimal PurchasePrice, decimal WholesalePrice, int StockQuantity, int? MinStockLevel, string? GlobalBarcode, string? InternalBarcode, decimal? VatRate, bool GenerateBarcode = false);
+    public record UpdateProductRequest(string Name, string? Description, string? CategoryName, decimal Price, decimal PurchasePrice, decimal WholesalePrice, int StockQuantity, int? MinStockLevel, string? GlobalBarcode, string? InternalBarcode, decimal? VatRate);
+    public record AdjustStockRequest(int AdjustmentQuantity, string Reason, decimal? CostPerUnit);
+    // Lookup by barcode response type
+    public record ProductLookupResponse(string Id, string Name, decimal Price, decimal WholesalePrice, string Barcode, int StockQuantity, decimal VatRate, string? ImageUrl);
 
     // GET /api/products/next-barcode — Preview the next auto-generated internal barcode
     [HttpGet("next-barcode")]
@@ -44,7 +51,7 @@ public class ProductsController : ControllerBase
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Products.AsQueryable();
+        var query = _dbContext.Products.Where(p => p.IsActive).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(p =>
@@ -111,8 +118,8 @@ public class ProductsController : ControllerBase
             PurchasePrice = request.PurchasePrice,
             WholesalePrice = request.WholesalePrice,
             StockQuantity = request.StockQuantity,
-            MinStockAlert = request.MinStockAlert,
-            Category = request.Category,
+            MinStockAlert = request.MinStockLevel ?? 0,
+            Category = request.CategoryName,
             Description = request.Description
         };
 
@@ -163,15 +170,49 @@ public class ProductsController : ControllerBase
         product.Price = request.Price;
         product.PurchasePrice = request.PurchasePrice;
         product.WholesalePrice = request.WholesalePrice;
-        product.StockQuantity = request.StockQuantity;
-        product.MinStockAlert = request.MinStockAlert;
-        product.Category = request.Category;
+        
+        StockAdjustment? stockAdj = null;
+        if (product.StockQuantity != request.StockQuantity)
+        {
+            var createdBy = User.Identity?.Name ?? User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "System";
+            var diff = request.StockQuantity - product.StockQuantity;
+            stockAdj = new StockAdjustment
+            {
+                ProductId = id,
+                Type = diff < 0 ? StockAdjustmentType.Damage : StockAdjustmentType.ManualCorrection,
+                QuantityAdjusted = (int)diff,
+                Cost = Math.Abs(diff) * product.PurchasePrice,
+                Reason = "تعديل عبر صفحة المنتج",
+                CreatedBy = createdBy
+            };
+            _dbContext.Set<StockAdjustment>().Add(stockAdj);
+            product.StockQuantity = request.StockQuantity;
+        }
+
+        product.MinStockAlert = request.MinStockLevel ?? 0;
+        product.Category = request.CategoryName;
         product.Description = request.Description;
         product.UpdatedAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
+        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            
+            if (stockAdj != null && stockAdj.Cost > 0)
+            {
+                await _accountingService.RecordStockAdjustmentAsync(stockAdj, stockAdj.CreatedBy);
+            }
+            
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return BadRequest(new { message = $"خطأ أثناء حفظ التعديل: {ex.Message}" });
+        }
 
+        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
         return Ok(product);
     }
 
@@ -182,14 +223,84 @@ public class ProductsController : ControllerBase
         var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
         if (product == null) return NotFound();
 
-        product.StockQuantity += request.AdjustmentAmount;
+        var createdBy = User.Identity?.Name ?? User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "System";
+
+        var adjustment = new StockAdjustment
+        {
+            ProductId = id,
+            Type = request.AdjustmentQuantity < 0 ? StockAdjustmentType.Loss : StockAdjustmentType.ManualCorrection,
+            QuantityAdjusted = request.AdjustmentQuantity,
+            Cost = Math.Abs(request.AdjustmentQuantity) * (request.CostPerUnit ?? product.PurchasePrice),
+            Reason = request.Reason,
+            CreatedBy = createdBy
+        };
+
+        product.StockQuantity += request.AdjustmentQuantity;
         if (product.StockQuantity < 0) product.StockQuantity = 0;
         product.UpdatedAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
+        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            _dbContext.Set<StockAdjustment>().Add(adjustment);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            
+            if (adjustment.Cost > 0)
+            {
+                await _accountingService.RecordStockAdjustmentAsync(adjustment, createdBy);
+            }
+            
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return BadRequest(new { message = $"خطأ أثناء حفظ التعديل: {ex.Message}" });
+        }
 
+        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
         return Ok(new { product.Id, product.Name, product.StockQuantity });
+    }
+
+    // GET /api/products/{id}/stock-adjustments — Get history of manual stock adjustments (Legacy)
+    [HttpGet("{id:guid}/stock-adjustments")]
+    public async Task<IActionResult> GetStockAdjustments(Guid id, CancellationToken cancellationToken)
+    {
+        var adjustments = await _dbContext.Set<StockAdjustment>()
+            .Where(a => a.ProductId == id)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync(cancellationToken);
+            
+        return Ok(adjustments);
+    }
+
+    // GET /api/products/{id}/stock-movements — Get full history of stock movements (Sales, Purchases, Returns, Adjustments)
+    [HttpGet("{id:guid}/stock-movements")]
+    public async Task<IActionResult> GetStockMovements(Guid id, CancellationToken cancellationToken)
+    {
+        var movements = await _dbContext.StockMovements
+            .Where(m => m.ProductId == id)
+            .OrderByDescending(m => m.CreatedAt)
+            .Select(m => new
+            {
+                m.Id,
+                m.Type,
+                TypeLabel = m.Type == StockMovementType.Sale ? "مبيعات" :
+                            m.Type == StockMovementType.Purchase ? "مشتريات" :
+                            m.Type == StockMovementType.ReturnSale ? "مرتجع مبيعات" :
+                            m.Type == StockMovementType.ReturnPurchase ? "مرتجع مشتريات" :
+                            m.Type == StockMovementType.Adjustment ? "تسوية" : "رصيد افتتاحي",
+                m.Quantity,
+                m.BalanceAfter,
+                m.ReferenceId,
+                m.ReferenceNumber,
+                m.Notes,
+                m.CreatedBy,
+                m.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+            
+        return Ok(movements);
     }
 
     // DELETE /api/products/{id}
@@ -201,7 +312,10 @@ public class ProductsController : ControllerBase
 
         product.IsActive = false;
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _productCacheService.RemoveProductCacheAsync(product.GlobalBarcode, cancellationToken);
+        if (!string.IsNullOrEmpty(product.GlobalBarcode))
+            await _productCacheService.RemoveProductCacheAsync(product.GlobalBarcode, cancellationToken);
+        if (!string.IsNullOrEmpty(product.InternalBarcode))
+            await _productCacheService.RemoveProductCacheAsync(product.InternalBarcode, cancellationToken);
 
         return NoContent();
     }

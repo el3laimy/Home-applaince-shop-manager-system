@@ -7,9 +7,9 @@ import 'package:collection/collection.dart';
 import '../controllers/inventory_controller.dart';
 import '../models/product_model.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 import '../services/api_service.dart';
 import '../services/barcode_print_service.dart';
-import 'package:pluto_grid/pluto_grid.dart';
 import '../core/utils/toast_service.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -32,25 +32,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   final customCategoryCtrl = TextEditingController();
   bool isCustomCategory = false;
 
-  PlutoGridStateManager? stateManager;
-  Worker? _worker;
-
   @override
   void initState() {
     super.initState();
-    final ctrl = Get.put(InventoryController());
-    _worker = ever(ctrl.products, (products) {
-      if (stateManager != null) {
-        stateManager!.removeAllRows();
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        stateManager!.appendRows(products.map((p) => _getPlutoRow(p, isDark, ctrl, context)).toList());
-      }
-    });
+    Get.put(InventoryController());
   }
 
   @override
   void dispose() {
-    _worker?.dispose();
     nameCtrl.dispose();
     barcodeCtrl.dispose();
     purchasePriceCtrl.dispose();
@@ -70,7 +59,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
               : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
         ),
       ),
@@ -167,24 +156,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withAlpha(8) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withAlpha(50)),
-        ),
+        decoration: DesignTokens.glowCardDecoration(glowColor: color, isDark: isDark),
         child: Row(
           children: [
             Container(
                padding: const EdgeInsets.all(10),
-               decoration: BoxDecoration(shape: BoxShape.circle, color: color.withAlpha(25)),
+               decoration: BoxDecoration(shape: BoxShape.circle, color: color.withAlpha(25),
+                   boxShadow: [BoxShadow(color: color.withAlpha(40), blurRadius: 10)]),
                child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                 Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                 Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                 Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                 Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
               ],
             ),
           ],
@@ -194,250 +180,223 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Widget _buildInventoryTable(BuildContext context, InventoryController ctrl, bool isDark) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withAlpha(8) : Colors.white.withAlpha(200),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withAlpha(isDark ? 20 : 60)),
-          ),
-          child: Column(
-            children: [
-              // Search bar & Category filter
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: 'ابحث بالاسم أو الباركود أو الفئة...',
-                          prefixIcon: const Icon(Icons.search),
-                          filled: true,
-                          fillColor: isDark ? Colors.black.withAlpha(40) : Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                        ),
-                        onChanged: ctrl.onSearchChanged,
-                      ),
+    final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api').replaceAll('/api', '');
+    return Container(
+      decoration: DesignTokens.panelDecoration(isDark: isDark),
+      child: Column(
+        children: [
+          // Search bar & Category filter
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'ابحث بالاسم أو الباركود أو الفئة...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      filled: true,
+                      fillColor: isDark ? Colors.black.withAlpha(40) : Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(DesignTokens.kChipRadius), borderSide: BorderSide.none),
                     ),
-                    const SizedBox(width: 12),
-                    Obx(() => DropdownButtonHideUnderline(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                           color: isDark ? Colors.black.withAlpha(40) : Colors.white,
-                           borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButton<String>(
-                          value: ctrl.selectedCategory.value.isEmpty ? null : ctrl.selectedCategory.value,
-                          hint: const Text('جميع الفئات'),
-                          items: [
-                            const DropdownMenuItem(value: '', child: Text('الكل')),
-                            ...ctrl.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))),
-                          ],
-                          onChanged: (val) {
-                            ctrl.selectedCategory.value = val ?? '';
-                            ctrl.fetchProducts(reset: true);
-                          },
-                        ),
-                      ),
-                    )),
-                  ],
+                    onChanged: ctrl.onSearchChanged,
+                  ),
                 ),
-              ),
-              // Table
-              Expanded(
-                child: Obx(() {
-                  if (ctrl.isLoading.value && ctrl.products.isEmpty) {
-                     return const Center(child: CircularProgressIndicator());
-                  }
-                  if (ctrl.products.isEmpty) {
-                     return Center(child: Text('لا توجد منتجات', style: TextStyle(color: Colors.grey[500])));
-                  }
-                  return PlutoGrid(
-                    columns: _getColumns(isDark, ctrl, context),
-                    rows: ctrl.products.map((p) => _getPlutoRow(p, isDark, ctrl, context)).toList(),
-                    onLoaded: (PlutoGridOnLoadedEvent event) {
-                      event.stateManager.setShowColumnFilter(true);
-                      event.stateManager.setPageSize(30);
-                    },
-                    configuration: PlutoGridConfiguration(
-                      style: isDark ? PlutoGridStyleConfig.dark() : const PlutoGridStyleConfig(),
-                      localeText: const PlutoGridLocaleText.arabic(),
+                const SizedBox(width: 12),
+                Obx(() => DropdownButtonHideUnderline(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                       color: isDark ? Colors.black.withAlpha(40) : Colors.white,
+                       borderRadius: BorderRadius.circular(DesignTokens.kChipRadius),
+                    ),
+                    child: DropdownButton<String>(
+                      value: ctrl.selectedCategory.value.isEmpty ? null : ctrl.selectedCategory.value,
+                      hint: const Text('جميع الفئات'),
+                      items: [
+                        const DropdownMenuItem(value: '', child: Text('الكل')),
+                        ...ctrl.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                      ],
+                      onChanged: (val) {
+                        ctrl.selectedCategory.value = val ?? '';
+                        ctrl.fetchProducts(reset: true);
+                      },
+                    ),
+                  ),
+                )),
+              ],
+            ),
+          ),
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withAlpha(5) : Colors.grey.withAlpha(8),
+              border: Border(bottom: BorderSide(color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(20))),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 50), // image col
+                const SizedBox(width: 12),
+                Expanded(flex: 2, child: Text('رمز المنتج', style: _tableHeaderStyle(isDark))),
+                Expanded(flex: 3, child: Text('اسم المنتج', style: _tableHeaderStyle(isDark))),
+                Expanded(flex: 2, child: Text('الفئة', style: _tableHeaderStyle(isDark))),
+                Expanded(flex: 2, child: Text('مستوى المخزون', style: _tableHeaderStyle(isDark))),
+                Expanded(flex: 1, child: Text('السعر', style: _tableHeaderStyle(isDark))),
+                const SizedBox(width: 130), // actions col
+              ],
+            ),
+          ),
+          // Table Rows
+          Expanded(
+            child: Obx(() {
+              if (ctrl.isLoading.value && ctrl.products.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (ctrl.products.isEmpty) {
+                return Center(child: Text('لا توجد منتجات', style: TextStyle(color: Colors.grey[500])));
+              }
+              return ListView.builder(
+                itemCount: ctrl.products.length,
+                itemBuilder: (context, index) {
+                  final p = ctrl.products[index];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: isDark ? Colors.white.withAlpha(5) : Colors.grey.withAlpha(12))),
+                      color: index.isEven ? Colors.transparent : (isDark ? Colors.white.withAlpha(3) : Colors.grey.withAlpha(5)),
+                    ),
+                    child: Row(
+                      children: [
+                        // Image
+                        Container(
+                          width: 42, height: 42,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(15),
+                            borderRadius: BorderRadius.circular(8),
+                            image: p.imageUrl != null && p.imageUrl!.isNotEmpty
+                                ? DecorationImage(image: NetworkImage('$hostUrl${p.imageUrl!}'), fit: BoxFit.cover)
+                                : null,
+                          ),
+                          child: (p.imageUrl == null || p.imageUrl!.isEmpty)
+                              ? Icon(Icons.image_not_supported_rounded, size: 18, color: Colors.grey[600])
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        // SKU / Barcode
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            p.globalBarcode.isNotEmpty ? p.globalBarcode : (p.internalBarcode ?? '-'),
+                            style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Name
+                        Expanded(
+                          flex: 3,
+                          child: Text(p.name, style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        // Category Badge
+                        Expanded(
+                          flex: 2,
+                          child: p.category != null && p.category!.isNotEmpty
+                              ? DesignTokens.buildCategoryBadge(p.category!)
+                              : Text('-', style: TextStyle(color: Colors.grey[500])),
+                        ),
+                        // Stock Level Bar
+                        Expanded(
+                          flex: 2,
+                          child: DesignTokens.buildStockBar(
+                            p.stockQuantity.toInt(),
+                            p.minStockAlert.toInt(),
+                            width: 90,
+                          ),
+                        ),
+                        // Price
+                        Expanded(
+                          flex: 1,
+                          child: Text('${p.price.toStringAsFixed(0)} ج.م', style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13,
+                            color: isDark ? DesignTokens.neonCyan : AppTheme.primaryColor,
+                          )),
+                        ),
+                        // Actions
+                        SizedBox(
+                          width: 130,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              _actionIcon(Icons.history, Colors.teal, 'سجل الحركات',
+                                  () => _showStockHistoryDialog(context, p, ctrl, isDark)),
+                              _actionIcon(Icons.print_outlined, Colors.orange, 'طباعة ملصق',
+                                  () => _showPrintLabelDialog(context, p, isDark)),
+                              _actionIcon(Icons.camera_alt_outlined, DesignTokens.neonPurple, 'تغيير الصورة',
+                                  () => ctrl.pickAndUploadImage(p.id, context)),
+                              _actionIcon(Icons.edit_outlined, DesignTokens.neonBlue, 'تعديل',
+                                  () => _showEditProductDialog(context, p, isDark, ctrl)),
+                              _actionIcon(Icons.delete_outline_rounded, DesignTokens.neonRed, 'حذف',
+                                  () => _showDeleteConfirmationDialog(context, p, ctrl)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   );
-                }),
-              ),
-            ],
+                },
+              );
+            }),
           ),
-        ),
+          // Pagination footer
+          Obx(() => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(20))),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (ctrl.isLoadingMore.value)
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                else if (ctrl.hasMore)
+                  TextButton.icon(
+                    onPressed: ctrl.loadMore,
+                    icon: const Icon(Icons.expand_more_rounded, size: 18),
+                    label: Text('تحميل المزيد (${ctrl.totalCount.value - ctrl.products.length} متبقٍ)',
+                        style: const TextStyle(fontSize: 12)),
+                  )
+                else
+                  Text('${ctrl.totalCount.value} منتج إجمالي',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+              ],
+            ),
+          )),
+        ],
       ),
     ).animate().fadeIn().slideY(begin: 0.05);
   }
 
-  List<PlutoColumn> _getColumns(bool isDark, InventoryController ctrl, BuildContext context) {
-    return [
-      PlutoColumn(
-        title: 'صورة',
-        field: 'image',
-        type: PlutoColumnType.text(),
-        enableFilterMenuItem: false,
-        enableSorting: false,
-        width: 80,
-        renderer: (rendererContext) {
-          final imageUrl = rendererContext.cell.value as String?;
-          final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api').replaceAll('/api', '');
-          return Container(
-             width: 40, height: 40,
-             decoration: BoxDecoration(
-               color: Colors.grey.withAlpha(50),
-               borderRadius: BorderRadius.circular(8),
-               image: imageUrl != null && imageUrl.isNotEmpty
-                   ? DecorationImage(image: NetworkImage('$hostUrl$imageUrl'), fit: BoxFit.cover)
-                   : null,
-             ),
-             child: (imageUrl == null || imageUrl.isEmpty)
-                 ? const Icon(Icons.image_not_supported, size: 20, color: Colors.grey)
-                 : null,
-          );
-        },
+  Widget _actionIcon(IconData icon, Color color, String tooltip, VoidCallback onTap) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, color: color, size: 18),
+        ),
       ),
-      PlutoColumn(
-        title: 'الباركود',
-        field: 'barcode',
-        type: PlutoColumnType.text(),
-        width: 150,
-      ),
-      PlutoColumn(
-        title: 'اسم المنتج',
-        field: 'name',
-        type: PlutoColumnType.text(),
-        width: 250,
-      ),
-      PlutoColumn(
-        title: 'الفئة',
-        field: 'category',
-        type: PlutoColumnType.text(),
-        width: 120,
-      ),
-      PlutoColumn(
-        title: 'الرصيد',
-        field: 'stock',
-        type: PlutoColumnType.number(),
-        width: 100,
-        renderer: (ctx) {
-          final isLow = ctx.row.cells['isLow']?.value as bool;
-          final stock = ctx.cell.value as num;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-               color: isLow ? Colors.red.withAlpha(30) : Colors.green.withAlpha(30),
-               borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text('${stock.toStringAsFixed(0)} قطعة',
-               style: TextStyle(color: isLow ? Colors.red : Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-          );
-        },
-      ),
-      PlutoColumn(
-        title: 'سعر الشراء',
-        field: 'purchase',
-        type: PlutoColumnType.number(),
-        width: 100,
-        renderer: (ctx) => Text('${(ctx.cell.value as num).toStringAsFixed(2)} ج.م', style: const TextStyle(fontSize: 13)),
-      ),
-      PlutoColumn(
-        title: 'سعر البيع',
-        field: 'price',
-        type: PlutoColumnType.number(),
-        width: 100,
-        renderer: (ctx) => Text('${(ctx.cell.value as num).toStringAsFixed(2)} ج.م', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondaryColor)),
-      ),
-      PlutoColumn(
-        title: '',
-        field: 'isLow',
-        type: PlutoColumnType.text(),
-        hide: true, // Hid isLow column
-      ),
-      PlutoColumn(
-        title: 'ID',
-        field: 'id',
-        type: PlutoColumnType.text(),
-        hide: true, // Hid Action context column
-      ),
-      PlutoColumn(
-        title: 'إجراءات',
-        field: 'actions',
-        type: PlutoColumnType.text(),
-        enableFilterMenuItem: false,
-        enableSorting: false,
-        width: 170,
-        renderer: (ctx) {
-          final id = ctx.row.cells['id']!.value.toString();
-          final p = ctrl.products.firstWhereOrNull((prod) => prod.id == id);
-          if (p == null) return const SizedBox.shrink();
-
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.print_outlined, color: Colors.orange, size: 22), 
-                onPressed: () => _showPrintLabelDialog(context, p, Theme.of(context).brightness == Brightness.dark), 
-                tooltip: 'طباعة ملصق'
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.camera_alt_outlined, color: Colors.purple, size: 22), 
-                onPressed: () => ctrl.pickAndUploadImage(p.id, context), 
-                tooltip: 'تغيير الصورة'
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 22), 
-                onPressed: () => _showEditProductDialog(context, p, Theme.of(context).brightness == Brightness.dark, ctrl), 
-                tooltip: 'تعديل'
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22), 
-                onPressed: () => _showDeleteConfirmationDialog(context, p, ctrl), 
-                tooltip: 'حذف'
-              ),
-            ],
-          );
-        }
-      ),
-    ];
-  }
-
-  PlutoRow _getPlutoRow(ProductModel p, bool isDark, InventoryController ctrl, BuildContext context) {
-    return PlutoRow(
-      cells: {
-        'image': PlutoCell(value: p.imageUrl ?? ''),
-        'barcode': PlutoCell(value: p.globalBarcode.isEmpty ? (p.internalBarcode ?? '-') : p.globalBarcode),
-        'name': PlutoCell(value: p.name),
-        'category': PlutoCell(value: p.category ?? '-'),
-        'stock': PlutoCell(value: p.stockQuantity),
-        'isLow': PlutoCell(value: p.isLowStock),
-        'purchase': PlutoCell(value: p.purchasePrice),
-        'price': PlutoCell(value: p.price),
-        'actions': PlutoCell(value: ''),
-        'id': PlutoCell(value: p.id),
-      },
     );
   }
+
+  TextStyle _tableHeaderStyle(bool isDark) => TextStyle(
+    fontWeight: FontWeight.w700, fontSize: 12,
+    color: isDark ? Colors.grey[400] : Colors.grey[600],
+  );
 
   void _showPrintLabelDialog(BuildContext context, ProductModel p, bool isDark) {
      final qtyCtrl = TextEditingController(text: '1');
@@ -876,4 +835,80 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ),
     );
   }
+
+  void _showStockHistoryDialog(BuildContext context, ProductModel p, InventoryController ctrl, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: ctrl.fetchStockHistory(p.id),
+          builder: (context, snapshot) {
+            return AlertDialog(
+              title: Text('سجل حركات الرصيد: ${p.name}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              content: SizedBox(
+                width: 600,
+                height: 400,
+                child: snapshot.connectionState == ConnectionState.waiting
+                    ? const Center(child: CircularProgressIndicator())
+                    : snapshot.hasError
+                        ? const Center(child: Text('حدث خطأ في جلب البيانات', style: TextStyle(color: Colors.red)))
+                        : snapshot.data == null || snapshot.data!.isEmpty
+                            ? const Center(child: Text('لا توجد حركات مسجلة لهذا المنتج', style: TextStyle(color: Colors.grey)))
+                            : ListView.builder(
+                                itemCount: snapshot.data!.length,
+                                itemBuilder: (context, index) {
+                                  final item = snapshot.data![index];
+                                  final qty = item['quantity'] as int? ?? 0;
+                                  final isPositive = qty > 0;
+                                  final balanceAfter = item['balanceAfter']?.toString() ?? '-';
+                                  final typeLabel = item['typeLabel']?.toString() ?? 'حركة رصيد';
+                                  final refNo = item['referenceNumber']?.toString() ?? '';
+                                  final dateStr = item['createdAt']?.toString() ?? '';
+                                  final DateTime? date = DateTime.tryParse(dateStr);
+                                  
+                                  return Card(
+                                    color: isDark ? Colors.white.withAlpha(10) : Colors.white,
+                                    margin: const EdgeInsets.symmetric(vertical: 4),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: isPositive ? Colors.green.withAlpha(30) : Colors.red.withAlpha(30),
+                                        child: Icon(
+                                          isPositive ? Icons.add_shopping_cart : Icons.remove_shopping_cart,
+                                          color: isPositive ? Colors.green : Colors.red,
+                                        ),
+                                      ),
+                                      title: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(typeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          Text('${isPositive ? '+' : ''}$qty', 
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isPositive ? Colors.green : Colors.red),
+                                          ),
+                                        ],
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 4),
+                                          if (refNo.isNotEmpty) Text('رقم المرجع: $refNo', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                                          Text('المستخدم: ${item['createdBy'] ?? 'مجهول'} | التاريخ: ${date != null ? '${date.year}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')} ${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}' : '-'}', style: const TextStyle(fontSize: 11)),
+                                          const SizedBox(height: 4),
+                                          Text('الرصيد بعد الحركة: $balanceAfter قطعة', style: TextStyle(color: isDark ? DesignTokens.neonCyan : AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 }
+

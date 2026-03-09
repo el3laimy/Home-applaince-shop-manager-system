@@ -1,6 +1,9 @@
 using System.Text;
+using System.Security.Claims;
+using ALIkhlasPOS.Application.Interfaces.Accounting;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
+using ALIkhlasPOS.Infrastructure.Sms;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +16,14 @@ namespace ALIkhlasPOS.API.Controllers;
 public class InstallmentsController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly SmsServiceFactory _smsFactory;
+    private readonly IAccountingService _accountingService;
 
-    public InstallmentsController(ApplicationDbContext dbContext)
+    public InstallmentsController(ApplicationDbContext dbContext, SmsServiceFactory smsFactory, IAccountingService accountingService)
     {
         _dbContext = dbContext;
+        _smsFactory = smsFactory;
+        _accountingService = accountingService;
     }
 
     // ── DTOs ────────────────────────────────────────────────────────────────
@@ -153,19 +160,42 @@ public class InstallmentsController : ControllerBase
         if (installment.Status == InstallmentStatus.Paid)
             return BadRequest(new { message = "هذا القسط مدفوع بالفعل." });
 
-        installment.Status = InstallmentStatus.Paid;
-        installment.PaidAt = DateTime.UtcNow;
-
-        if (installment.Invoice != null)
+        using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+        try
         {
-            installment.Invoice.PaidAmount += req.AmountPaid;
-            installment.Invoice.RemainingAmount = Math.Max(0, installment.Invoice.TotalAmount - installment.Invoice.PaidAmount);
-            if (installment.Invoice.RemainingAmount == 0)
-                installment.Invoice.Status = InvoiceStatus.Completed;
-        }
+            installment.Status = InstallmentStatus.Paid;
+            installment.PaidAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync(ct);
-        return Ok(new { message = "تم تسجيل الدفعة بنجاح.", installment.Status, installment.PaidAt });
+            if (installment.Invoice != null)
+            {
+                installment.Invoice.PaidAmount += req.AmountPaid;
+                installment.Invoice.RemainingAmount = Math.Max(0, installment.Invoice.TotalAmount - installment.Invoice.PaidAmount);
+                if (installment.Invoice.RemainingAmount == 0)
+                    installment.Invoice.Status = InvoiceStatus.Completed;
+            }
+
+            // FIX-D: Update Customer.TotalPaid
+            var customer = await _dbContext.Customers.FindAsync(new object[] { installment.CustomerId }, ct);
+            if (customer != null)
+            {
+                customer.TotalPaid += req.AmountPaid;
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+
+            // FIX-A: Record in treasury & accounting
+            var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
+            var receiptNo = $"INST-{installment.Id.ToString()[..8]}";
+            await _accountingService.RecordInstallmentPaymentAsync(installment, req.AmountPaid, receiptNo, createdBy);
+
+            await transaction.CommitAsync(ct);
+            return Ok(new { message = "تم تسجيل الدفعة وتحديث الخزينة بنجاح.", installment.Status, installment.PaidAt });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(ct);
+            return BadRequest(new { message = $"خطأ في تسجيل الدفعة: {ex.Message}" });
+        }
     }
 
     // ── GET /api/installments/export-csv ─────────────────────────────────────
@@ -196,6 +226,7 @@ public class InstallmentsController : ControllerBase
     }
 
     // ── POST /api/installments/{id}/send-reminder ─────────────────────────────
+    // BUG-07: Now sends a REAL SMS using the provider configured in ShopSettings
     [HttpPost("{id:guid}/send-reminder")]
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> SendReminder(Guid id, CancellationToken ct)
@@ -205,22 +236,80 @@ public class InstallmentsController : ControllerBase
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
         if (installment == null) return NotFound();
+
         var phone = installment.Invoice?.Customer?.Phone;
         if (string.IsNullOrEmpty(phone))
             return BadRequest(new { message = "العميل ليس له رقم هاتف مسجل." });
 
-        var settings = await _dbContext.ShopSettings.FirstOrDefaultAsync(ct);
+        // 1. Load shop settings & resolve SMS provider
+        var settings = await _dbContext.Set<ShopSettings>().FirstOrDefaultAsync(ct);
+        var smsService = _smsFactory.Create(settings!);
+
+        if (smsService == null)
+        {
+            return BadRequest(new
+            {
+                message = "لم يتم تهيئة خدمة SMS. يرجى تعيين مزود الرسائل وبيانات الاعتماد في إعدادات المتجر.",
+                configRequired = true
+            });
+        }
+
+        // 2. Build Arabic reminder message
+        var customerName = installment.Invoice?.Customer?.Name ?? "العميل الكريم";
+        var shopName = settings?.ShopName ?? "المتجر";
+        var message = $"عزيزي {customerName}،\n" +
+                      $"تذكير بموعد قسط بقيمة {installment.Amount:F2} ج.م" +
+                      $" المستحق بتاريخ {installment.DueDate:dd/MM/yyyy}.\n" +
+                      $"يرجى السداد في موعده. — {shopName}";
+
+        // 3. Send SMS
+        var (success, error) = await smsService.SendAsync(phone, message, ct);
+
+        if (!success)
+        {
+            return StatusCode(500, new { message = $"فشل إرسال الرسالة: {error}" });
+        }
+
+        // 4. Mark reminder as sent
         installment.ReminderSent = true;
         await _dbContext.SaveChangesAsync(ct);
 
         return Ok(new
         {
-            message = $"تم إرسال تذكير للعميل {installment.Invoice?.Customer?.Name}",
+            message = $"✓ تم إرسال تذكير SMS للعميل {customerName} على الرقم {phone}",
             phone,
             dueDate = installment.DueDate,
-            amount = installment.Amount,
-            smsConfigured = !string.IsNullOrEmpty(settings?.SmsApiKey)
+            amount = installment.Amount
         });
+    }
+
+    // ── POST /api/installments/test-sms ────────────────────────────────────────
+    // BUG-07: Sends a test SMS to verify API credentials — used from the settings screen
+    [HttpPost("test-sms")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> TestSms(
+        [FromBody] TestSmsRequest req, CancellationToken ct)
+    {
+        // Build a temporary SMS service with the provided credentials (no DB write)
+        var tempSettings = new ShopSettings
+        {
+            SmsProvider = req.Provider,
+            SmsApiKey = req.ApiKey,
+            SmsSenderId = req.SenderId,
+            ShopName = "ALIkhlasPOS"
+        };
+
+        var smsService = _smsFactory.Create(tempSettings);
+        if (smsService == null)
+            return BadRequest(new { message = "بيانات المزود غير صحيحة أو ناقصة." });
+
+        var testMessage = $"هذه رسالة اختبار من نظام إخلاص كاشير. المزود: {req.Provider}. وقت الإرسال: {DateTime.Now:HH:mm}";
+        var (success, error) = await smsService.SendAsync(req.Phone, testMessage, ct);
+
+        return success
+            ? Ok(new { message = $"✓ تم إرسال رسالة الاختبار إلى {req.Phone} بنجاح" })
+            : StatusCode(500, new { message = $"فشل الإرسال: {error}" });
     }
 }
 
+public record TestSmsRequest(string Phone, string Provider, string ApiKey, string SenderId);

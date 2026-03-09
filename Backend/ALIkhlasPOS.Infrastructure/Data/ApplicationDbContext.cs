@@ -1,5 +1,6 @@
 using ALIkhlasPOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace ALIkhlasPOS.Infrastructure.Data;
 
@@ -30,6 +31,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Account> Accounts { get; set; }
     public DbSet<JournalEntry> JournalEntries { get; set; }
     public DbSet<JournalEntryLine> JournalEntryLines { get; set; }
+    public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
     public DbSet<Expense> Expenses { get; set; }
     public DbSet<CashTransaction> CashTransactions { get; set; } = null!;
 
@@ -40,6 +42,10 @@ public class ApplicationDbContext : DbContext
 
     // ERP - Inventory / Stock
     public DbSet<StockAdjustment> StockAdjustments { get; set; }
+    public DbSet<StockMovement> StockMovements { get; set; }
+
+    // ===== Audit Trail =====
+    public DbSet<AuditLog> AuditLogs { get; set; }
 
     // ===== Shop Configuration =====
     public DbSet<ShopSettings> ShopSettings { get; set; } = null!;
@@ -57,6 +63,21 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(s => s.CashierId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Expense -> ExpenseCategory Relation
+        modelBuilder.Entity<Expense>()
+            .HasOne(e => e.Category)
+            .WithMany()
+            .HasForeignKey(e => e.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Seed default expense categories
+        modelBuilder.Entity<ExpenseCategory>().HasData(
+            new ExpenseCategory { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "مصروفات تشغيل (كهرباء، غاز، إلخ)" },
+            new ExpenseCategory { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Name = "رواتب وأجور" },
+            new ExpenseCategory { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Name = "تسويق وإعلانات" },
+            new ExpenseCategory { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "أخرى" }
+        );
 
 
         // --- Product ---
@@ -133,5 +154,74 @@ public class ApplicationDbContext : DbContext
 
         // --- Shop Settings ---
         modelBuilder.Entity<ShopSettings>().Property(s => s.DefaultVatRate).HasColumnType("numeric(5,2)");
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var auditEntries = new List<AuditLog>();
+        
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.Entity is not AuditLog && 
+                       (e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted))
+            .ToList();
+
+        foreach (var entry in entries)
+        {
+            var auditLog = new AuditLog
+            {
+                TableName = entry.Metadata.GetTableName() ?? entry.Metadata.Name,
+                Action = entry.State.ToString()
+            };
+
+            var primaryKey = entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey());
+            auditLog.RecordId = primaryKey?.CurrentValue?.ToString() ?? Guid.NewGuid().ToString();
+
+            var createdByProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "CreatedBy" || p.Metadata.Name == "UpdatedBy");
+            if (createdByProp != null && createdByProp.CurrentValue != null)
+            {
+                auditLog.CreatedBy = createdByProp.CurrentValue.ToString() ?? "System";
+            }
+
+            if (entry.State == EntityState.Added)
+            {
+                var newValues = new Dictionary<string, object?>();
+                foreach (var prop in entry.Properties)
+                {
+                    newValues[prop.Metadata.Name] = prop.CurrentValue;
+                }
+                auditLog.NewValues = JsonSerializer.Serialize(newValues);
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                var oldValues = new Dictionary<string, object?>();
+                var newValues = new Dictionary<string, object?>();
+                
+                foreach (var prop in entry.Properties.Where(p => p.IsModified))
+                {
+                    oldValues[prop.Metadata.Name] = prop.OriginalValue;
+                    newValues[prop.Metadata.Name] = prop.CurrentValue;
+                }
+                auditLog.OldValues = JsonSerializer.Serialize(oldValues);
+                auditLog.NewValues = JsonSerializer.Serialize(newValues);
+            }
+            else if (entry.State == EntityState.Deleted)
+            {
+                var oldValues = new Dictionary<string, object?>();
+                foreach (var prop in entry.Properties)
+                {
+                    oldValues[prop.Metadata.Name] = prop.OriginalValue;
+                }
+                auditLog.OldValues = JsonSerializer.Serialize(oldValues);
+            }
+
+            auditEntries.Add(auditLog);
+        }
+
+        if (auditEntries.Any())
+        {
+            AuditLogs.AddRange(auditEntries);
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }

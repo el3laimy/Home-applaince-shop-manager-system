@@ -54,6 +54,44 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.ToTable("Accounts");
                 });
 
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NewValues")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OldValues")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RecordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TableName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Bundle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -175,8 +213,8 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<int>("Category")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CreatedBy")
                         .IsRequired()
@@ -192,11 +230,61 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ReceiptImagePath")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
 
                     b.HasIndex("JournalEntryId");
 
                     b.ToTable("Expenses");
+                });
+
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.ExpenseCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ExpenseCategories");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                            IsActive = true,
+                            Name = "مصروفات تشغيل (كهرباء، غاز، إلخ)"
+                        },
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            IsActive = true,
+                            Name = "رواتب وأجور"
+                        },
+                        new
+                        {
+                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                            IsActive = true,
+                            Name = "تسويق وإعلانات"
+                        },
+                        new
+                        {
+                            Id = new Guid("44444444-4444-4444-4444-444444444444"),
+                            IsActive = true,
+                            Name = "أخرى"
+                        });
                 });
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Installment", b =>
@@ -242,6 +330,9 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BridalNotes")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("CashierId")
                         .HasColumnType("uuid");
 
@@ -255,18 +346,39 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DeliveryDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("EventDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("InstallmentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InstallmentPeriod")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("InterestRate")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("InvoiceNo")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsBridal")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
                     b.Property<decimal>("PaidAmount")
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("PaymentReference")
+                        .HasColumnType("text");
 
                     b.Property<int>("PaymentType")
                         .HasColumnType("integer");
@@ -339,6 +451,9 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Reference")
                         .HasMaxLength(500)
@@ -511,6 +626,9 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
 
                     b.Property<decimal>("RemainingAmount")
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("SupplierId")
                         .HasColumnType("uuid");
@@ -708,6 +826,10 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("BackupPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("CommercialRegNo")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -748,6 +870,10 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<string>("SmsApiKey")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("SmsProvider")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("SmsSenderId")
                         .HasMaxLength(100)
@@ -804,6 +930,47 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.HasIndex("ProductId");
 
                     b.ToTable("StockAdjustments");
+                });
+
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.StockMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BalanceAfter")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ReferenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("StockMovements");
                 });
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Supplier", b =>
@@ -926,9 +1093,17 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Expense", b =>
                 {
+                    b.HasOne("ALIkhlasPOS.Domain.Entities.ExpenseCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ALIkhlasPOS.Domain.Entities.JournalEntry", "JournalEntry")
                         .WithMany()
                         .HasForeignKey("JournalEntryId");
+
+                    b.Navigation("Category");
 
                     b.Navigation("JournalEntry");
                 });
@@ -1090,6 +1265,17 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.StockAdjustment", b =>
+                {
+                    b.HasOne("ALIkhlasPOS.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.StockMovement", b =>
                 {
                     b.HasOne("ALIkhlasPOS.Domain.Entities.Product", "Product")
                         .WithMany()

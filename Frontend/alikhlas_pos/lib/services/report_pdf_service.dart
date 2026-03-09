@@ -47,6 +47,7 @@ class ReportPdfService {
     final totalCost = (salesMetrics['totalCost'] as num?)?.toDouble() ?? 0;
     final netProfit = (salesMetrics['netProfit'] as num?)?.toDouble() ?? 0;
     final totalRefunds = (salesMetrics['totalRefunds'] as num?)?.toDouble() ?? 0;
+    final totalExpenses = (salesMetrics['totalExpenses'] as num?)?.toDouble() ?? 0;
 
     doc.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -62,9 +63,10 @@ class ReportPdfService {
       build: (ctx) => [
         // ── KPI Cards Row ──────────────────────────────────────────────────
         pw.Row(children: [
-          _kpiCard('إجمالي الإيرادات', _money(totalRevenue), PdfColors.blue700, arabicBoldFont, arabicFont),
-          _kpiCard('تكلفة البضاعة', _money(totalCost), PdfColors.orange700, arabicBoldFont, arabicFont),
+          _kpiCard('الإيرادات', _money(totalRevenue), PdfColors.blue700, arabicBoldFont, arabicFont),
+          _kpiCard('التكلفة', _money(totalCost), PdfColors.orange700, arabicBoldFont, arabicFont),
           _kpiCard('المرتجعات', _money(totalRefunds), PdfColors.red700, arabicBoldFont, arabicFont),
+          _kpiCard('المصروفات', _money(totalExpenses), PdfColors.purple700, arabicBoldFont, arabicFont),
           _kpiCard('صافي الربح', _money(netProfit), netProfit >= 0 ? PdfColors.green700 : PdfColors.red700, arabicBoldFont, arabicFont),
         ]),
 

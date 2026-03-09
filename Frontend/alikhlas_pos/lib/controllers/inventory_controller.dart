@@ -27,7 +27,10 @@ class InventoryController extends GetxController {
   // Pagination
   final RxInt currentPage = 1.obs;
   final RxInt totalCount = 0.obs;
+  final RxBool isLoadingMore = false.obs;
   static const int pageSize = 50;
+
+  bool get hasMore => products.length < totalCount.value;
 
   @override
   void onInit() {
@@ -69,6 +72,30 @@ class InventoryController extends GetxController {
       errorMessage.value = 'خطأ في الاتصال بالخادم';
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  /// MISSING-03: Loads the next page of products and appends to the list.
+  Future<void> loadMore() async {
+    if (!hasMore || isLoadingMore.value || isLoading.value) return;
+    isLoadingMore.value = true;
+    currentPage.value++;
+    try {
+      String endpoint = 'products?page=${currentPage.value}&pageSize=$pageSize';
+      if (searchQuery.value.isNotEmpty) endpoint += '&search=${Uri.encodeComponent(searchQuery.value)}';
+      if (selectedCategory.value.isNotEmpty) endpoint += '&category=${Uri.encodeComponent(selectedCategory.value)}';
+      if (showLowStockOnly.value) endpoint += '&lowStock=true';
+
+      final data = await ApiService.get(endpoint);
+      totalCount.value = (data['total'] as num? ?? 0).toInt();
+      final list = (data['data'] as List<dynamic>? ?? [])
+          .map((p) => ProductModel.fromJson(p as Map<String, dynamic>))
+          .toList();
+      products.addAll(list);
+    } catch (_) {
+      currentPage.value--; // revert on failure
+    } finally {
+      isLoadingMore.value = false;
     }
   }
 
@@ -188,6 +215,15 @@ class InventoryController extends GetxController {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchStockHistory(String productId) async {
+    try {
+      final res = await ApiService.getList('products/$productId/stock-movements');
+      return res.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   void onSearchChanged(String query) {
     searchQuery.value = query;
     fetchProducts(reset: true);
@@ -201,5 +237,6 @@ class InventoryController extends GetxController {
     else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
     else { ToastService.showInfo(msg); }
   }
+
 
 }

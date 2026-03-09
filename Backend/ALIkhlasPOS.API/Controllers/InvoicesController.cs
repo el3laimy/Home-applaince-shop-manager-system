@@ -17,12 +17,20 @@ public class InvoicesController : ControllerBase
     private readonly ApplicationDbContext _dbContext;
     private readonly IProductCacheService _productCacheService;
     private readonly IAccountingService _accountingService;
+    private readonly ALIkhlasPOS.Application.Services.InvoicePdfGenerator _pdfGenerator;
 
-    public InvoicesController(ApplicationDbContext dbContext, IProductCacheService productCacheService, IAccountingService accountingService)
+    public InvoicesController(
+        ApplicationDbContext dbContext, 
+        IProductCacheService productCacheService, 
+        IAccountingService accountingService,
+        ALIkhlasPOS.Application.Services.InvoicePdfGenerator pdfGenerator,
+        IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> hubContext)
     {
         _dbContext = dbContext;
         _productCacheService = productCacheService;
         _accountingService = accountingService;
+        _pdfGenerator = pdfGenerator;
+        _hubContext = hubContext;
     }
 
     // ── Request DTOs ─────────────────────────────────────────────────────────
@@ -35,8 +43,18 @@ public class InvoicesController : ControllerBase
         decimal DiscountAmount = 0,
         decimal DownPayment = 0,        // مقدم الأقساط (يُدفع عند إنشاء الفاتورة)
         decimal VatRate = 0,            // نسبة الضريبة (0 = بدون ضريبة)
+        decimal InterestRate = 0,       // نسبة الفائدة % على المتبقي (للتقسيط)
+        InstallmentPeriod InstallmentPeriod = InstallmentPeriod.Monthly, // نوع القسط
+        int InstallmentCount = 0,       // عدد الأقساط
         InvoiceStatus Status = InvoiceStatus.Completed,
-        string? Notes = null
+        string? Notes = null,
+        bool IsBridal = false,
+        DateTime? EventDate = null,
+        DateTime? DeliveryDate = null,
+        string? BridalNotes = null,
+        string? PaymentReference = null, // رقم العملية لـ Visa/BankTransfer
+        decimal SplitCashAmount = 0,    // مبلغ الدفع المقسم (نقدًا)
+        decimal SplitVisaAmount = 0     // مبلغ الدفع المقسم (فيزا)
     );
 
     // ── GET /api/invoices — List with filters ────────────────────────────────
@@ -90,6 +108,103 @@ public class InvoicesController : ControllerBase
         return Ok(invoice);
     }
 
+    // ── GET /api/invoices/{id}/pdf — Generate PDF receipt ───────────────────
+    [HttpGet("{id:guid}/pdf")]
+    [AllowAnonymous] // Might want to secure this depending on architecture, but usually receipts are safe if ID is UUID
+    public async Task<IActionResult> DownloadPdf(Guid id, CancellationToken cancellationToken)
+    {
+        var invoice = await _dbContext.Invoices
+            .Include(i => i.Customer)
+            .Include(i => i.Items).ThenInclude(it => it.Product)
+            .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+
+        if (invoice == null) return NotFound(new { message = "الفاتورة غير موجودة" });
+
+        try
+        {
+            var pdfBytes = _pdfGenerator.GenerateInvoicePdf(invoice);
+            return File(pdfBytes, "application/pdf", $"Invoice_{invoice.InvoiceNo}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"خطأ أثناء توليد الـ PDF: {ex.Message}" });
+        }
+    }
+
+    // ── GET /api/invoices/by-no/{invoiceNo} — Used by Returns Screen ──────────
+    [HttpGet("by-no/{invoiceNo}")]
+    public async Task<IActionResult> GetByInvoiceNo(string invoiceNo, CancellationToken cancellationToken)
+    {
+        var invoice = await _dbContext.Invoices
+            .Include(i => i.Customer)
+            .Include(i => i.Items).ThenInclude(it => it.Product)
+            .FirstOrDefaultAsync(i => i.InvoiceNo.ToLower() == invoiceNo.ToLower(), cancellationToken);
+
+        if (invoice == null) return NotFound(new { message = "رقم الفاتورة غير موجود." });
+
+        if (invoice.Status == InvoiceStatus.Reserved)
+            return BadRequest(new { message = "لا يمكن إرجاع فاتورة غير مكتملة الدفع أو قيد الحجز." });
+
+        // Calculate how many of each item were already returned
+        var previouslyReturnedItems = await _dbContext.ReturnInvoices
+            .Where(r => r.OriginalInvoiceId == invoice.Id)
+            .SelectMany(r => r.Items)
+            .ToListAsync(cancellationToken);
+            
+        var returnedQtyByProduct = previouslyReturnedItems
+            .GroupBy(ri => ri.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(ri => ri.Quantity));
+
+        var allProductIds = invoice.Items.Select(i => i.ProductId).ToList();
+        var allBundles = await _dbContext.Bundles
+            .Include(b => b.SubProduct)
+            .Where(b => allProductIds.Contains(b.ParentProductId))
+            .ToListAsync(cancellationToken);
+
+        var response = new
+        {
+            invoice.Id,
+            invoice.InvoiceNo,
+            invoice.CreatedAt,
+            invoice.TotalAmount,
+            invoice.PaidAmount,
+            invoice.RemainingAmount,
+            CustomerName = invoice.Customer != null ? invoice.Customer.Name : "عميل نقدي",
+            Items = invoice.Items.Select(i => {
+                var isBundle = allBundles.Any(b => b.ParentProductId == i.ProductId);
+                var bundleItems = allBundles.Where(b => b.ParentProductId == i.ProductId).Select(b => new {
+                    SubProductId = b.SubProductId,
+                    SubProductName = b.SubProduct?.Name ?? "غير معروف",
+                    QuantityRequired = b.QuantityRequired,
+                    TotalSubQuantity = b.QuantityRequired * i.Quantity,
+                    PreviouslyReturned = returnedQtyByProduct.GetValueOrDefault(b.SubProductId, 0),
+                    // If returning a single sub-item, we need a baseline price. We'll send the sub-product's retail price as a suggestion
+                    SuggestedRefundPrice = b.SubProduct?.Price ?? 0
+                }).ToList();
+
+                var mainReturnedQty = returnedQtyByProduct.GetValueOrDefault(i.ProductId, 0);
+
+                return new
+                {
+                    i.ProductId,
+                    i.Product.Name,
+                    OriginalQuantity = i.Quantity,
+                    ReturnedQuantity = mainReturnedQty,
+                    ReturnableQuantity = i.Quantity - mainReturnedQty,
+                    i.UnitPrice,
+                    i.TotalPrice,
+                    IsBundle = isBundle,
+                    BundleItems = bundleItems
+                };
+            }).Where(i => i.ReturnableQuantity > 0 || (i.IsBundle && i.BundleItems.Any(b => b.TotalSubQuantity > b.PreviouslyReturned))).ToList()
+        };
+
+        if (!response.Items.Any())
+            return BadRequest(new { message = "تم إرجاع جميع أصناف هذه الفاتورة مسبقاً." });
+
+        return Ok(response);
+    }
+
     // ── POST /api/invoices — Create invoice ──────────────────────────────────
     [HttpPost]
     public async Task<IActionResult> CreateInvoice([FromBody] InvoiceCreateRequest request, CancellationToken cancellationToken)
@@ -101,9 +216,29 @@ public class InvoicesController : ControllerBase
         var cashierIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var cashierId = cashierIdStr != null ? Guid.Parse(cashierIdStr) : (Guid?)null;
 
+        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+
+            // BUG-14: Sequential invoice number — safe under high load
+            var today = DateTime.UtcNow.ToString("yyyyMMdd");
+            var lastNo = await _dbContext.Invoices
+                .Where(i => i.InvoiceNo.StartsWith($"INV-{today}-"))
+                .OrderByDescending(i => i.InvoiceNo)
+                .Select(i => i.InvoiceNo)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            int seq = 1;
+            if (lastNo != null)
+            {
+                var parts = lastNo.Split('-');
+                if (parts.Length == 3 && int.TryParse(parts[2], out var lastSeq))
+                    seq = lastSeq + 1;
+            }
+
         var invoice = new Invoice
         {
-            InvoiceNo = $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}",
+            InvoiceNo = $"INV-{today}-{seq:D5}",
             PaymentType = request.PaymentType,
             Status = request.Status,
             CustomerId = request.CustomerId,
@@ -111,7 +246,15 @@ public class InvoicesController : ControllerBase
             DiscountAmount = request.DiscountAmount,
             VatRate = request.VatRate,
             Notes = request.Notes,
-            CreatedBy = User.FindFirstValue(ClaimTypes.Name) ?? "System"
+            IsBridal = request.IsBridal,
+            EventDate = request.EventDate,
+            DeliveryDate = request.DeliveryDate,
+            BridalNotes = request.BridalNotes,
+            InterestRate = request.InterestRate,
+            InstallmentPeriod = request.InstallmentPeriod,
+            InstallmentCount = request.InstallmentCount,
+            CreatedBy = User.FindFirstValue(ClaimTypes.Name) ?? "System",
+            PaymentReference = request.PaymentReference
         };
 
         // ── Scanner Aggregation (group repeated scans of the same barcode & price) ──
@@ -148,7 +291,21 @@ public class InvoicesController : ControllerBase
 
                         subProduct.StockQuantity -= totalSubQtyRequired;
                         _dbContext.Products.Update(subProduct);
-                        await _productCacheService.RemoveProductCacheAsync(subProduct.GlobalBarcode, cancellationToken);
+                        
+                        _dbContext.StockMovements.Add(new StockMovement
+                        {
+                            ProductId = subProduct.Id,
+                            Type = StockMovementType.Sale,
+                            Quantity = -(int)totalSubQtyRequired,
+                            BalanceAfter = (int)subProduct.StockQuantity,
+                            ReferenceId = invoice.Id,
+                            ReferenceNumber = invoice.InvoiceNo,
+                            CreatedBy = invoice.CreatedBy,
+                            Notes = $"مرتبط بالمنتج المجمّع {product.Name}"
+                        });
+                        
+                        if (!string.IsNullOrEmpty(subProduct.GlobalBarcode))
+                            await _productCacheService.RemoveProductCacheAsync(subProduct.GlobalBarcode, cancellationToken);
                         if (!string.IsNullOrEmpty(subProduct.InternalBarcode))
                             await _productCacheService.RemoveProductCacheAsync(subProduct.InternalBarcode, cancellationToken);
                     }
@@ -161,6 +318,17 @@ public class InvoicesController : ControllerBase
 
                 product.StockQuantity -= quantity;
                 _dbContext.Products.Update(product);
+
+                _dbContext.StockMovements.Add(new StockMovement
+                {
+                    ProductId = product.Id,
+                    Type = StockMovementType.Sale,
+                    Quantity = -(int)quantity,
+                    BalanceAfter = (int)product.StockQuantity,
+                    ReferenceId = invoice.Id,
+                    ReferenceNumber = invoice.InvoiceNo,
+                    CreatedBy = invoice.CreatedBy
+                });
             }
 
             await _productCacheService.SetProductCacheAsync(product, cancellationToken);
@@ -214,7 +382,12 @@ public class InvoicesController : ControllerBase
         if (request.PaymentType == PaymentType.Installment)
         {
             invoice.PaidAmount = request.DownPayment;
-            invoice.RemainingAmount = totalAmount - request.DownPayment;
+            // Apply interest on the remaining amount
+            var remaining = totalAmount - request.DownPayment;
+            var interest = remaining * (request.InterestRate / 100m);
+            var totalWithInterest = remaining + interest;
+            invoice.RemainingAmount = totalWithInterest;
+            invoice.TotalAmount = totalAmount + interest; // updated to include interest
         }
         else
         {
@@ -222,20 +395,27 @@ public class InvoicesController : ControllerBase
             invoice.RemainingAmount = 0;
         }
 
+        // ── Recording to Treasury & Accounting ──
+        // FIX-D: Update Customer balance fields
+        if (invoice.CustomerId.HasValue)
+        {
+            var customer = await _dbContext.Customers.FindAsync(new object[] { invoice.CustomerId.Value }, cancellationToken);
+            if (customer != null)
+            {
+                customer.TotalPurchases += invoice.TotalAmount;
+                customer.TotalPaid += invoice.PaidAmount;
+            }
+        }
+
         _dbContext.Invoices.Add(invoice);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // ── Recording to Treasury & Accounting ──
-        try
-        {
-            await _accountingService.RecordCashSaleAsync(invoice, invoice.CreatedBy);
-        }
-        catch (Exception ex)
-        {
-            // Logging would go here. We don't want to fail the invoice if accounting fails,
-            // but for now we let it pass as the invoice is already saved.
-            Console.WriteLine($"Accounting Sync Error: {ex.Message}");
-        }
+        await _accountingService.RecordCashSaleAsync(invoice, invoice.CreatedBy, request.SplitCashAmount, request.SplitVisaAmount);
+        
+        await transaction.CommitAsync(cancellationToken);
+
+        // Trigger SignalR broadcast for live dashboard update
+        await _hubContext.Clients.All.SendAsync("UpdateDashboard", cancellationToken);
 
         return Ok(new
         {
@@ -249,5 +429,11 @@ public class InvoicesController : ControllerBase
             invoice.RemainingAmount,
             ItemCount = invoice.Items.Count
         });
+    }
+    catch (Exception ex)
+    {
+        await transaction.RollbackAsync(cancellationToken);
+        return BadRequest(new { message = $"حدث خطأ أثناء حفظ الفاتورة أو المعاملة المالية: {ex.Message}" });
+    }
     }
 }

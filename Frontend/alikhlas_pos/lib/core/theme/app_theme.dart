@@ -4,14 +4,17 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   // Premium Aesthetic Colors
   static const Color primaryColor = Color(0xFF6C63FF); 
-  static const Color secondaryColor = Color(0xFF00E5FF); // Neon Cyan for accents
-  static const Color bgDark = Color(0xFF0B0F19); // Super deep slate/navy
-  static const Color surfaceDark = Color(0xFF131A2A); // Elevated surface
+  static const Color secondaryColor = Color(0xFF00E5FF); 
+  static const Color posBackground = Color(0xFFF0F4F9); // Light blueish grey for POS background
+  static const Color bgDark = Color(0xFF0B0F19);
+  static const Color surfaceDark = Color(0xFF131A2A);
+  static const Color cardDark = Color(0xFF1A2236);
   
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      scaffoldBackgroundColor: posBackground,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryColor,
         primary: primaryColor,
@@ -27,9 +30,8 @@ class AppTheme {
         titleTextStyle: GoogleFonts.cairo(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.bold),
       ),
       cardTheme: CardThemeData(
-        elevation: 8,
-        shadowColor: primaryColor.withAlpha(30),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 0, // We'll use custom containers with shadows for more control
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         color: Colors.white,
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -37,9 +39,17 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: primaryColor, width: 2),
+        ),
         filled: true,
-        fillColor: Colors.grey.shade100,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       ),
     );
   }
@@ -65,19 +75,26 @@ class AppTheme {
         titleTextStyle: GoogleFonts.cairo(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
       ),
       cardTheme: CardThemeData(
-        elevation: 12,
-        shadowColor: Colors.black54,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        color: surfaceDark.withAlpha(200),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        color: surfaceDark,
       ),
       inputDecorationTheme: InputDecorationTheme(
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: primaryColor, width: 2),
+        ),
         filled: true,
-        fillColor: Colors.white.withAlpha(15),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        fillColor: Colors.white.withAlpha(20),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       ),
     );
   }

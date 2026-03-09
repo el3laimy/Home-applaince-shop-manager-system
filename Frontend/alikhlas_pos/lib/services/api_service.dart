@@ -9,7 +9,10 @@ class ApiService {
   
 
   static void initialize() {
-    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+    String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+    if (!baseUrl.endsWith('/')) {
+      baseUrl += '/';
+    }
     
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
@@ -82,7 +85,7 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint, {Map<String, dynamic>? queryParameters}) async {
     try {
-      final response = await _dio.get('/$endpoint', queryParameters: queryParameters);
+      final response = await _dio.get(endpoint, queryParameters: queryParameters);
       return _handleResponse(response);
     } on DioException catch (e) {
       throw _handleDioError(e);
@@ -91,7 +94,7 @@ class ApiService {
 
   static Future<List<dynamic>> getList(String endpoint, {Map<String, dynamic>? queryParameters}) async {
     try {
-      final response = await _dio.get('/$endpoint', queryParameters: queryParameters);
+      final response = await _dio.get(endpoint, queryParameters: queryParameters);
       if (response.data is List) return response.data as List<dynamic>;
       if (response.data is Map && response.data.containsKey('data')) return response.data['data'] as List<dynamic>;
       return [];
@@ -102,7 +105,7 @@ class ApiService {
 
   static Future<dynamic> post(String endpoint, dynamic data) async {
     try {
-      final response = await _dio.post('/$endpoint', data: data);
+      final response = await _dio.post(endpoint, data: data);
       return _handleResponse(response);
     } on DioException catch (e) {
       throw _handleDioError(e);
@@ -111,7 +114,7 @@ class ApiService {
 
   static Future<dynamic> put(String endpoint, dynamic data) async {
     try {
-      final response = await _dio.put('/$endpoint', data: data);
+      final response = await _dio.put(endpoint, data: data);
       return _handleResponse(response);
     } on DioException catch (e) {
       throw _handleDioError(e);
@@ -120,7 +123,7 @@ class ApiService {
 
   static Future<dynamic> patch(String endpoint, dynamic data) async {
     try {
-      final response = await _dio.patch('/$endpoint', data: data);
+      final response = await _dio.patch(endpoint, data: data);
       return _handleResponse(response);
     } on DioException catch (e) {
       throw _handleDioError(e);
@@ -129,7 +132,20 @@ class ApiService {
 
   static Future<dynamic> delete(String endpoint) async {
     try {
-      final response = await _dio.delete('/$endpoint');
+      final response = await _dio.delete(endpoint);
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  static Future<dynamic> uploadFile(String endpoint, String filePath, {String fileKey = 'file'}) async {
+    try {
+      String fileName = filePath.split('/').last;
+      FormData formData = FormData.fromMap({
+        fileKey: await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+      final response = await _dio.post(endpoint, data: formData);
       return _handleResponse(response);
     } on DioException catch (e) {
       throw _handleDioError(e);
