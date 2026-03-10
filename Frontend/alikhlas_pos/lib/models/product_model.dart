@@ -76,6 +76,7 @@ class ProductModel {
     double? minStockAlert,
     String? category,
     String? description,
+    String? imageUrl,
   }) {
     return ProductModel(
       id: id,
@@ -89,6 +90,7 @@ class ProductModel {
       stockQuantity: stockQuantity ?? this.stockQuantity,
       minStockAlert: minStockAlert ?? this.minStockAlert,
       category: category ?? this.category,
+      imageUrl: imageUrl ?? this.imageUrl,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );

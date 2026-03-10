@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 import '../core/utils/formatters.dart';
 
 // ── Local model ────────────────────────────────────────────────────────────────
@@ -125,55 +127,202 @@ class _InstallmentsScreenState extends State<InstallmentsScreen> {
     }
   }
 
+  // UX-05: Real CSV download by launching the export URL in the system browser
   Future<void> _exportCsv() async {
+    final filter = activeFilter.value == 'all' ? '' : '?filter=${activeFilter.value}';
+    final baseUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api').replaceAll('/api', '');
+    final uri = Uri.parse('$baseUrl/api/installments/export-csv$filter');
     try {
-      final filter = activeFilter.value == 'all' ? '' : '?filter=${activeFilter.value}';
-      // Open the export URL in the system browser/downloader
-      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api'; // e.g. http://localhost:5000/api
-      Get.snackbar('📥 تصدير', 'جارٍ تنزيل الملف...', backgroundColor: Colors.blue.withAlpha(200), colorText: Colors.white);
-      await ApiService.get('installments/export-csv$filter');
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        Get.snackbar('تصدير', 'جاري فتح ملف التصدير...',
+            backgroundColor: Colors.green.withAlpha(200), colorText: Colors.white);
+      } else {
+        Get.snackbar('خطأ', 'تعذّر فتح رابط التحميل',
+            backgroundColor: Colors.red.withAlpha(200), colorText: Colors.white);
+      }
     } catch (_) {
-      Get.snackbar('📥 CSV', 'سيُفتح الملف في المتصفح. تأكد من الوصول للـ API', duration: const Duration(seconds: 4));
+      Get.snackbar('خطأ', 'تعذّر فتح رابط التحميل',
+          backgroundColor: Colors.red.withAlpha(200), colorText: Colors.white);
     }
+  }
+
+  // UX-04: Manually create installment schedule for an existing invoice
+  void _showCreateScheduleDialog() {
+    final invoiceNoCtrl = TextEditingController();
+    final customerIdCtrl = TextEditingController();
+    final downCtrl = TextEditingController();
+    final monthsCtrl = TextEditingController(text: '6');
+    DateTime firstDate = DateTime.now().add(const Duration(days: 30));
+    final RxBool loading = false.obs;
+
+    Get.dialog(
+      StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('إنشاء جدول أقساط',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: invoiceNoCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم الفاتورة (INV-...)',
+                    prefixIcon: Icon(Icons.receipt_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: customerIdCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم معرف العميل (UUID)',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: downCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'مبلغ المقدم (ج.م)',
+                    prefixIcon: Icon(Icons.payments_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: monthsCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'عدد الأشهر',
+                    prefixIcon: Icon(Icons.calendar_month_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('تاريخ أول قسط', style: TextStyle(fontSize: 13)),
+                  subtitle: Text('${firstDate.day}/${firstDate.month}/${firstDate.year}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: const Icon(Icons.calendar_today_outlined),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: firstDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+                    );
+                    if (picked != null) setState(() => firstDate = picked);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
+            Obx(() => ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+              onPressed: loading.value ? null : () async {
+                final invoiceNo = invoiceNoCtrl.text.trim();
+                final customerId = customerIdCtrl.text.trim();
+                final down = double.tryParse(downCtrl.text) ?? 0.0;
+                final months = int.tryParse(monthsCtrl.text) ?? 0;
+
+                if (invoiceNo.isEmpty || customerId.isEmpty || months <= 0) {
+                  Get.snackbar('خطأ', 'يرجى تعبئة جميع الحقول',
+                      backgroundColor: Colors.red, colorText: Colors.white);
+                  return;
+                }
+
+                try {
+                  loading.value = true;
+                  // Resolve invoice id from invoice number first
+                  final invoiceData = await ApiService.get('invoices?invoiceNo=$invoiceNo');
+                  final invoiceList = invoiceData['data'] as List? ?? [];
+                  if (invoiceList.isEmpty) {
+                    Get.snackbar('خطأ', 'لم يتم العثور على الفاتورة',
+                        backgroundColor: Colors.red, colorText: Colors.white);
+                    return;
+                  }
+                  final invoiceId = invoiceList[0]['id'] as String;
+
+                  await ApiService.post('installments/schedule', {
+                    'invoiceId': invoiceId,
+                    'customerId': customerId,
+                    'downPayment': down,
+                    'numberOfMonths': months,
+                    'firstInstallmentDate': firstDate.toIso8601String(),
+                  });
+                  Get.back();
+                  Get.snackbar('نجاح', 'تم إنشاء جدول الأقساط ✓',
+                      backgroundColor: Colors.green, colorText: Colors.white);
+                  await _loadData();
+                } catch (e) {
+                  Get.snackbar('خطأ', e.toString(),
+                      backgroundColor: Colors.red, colorText: Colors.white);
+                } finally {
+                  loading.value = false;
+                }
+              },
+              child: loading.value
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('إنشاء الجدول', style: TextStyle(color: Colors.white)),
+            )),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
-              : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
-        ),
+    // UX-04: Use Scaffold to allow FAB for creating installment schedules
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showCreateScheduleDialog,
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_chart_outlined),
+        label: const Text('جدول أقساط', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              _buildHeader(isDark),
-              const SizedBox(height: 20),
-              // Summary KPI cards
-              Obx(() => _buildSummaryCards(isDark)),
-              const SizedBox(height: 16),
-              // Filter chips + export button
-              _buildFilterRow(),
-              const SizedBox(height: 16),
-              // Table
-              Expanded(
-                child: Obx(() {
-                  if (isLoading.value) return const Center(child: CircularProgressIndicator());
-                  if (items.isEmpty) return _buildEmpty();
-                  return _buildTable(isDark);
-                }),
-              ),
-            ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: isDark
+                ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                _buildHeader(isDark),
+                const SizedBox(height: 20),
+                // Summary KPI cards
+                Obx(() => _buildSummaryCards(isDark)),
+                const SizedBox(height: 16),
+                // Filter chips + export button
+                _buildFilterRow(),
+                const SizedBox(height: 16),
+                // Table
+                Expanded(
+                  child: Obx(() {
+                    if (isLoading.value) return const Center(child: CircularProgressIndicator());
+                    if (items.isEmpty) return _buildEmpty();
+                    return _buildTable(isDark);
+                  }),
+                ),
+              ],
+            ),
           ),
         ),
       ),

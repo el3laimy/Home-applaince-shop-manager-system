@@ -2,8 +2,10 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/invoice_model.dart';
 import '../services/api_service.dart';
+import '../core/utils/toast_service.dart';
 
 /// ShopSettings model (matched to backend ShopSettings entity)
 class ShopSettingsModel {
@@ -75,7 +77,7 @@ class ReceiptService {
     String? notes,
   }) async {
     final settings = await getShopSettings();
-    final pdf = await _buildPdf(
+    final doc = await _buildPdf(
       settings: settings,
       invoiceNo: invoiceNo,
       date: date,
@@ -92,20 +94,16 @@ class ReceiptService {
       notes: notes,
     );
 
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdf,
-      name: 'إيصال $invoiceNo',
-      format: PdfPageFormat.roll80,
-    );
+    await _sendToPrinter(doc, 'إيصال $invoiceNo', 'receipt_printer');
   }
 
   /// Print a test page to verify printer setup
   static Future<void> printTestPage() async {
     final settings = await getShopSettings();
-    final pdf = pw.Document();
+    final doc = pw.Document();
 
-    pdf.addPage(pw.Page(
-      pageFormat: PdfPageFormat.roll80,
+    doc.addPage(pw.Page(
+      pageFormat: PdfPageFormat.roll80.copyWith(marginTop: 0, marginBottom: 0, marginLeft: 2 * PdfPageFormat.mm, marginRight: 2 * PdfPageFormat.mm),
       build: (ctx) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
@@ -116,15 +114,38 @@ class ReceiptService {
           pw.Text('الطابعة تعمل بشكل صحيح ✓', style: const pw.TextStyle(fontSize: 12)),
           pw.SizedBox(height: 8),
           pw.Text(DateTime.now().toString()),
+          pw.SizedBox(height: 20),
+          pw.Text('--- نهاية الاختبار ---', style: const pw.TextStyle(fontSize: 10)),
         ],
       ),
     ));
 
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdf.save(),
-      name: 'اختبار الطباعة',
-      format: PdfPageFormat.roll80,
-    );
+    await _sendToPrinter(await doc.save(), 'اختبار الطباعة', 'receipt_printer');
+  }
+
+  static Future<void> _sendToPrinter(Uint8List docBytes, String jobName, String prefsKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final targetPrinterName = prefs.getString(prefsKey) ?? 'Default';
+
+      final printers = await Printing.listPrinters();
+      final printer = printers.firstWhere(
+        (p) => p.name == targetPrinterName, 
+        orElse: () => printers.firstWhere((p) => p.isDefault, orElse: () => printers.first)
+      );
+
+      final success = await Printing.directPrintPdf(
+        printer: printer,
+        onLayout: (format) async => docBytes,
+        name: jobName,
+      );
+
+      if (!success) {
+        ToastService.showError('تعذر الإرسال لطابعة الفواتير. يرجى التأكد من توصيلها وتشغيلها.');
+      }
+    } catch (e) {
+      ToastService.showError('عفواً، يبدو أن طابعة الفواتير غير متصلة أو لا يوجد بها ورق. يرجى التحقق وإعادة المحاولة.');
+    }
   }
 
   // ── Internal: Build PDF document ──────────────────────────────────────────

@@ -43,13 +43,38 @@ public class BackupController : ControllerBase
                            counts.Customers + counts.Installments +
                            counts.PurchaseInvoices + counts.Expenses;
 
+        var settings = await _dbContext.ShopSettings.FirstOrDefaultAsync(ct);
+        var backupDir = !string.IsNullOrWhiteSpace(settings?.BackupPath) 
+            ? settings.BackupPath 
+            : Path.Combine(Directory.GetCurrentDirectory(), "Backups");
+
+        object lastBackup = null;
+        if (Directory.Exists(backupDir))
+        {
+            var latestFile = new DirectoryInfo(backupDir)
+                .GetFiles("*.sql")
+                .OrderByDescending(f => f.CreationTime)
+                .FirstOrDefault();
+
+            if (latestFile != null)
+            {
+                lastBackup = new
+                {
+                    fileName = latestFile.Name,
+                    sizeBytes = latestFile.Length,
+                    createdAt = latestFile.CreationTimeUtc
+                };
+            }
+        }
+
         return Ok(new
         {
             DatabaseEngine = "PostgreSQL",
             BackupMethod = "pg_dump",
             LastChecked = DateTime.UtcNow,
             TotalRecords = totalRecords,
-            Tables = counts
+            Tables = counts,
+            LastBackup = lastBackup
         });
     }
 
@@ -67,10 +92,14 @@ public class BackupController : ControllerBase
 
         // Parse connection string to extract pg_dump parameters
         var builder = new Npgsql.NpgsqlConnectionStringBuilder(connStr);
-        var backupDir = Path.Combine(Path.GetTempPath(), "alikhlas_backups");
+        var settings = await _dbContext.ShopSettings.FirstOrDefaultAsync(ct);
+        var backupDir = !string.IsNullOrWhiteSpace(settings?.BackupPath) 
+            ? settings.BackupPath 
+            : Path.Combine(Directory.GetCurrentDirectory(), "Backups");
         Directory.CreateDirectory(backupDir);
 
-        var fileName = $"backup_{DateTime.Now:yyyyMMdd_HHmmss}.sql";
+        var database = builder.Database ?? "db";
+        var fileName = $"backup_{database}_{DateTime.Now:yyyyMMdd_HHmmss}.sql";
         var fullPath = Path.Combine(backupDir, fileName);
 
         var env = new Dictionary<string, string>
@@ -78,9 +107,10 @@ public class BackupController : ControllerBase
             ["PGPASSWORD"] = builder.Password ?? ""
         };
 
-        var psi = new System.Diagnostics.ProcessStartInfo("pg_dump")
+        // PostgreSQL is running in docker (container name: alikhlaspos-postgres)
+        var psi = new System.Diagnostics.ProcessStartInfo("docker")
         {
-            Arguments = $"-h {builder.Host} -p {builder.Port} -U {builder.Username} -d {builder.Database} -f {fullPath} --no-password",
+            Arguments = $"exec -e PGPASSWORD={builder.Password} alikhlaspos-postgres pg_dump -h {builder.Host} -p {builder.Port} -U {builder.Username} -d {builder.Database} -f /tmp/{fileName} --no-password",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -96,9 +126,31 @@ public class BackupController : ControllerBase
 
             if (process.ExitCode != 0)
             {
-                _logger.LogError("pg_dump failed: {Error}", stderr);
+                _logger.LogError("docker exec pg_dump failed: {Error}", stderr);
                 return StatusCode(500, new { message = $"فشل النسخ الاحتياطي: {stderr}" });
             }
+
+            // Copy the file from the container to the host
+            var copyPsi = new System.Diagnostics.ProcessStartInfo("docker")
+            {
+                Arguments = $"cp alikhlaspos-postgres:/tmp/{fileName} {fullPath}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using var copyProcess = System.Diagnostics.Process.Start(copyPsi)!;
+            await copyProcess.WaitForExitAsync(ct);
+
+            // Clean up the file inside the container
+            var rmPsi = new System.Diagnostics.ProcessStartInfo("docker")
+            {
+                Arguments = $"exec alikhlaspos-postgres rm /tmp/{fileName}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using var rmProcess = System.Diagnostics.Process.Start(rmPsi)!;
+            await rmProcess.WaitForExitAsync(ct);
 
             var fileInfo = new FileInfo(fullPath);
             _logger.LogInformation("Backup created: {Path} ({Size})", fullPath, fileInfo.Length);
@@ -126,7 +178,7 @@ public class BackupController : ControllerBase
         if (fileName.Contains("..") || fileName.Contains("/"))
             return BadRequest("Invalid filename");
 
-        var backupDir = Path.Combine(Path.GetTempPath(), "alikhlas_backups");
+        var backupDir = Path.Combine(Directory.GetCurrentDirectory(), "Backups");
         var fullPath = Path.Combine(backupDir, fileName);
 
         if (!System.IO.File.Exists(fullPath))

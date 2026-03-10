@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../controllers/auth_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -21,7 +22,7 @@ class LoginScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,
             colors: isDark
-                ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+                ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
                 : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
           ),
         ),

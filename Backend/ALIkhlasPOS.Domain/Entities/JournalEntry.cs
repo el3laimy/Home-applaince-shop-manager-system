@@ -21,6 +21,8 @@ namespace ALIkhlasPOS.Domain.Entities
 
         public string CreatedBy { get; set; } = string.Empty;
 
+        public bool IsClosed { get; set; } = false;
+
         public ICollection<JournalEntryLine> Lines { get; set; } = new List<JournalEntryLine>();
     }
 

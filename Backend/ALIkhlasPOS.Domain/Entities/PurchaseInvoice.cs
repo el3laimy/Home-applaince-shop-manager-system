@@ -23,6 +23,8 @@ namespace ALIkhlasPOS.Domain.Entities
         public decimal PaidAmount { get; set; }    // المدفوع نقداً
         public decimal RemainingAmount { get; set; } // الآجل (يضاف لرصيد المورد)
 
+        public PurchaseInvoiceStatus Status { get; set; } = PurchaseInvoiceStatus.Completed;
+
         public Guid? JournalEntryId { get; set; } // تأثير الفاتورة محاسبياً
         public JournalEntry? JournalEntry { get; set; }
 

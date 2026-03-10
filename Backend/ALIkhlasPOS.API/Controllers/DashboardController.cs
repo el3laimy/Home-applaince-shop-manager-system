@@ -116,7 +116,12 @@ namespace ALIkhlasPOS.API.Controllers
                 .Where(e => e.Date >= startOfMonth)
                 .SumAsync(e => e.Amount, cancellationToken);
 
-            var monthlyGrossProfit = monthlySales - monthlyCogs;
+            // BUG-12: Subtract returns from gross profit
+            var monthlyReturns = await _dbContext.ReturnInvoices
+                .Where(r => r.CreatedAt >= startOfMonth)
+                .SumAsync(r => r.RefundAmount, cancellationToken);
+
+            var monthlyGrossProfit = monthlySales - monthlyCogs - monthlyReturns;
             var monthlyNetProfit = monthlyGrossProfit - monthlyExpenses;
 
             var grossMargin = monthlySales > 0 ? Math.Round((double)(monthlyGrossProfit / monthlySales) * 100, 1) : 0;
@@ -174,6 +179,52 @@ namespace ALIkhlasPOS.API.Controllers
             });
         }
 
+
+
+        [HttpGet("low-stock")]
+        public async Task<IActionResult> GetLowStock([FromQuery] int threshold = 5, CancellationToken cancellationToken = default)
+        {
+            var lowStockProducts = await _dbContext.Products
+                .Where(p => p.IsActive && p.StockQuantity <= threshold)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    p.StockQuantity,
+                    p.Category
+                })
+                .OrderBy(p => p.StockQuantity)
+                .Take(20)
+                .ToListAsync(cancellationToken);
+
+            return Ok(lowStockProducts);
+        }
+
+        [HttpGet("overdue-installments")]
+        public async Task<IActionResult> GetOverdueInstallments(CancellationToken cancellationToken)
+        {
+            var today = DateTime.UtcNow.Date;
+
+            var overdue = await _dbContext.Installments
+                .Include(i => i.Invoice)
+                .ThenInclude(inv => inv.Customer)
+                .Where(i => i.Status == InstallmentStatus.Pending && i.DueDate < today)
+                .OrderBy(i => i.DueDate)
+                .Take(20)
+                .Select(i => new
+                {
+                    i.Id,
+                    i.Amount,
+                    i.DueDate,
+                    DaysOverdue = (today - i.DueDate).Days,
+                    CustomerName = i.Invoice != null && i.Invoice.Customer != null ? i.Invoice.Customer.Name : "غير معروف",
+                    CustomerPhone = i.Invoice != null && i.Invoice.Customer != null ? i.Invoice.Customer.Phone : null,
+                    InvoiceNo = i.Invoice != null ? i.Invoice.InvoiceNo : null
+                })
+                .ToListAsync(cancellationToken);
+
+            return Ok(overdue);
+        }
 
         private string GetArabicDayName(DayOfWeek day)
         {

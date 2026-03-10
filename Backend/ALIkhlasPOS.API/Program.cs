@@ -66,6 +66,12 @@ builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.Accounting.IAccoun
 builder.Services.AddScoped<IBarcodeService, BarcodeService>();
 builder.Services.AddScoped<IProductCacheService, ProductCacheService>();
 
+// BUG-07: SMS factory and named HttpClient for VictoryLink / Twilio / Unifonic
+builder.Services.AddHttpClient("SmsClient")
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton<ALIkhlasPOS.Infrastructure.Sms.SmsServiceFactory>();
+
+
 // Register Background Workers
 builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.InstallmentReminderService>();
 builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.DatabaseBackupService>();

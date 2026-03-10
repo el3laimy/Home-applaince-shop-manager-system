@@ -69,10 +69,8 @@ class PurchasingController extends GetxController {
     isLoadingSuppliers.value = true;
     try {
       final endpoint = 'erp/suppliers${search != null && search.isNotEmpty ? "?search=${Uri.encodeComponent(search)}" : ""}';
-      final data = await ApiService.get(endpoint);
-      if (data is List) {
-         suppliersWithBalances.assignAll((data as List).map((e) => SupplierModel.fromJson(e as Map<String, dynamic>)).toList());
-      }
+      final data = await ApiService.getList(endpoint);
+      suppliersWithBalances.assignAll(data.map((e) => SupplierModel.fromJson(e as Map<String, dynamic>)).toList());
     } catch (e) {
        print('Error in fetchSuppliersWithBalances: $e');
     } finally {
@@ -181,7 +179,7 @@ class PurchasingController extends GetxController {
     }
   }
 
-  Future<bool> submitInvoice(double paidAmount, BuildContext context) async {
+  Future<bool> submitInvoice(double paidAmount, BuildContext context, {String status = 'Completed'}) async {
     if (selectedSupplier.value == null || purchaseItems.isEmpty) {
       ToastService.showWarning('يرجى اختيار مورد وإضافة أصناف');
       return false;
@@ -192,6 +190,7 @@ class PurchasingController extends GetxController {
         'supplierId': selectedSupplier.value!.id,
         'referenceNumber': referenceNumber.value.isEmpty ? null : referenceNumber.value,
         'paidAmount': paidAmount,
+        'status': status,
         'items': purchaseItems.map((i) => {
           'productId': i.productId,
           'quantity': i.quantity,
@@ -201,7 +200,7 @@ class PurchasingController extends GetxController {
       purchaseItems.clear();
       selectedSupplier.value = null;
       referenceNumber.value = '';
-      ToastService.showSuccess('تم ترحيل الفاتورة بنجاح');
+      ToastService.showSuccess(status == 'Draft' ? 'تم حفظ الفاتورة كمسودة' : 'تم ترحيل الفاتورة بنجاح');
       await fetchSuppliersWithBalances();
       await fetchSafeBalance();
       await fetchAllInvoices();

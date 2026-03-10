@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../controllers/finance_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 
 class FinanceScreen extends StatelessWidget {
   const FinanceScreen({super.key});
@@ -18,7 +19,7 @@ class FinanceScreen extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
               : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
         ),
       ),
@@ -67,6 +68,17 @@ class FinanceScreen extends StatelessWidget {
           children: [
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal, foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.account_balance),
+              label: const Text('توريد نقدية', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _showTransferDialog(context, ctrl),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo, foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -109,40 +121,29 @@ class FinanceScreen extends StatelessWidget {
 
   Widget _card(BuildContext context, String title, String value, IconData icon, Color color, bool isDark) {
     return Expanded(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withAlpha(8) : Colors.white.withAlpha(200),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withAlpha(40)),
-              boxShadow: [BoxShadow(color: color.withAlpha(isDark ? 20 : 10), blurRadius: 20)],
+      child: Container(
+        padding: const EdgeInsets.all(DesignTokens.kPanelPadding),
+        decoration: DesignTokens.glowCardDecoration(glowColor: color, isDark: isDark),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color.withAlpha(25),
+                  boxShadow: [BoxShadow(color: color.withAlpha(40), blurRadius: 12)]),
+              child: Icon(icon, color: color, size: 24),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: color.withAlpha(30),
-                      boxShadow: [BoxShadow(color: color.withAlpha(60), blurRadius: 12)]),
-                  child: Icon(icon, color: color, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18), overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                ),
-              ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18), overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ).animate().fadeIn(delay: 150.ms).slideY(begin: -0.1),
     );
@@ -321,6 +322,44 @@ class FinanceScreen extends StatelessWidget {
               await ctrl.closePeriod(context);
             },
             child: const Text('تأكيد الإقفال', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTransferDialog(BuildContext context, FinanceController ctrl) {
+    final amountCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [Icon(Icons.account_balance, color: Colors.teal), SizedBox(width: 8), Text('توريد للخزينة الرئيسية')]),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('الرصيد المتاح بالدرج: ${ctrl.cashDrawerBalance.value.toStringAsFixed(2)} ج.م', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+              const SizedBox(height: 16),
+              _inputField(amountCtrl, 'المبلغ المراد توريده', Icons.money, Theme.of(context).brightness == Brightness.dark, isNumber: true),
+              const SizedBox(height: 12),
+              _inputField(descCtrl, 'البيان (اختياري)', Icons.description, Theme.of(context).brightness == Brightness.dark, maxLines: 2),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            onPressed: () async {
+              final amount = double.tryParse(amountCtrl.text) ?? 0;
+              if (amount <= 0) return;
+              Get.back();
+              await ctrl.transferToTreasury(amount, descCtrl.text, context);
+            },
+            child: const Text('تأكيد التوريد', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

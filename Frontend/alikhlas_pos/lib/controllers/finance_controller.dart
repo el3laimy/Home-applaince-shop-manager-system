@@ -65,6 +65,24 @@ class FinanceController extends GetxController {
     }
   }
 
+  Future<bool> transferToTreasury(double amount, String description, BuildContext context) async {
+    isLoading.value = true;
+    try {
+      await ApiService.post('erp/finance/transfer-to-treasury', {
+        'amount': amount,
+        'description': description
+      });
+      _snap(context, 'تم توريد النقدية بنجاح', Colors.green);
+      await fetchFinanceSummary();
+      return true;
+    } on ApiException catch (e) {
+      _snap(context, e.message, Colors.red);
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   void _snap(BuildContext $1, String msg, Color color) {
     if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
     else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }

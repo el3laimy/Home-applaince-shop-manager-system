@@ -1,4 +1,6 @@
 import 'package:get/get.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:signalr_netcore/signalr_client.dart';
 import '../services/api_service.dart';
 
 class DashboardController extends GetxController {
@@ -33,11 +35,55 @@ class DashboardController extends GetxController {
   var recentInvoices = [].obs;
   var topProfitableProducts = [].obs; // NEW
   var salesTrend = [].obs; // Now contains {date, dayName, total, profit}
+  
+  // Detailed Alerts Lists
+  var lowStockDetails = [].obs;
+  var overdueDetails = [].obs;
+
+  // SignalR Connection
+  HubConnection? _hubConnection;
 
   @override
   void onInit() {
     super.onInit();
     fetchSummary();
+    _initSignalR();
+  }
+
+  @override
+  void onClose() {
+    _hubConnection?.stop();
+    super.onClose();
+  }
+
+  void _initSignalR() {
+    String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+    // Remove trailing slash if any, then remove /api
+    if (baseUrl.endsWith('/')) baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    String hubUrl = baseUrl.replaceAll(RegExp(r'/api$'), '/hubs/dashboard');
+    
+    _hubConnection = HubConnectionBuilder()
+        .withUrl(hubUrl)
+        .withAutomaticReconnect()
+        .build();
+
+    _hubConnection?.on('UpdateDashboard', (arguments) {
+      // Re-fetch dashboard when a relevant backend event occurs
+      fetchSummary();
+    });
+
+    _startSignalR();
+  }
+
+  Future<void> _startSignalR() async {
+    try {
+      if (_hubConnection?.state == HubConnectionState.Disconnected) {
+        await _hubConnection?.start();
+        print("SignalR Connected to Dashboard Hub");
+      }
+    } catch (e) {
+      print("SignalR Connection Error: $e");
+    }
   }
 
   Future<void> fetchSummary() async {
@@ -47,6 +93,7 @@ class DashboardController extends GetxController {
       
       final data = await ApiService.get('dashboard/summary');
       
+      // Batch updates if possible or update one by one but in a controlled manner
       todaySales.value = (data['todaySales'] as num?)?.toDouble() ?? 0.0;
       dailySalesGrowth.value = (data['dailySalesGrowth'] as num?)?.toDouble() ?? 0.0;
       dailyInvoicesCount.value = (data['dailyInvoicesCount'] as num?)?.toInt() ?? 0;
@@ -68,9 +115,24 @@ class DashboardController extends GetxController {
       overdueInstallmentsTotal.value = (data['overdueInstallmentsTotal'] as num?)?.toDouble() ?? 0.0;
       dueSoonCount.value = (data['dueSoonCount'] as num?)?.toInt() ?? 0;
 
-      recentInvoices.value = data['recentInvoices'] ?? [];
-      topProfitableProducts.value = data['topProfitableProducts'] ?? [];
-      salesTrend.value = data['salesTrend'] ?? [];
+      recentInvoices.assignAll(data['recentInvoices'] ?? []);
+      topProfitableProducts.assignAll(data['topProfitableProducts'] ?? []);
+      salesTrend.assignAll(data['salesTrend'] ?? []);
+
+      // Fetch detailed alert lists
+      try {
+        final lowStockRes = await ApiService.get('dashboard/low-stock?threshold=5');
+        if (lowStockRes != null && lowStockRes is List) {
+          lowStockDetails.assignAll(lowStockRes);
+        }
+      } catch (_) {}
+
+      try {
+        final overdueRes = await ApiService.get('dashboard/overdue-installments');
+        if (overdueRes != null && overdueRes is List) {
+          overdueDetails.assignAll(overdueRes);
+        }
+      } catch (_) {}
 
     } catch (e) {
       errorMessage.value = 'فشل تحميل الإحصائيات: $e';
@@ -79,4 +141,5 @@ class DashboardController extends GetxController {
     }
   }
 }
+
 

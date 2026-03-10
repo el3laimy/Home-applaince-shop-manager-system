@@ -62,6 +62,7 @@ public class ShopSettingsController : ControllerBase
             settings.DefaultVatRate = updated.DefaultVatRate;
             settings.CurrencySymbol = updated.CurrencySymbol;
             settings.CurrencyCode = updated.CurrencyCode;
+            settings.BackupPath = updated.BackupPath;
             settings.UpdatedAt = DateTime.UtcNow;
         }
 

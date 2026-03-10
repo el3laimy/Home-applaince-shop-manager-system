@@ -116,11 +116,10 @@ namespace ALIkhlasPOS.API.Controllers
                     return BadRequest(new { message = "لا توجد وردية مفتوحة لإغلاقها." });
 
                 // Calculate totals for this shift
-                var userIdString = userId.ToString();
 
-                // 1. Invoices
+                // 1. Invoices — BUG-08: use CashierId (Guid) not CreatedBy (string)
                 var shiftInvoices = await _dbContext.Invoices
-                    .Where(i => i.CreatedBy == userIdString && i.CreatedAt >= shift.StartTime && i.Status == InvoiceStatus.Completed)
+                    .Where(i => i.CashierId == userId && i.CreatedAt >= shift.StartTime && i.Status == InvoiceStatus.Completed)
                     .ToListAsync(cancellationToken);
                     
                 shift.TotalSales = shiftInvoices.Sum(i => i.TotalAmount);
@@ -128,29 +127,30 @@ namespace ALIkhlasPOS.API.Controllers
                 
                 // 2. Installment Payments
                 var shiftInstallments = await _dbContext.Installments
-                    .Include(i => i.Invoice) // Include invoice to check CreatedBy
-                    .Where(i => i.PaidAt != null && i.PaidAt >= shift.StartTime && i.Status == InstallmentStatus.Paid && i.Invoice!.CreatedBy == userIdString)
+                    .Include(i => i.Invoice)
+                    .Where(i => i.PaidAt != null && i.PaidAt >= shift.StartTime && i.Status == InstallmentStatus.Paid && i.Invoice!.CashierId == userId)
                     .ToListAsync(cancellationToken); 
                 
                 shift.TotalCashIn += shiftInstallments.Sum(i => i.Amount);
 
-                // 3. Expenses
+                // 3. Expenses (only those created in this shift by this cashier)
+                var cashierIdStr = userId.ToString();
                 var shiftExpenses = await _dbContext.Expenses
-                    .Where(e => e.Date >= shift.StartTime && e.CreatedBy == userIdString)
+                    .Where(e => e.Date >= shift.StartTime && e.CreatedBy == cashierIdStr)
                     .SumAsync(e => e.Amount, cancellationToken);
                 
                 shift.TotalCashOut += shiftExpenses;
 
-                // 4. Return Invoices (Cash Refunds)
+                // 4. Return Invoices (Cash Refunds) 
                 var shiftReturns = await _dbContext.ReturnInvoices
-                    .Where(r => r.CreatedAt >= shift.StartTime && r.CreatedBy == userIdString) // Assuming refunds are always from cash drawer
+                    .Where(r => r.CreatedAt >= shift.StartTime && r.CreatedBy == cashierIdStr)
                     .SumAsync(r => r.RefundAmount, cancellationToken);
                 
                 shift.TotalCashOut += shiftReturns;
 
                 // Optional: Purchasing (if Cashier pays suppliers from drawer)
                 var shiftPurchases = await _dbContext.PurchaseInvoices
-                    .Where(p => p.CreatedAt >= shift.StartTime && p.CreatedBy == userIdString) // Assuming cash
+                    .Where(p => p.CreatedAt >= shift.StartTime && p.CreatedBy == cashierIdStr) // Assuming cash
                     .SumAsync(p => p.PaidAmount, cancellationToken);
                 
                 shift.TotalCashOut += shiftPurchases;

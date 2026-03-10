@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using ALIkhlasPOS.Application.Interfaces.Accounting;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -16,10 +18,12 @@ namespace ALIkhlasPOS.API.Controllers.ERP
     public class SuppliersController : ControllerBase
     {
         private readonly ApplicationDbContext _dbContext;
+        private readonly IAccountingService _accountingService;
 
-        public SuppliersController(ApplicationDbContext dbContext)
+        public SuppliersController(ApplicationDbContext dbContext, IAccountingService accountingService)
         {
             _dbContext = dbContext;
+            _accountingService = accountingService;
         }
 
         [HttpGet]
@@ -70,6 +74,16 @@ namespace ALIkhlasPOS.API.Controllers.ERP
         [HttpPost]
         public async Task<ActionResult<Supplier>> CreateSupplier([FromBody] Supplier supplier, CancellationToken ct = default)
         {
+            // Uniqueness check
+            bool nameExists = await _dbContext.Suppliers.AnyAsync(s => s.Name == supplier.Name, ct);
+            if (nameExists) return BadRequest(new { message = "عذراً، يوجد مورد مسجل بهذا الاسم بالفعل." });
+
+            if (!string.IsNullOrWhiteSpace(supplier.Phone))
+            {
+                bool phoneExists = await _dbContext.Suppliers.AnyAsync(s => s.Phone == supplier.Phone, ct);
+                if (phoneExists) return BadRequest(new { message = "عذراً، يوجد مورد مسجل بهذا الرقم بالفعل." });
+            }
+
             supplier.CreatedAt = DateTime.UtcNow;
             _dbContext.Suppliers.Add(supplier);
             await _dbContext.SaveChangesAsync(ct);
@@ -145,20 +159,47 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             if (supplier == null) return NotFound();
             if (req.Amount <= 0) return BadRequest(new { message = "المبلغ يجب أن يكون أكبر من صفر." });
 
-            // Record cash transaction
-            var tx = new CashTransaction
-            {
-                Amount = req.Amount,
-                Type = TransactionType.CashOut,
-                Description = $"دفعة للمورد: {supplier.Name}",
-                ReceiptNumber = $"SUP-{DateTime.UtcNow:yyyyMMddHHmmss}",
-                Date = DateTime.UtcNow,
-                TargetAccountId = supplier.AccountId
-            };
-            _dbContext.CashTransactions.Add(tx);
-            await _dbContext.SaveChangesAsync(ct);
+            // Check cash drawer balance
+            var totalCash = await _dbContext.CashTransactions
+                .SumAsync(t => t.Type == TransactionType.CashIn ? t.Amount : -t.Amount, ct);
+            if (req.Amount > totalCash)
+                return BadRequest(new { message = $"رصيد الصندوق ({totalCash} ج.م) لا يكفي." });
 
-            return Ok(new { message = "تم تسجيل الدفعة بنجاح.", tx.Id, tx.Amount });
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+            try
+            {
+                var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
+                var receiptNo = $"SUP-{DateTime.UtcNow:yyyyMMddHHmmss}";
+
+                // FIX-C: Use AccountingService for proper journal entry + cash transaction
+                await _accountingService.RecordSupplierPaymentAsync(id, req.Amount, receiptNo, createdBy);
+
+                // FIX-E: Reduce RemainingAmount on purchase invoices (FIFO)
+                var unpaidInvoices = await _dbContext.PurchaseInvoices
+                    .Where(p => p.SupplierId == id && p.RemainingAmount > 0)
+                    .OrderBy(p => p.Date)
+                    .ToListAsync(ct);
+
+                decimal remaining = req.Amount;
+                foreach (var pi in unpaidInvoices)
+                {
+                    if (remaining <= 0) break;
+                    decimal applied = Math.Min(remaining, pi.RemainingAmount);
+                    pi.PaidAmount += applied;
+                    pi.RemainingAmount -= applied;
+                    remaining -= applied;
+                }
+
+                await _dbContext.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+
+                return Ok(new { message = "تم تسجيل الدفعة وتحديث الفواتير بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(ct);
+                return BadRequest(new { message = $"خطأ في تسجيل الدفعة: {ex.Message}" });
+            }
         }
 
         [HttpDelete("{id:guid}")]

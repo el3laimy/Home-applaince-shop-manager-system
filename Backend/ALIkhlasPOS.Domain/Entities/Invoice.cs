@@ -3,8 +3,18 @@ namespace ALIkhlasPOS.Domain.Entities;
 public enum PaymentType
 {
     Cash,
-    Card,
-    Installment
+    Card,           // Old equivalent of Visa
+    Installment,
+    Visa,           // Credit/Debit Cards via POS machine
+    BankTransfer    // InstaPay, Vodafone Cash, Bank Transfer
+}
+
+public enum InstallmentPeriod
+{
+    Monthly,      // شهري
+    Quarterly,    // ربع سنوي
+    SemiAnnual,   // نصف سنوي
+    Annual        // سنوي
 }
 
 public enum InvoiceStatus
@@ -39,7 +49,19 @@ public class Invoice
     public PaymentType PaymentType { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Completed;
 
+    public string? PaymentReference { get; set; } // رقم العملية لـ Visa/BankTransfer
     public string? Notes { get; set; }
+
+    // Installment pricing fields (set when PaymentType = Installment)
+    public decimal InterestRate { get; set; } = 0;            // نسبة الفائدة % على المتبقي
+    public InstallmentPeriod InstallmentPeriod { get; set; } = InstallmentPeriod.Monthly; // نوع القسط
+    public int InstallmentCount { get; set; } = 0;            // عدد الأقساط
+
+    // Bridal Booking Fields
+    public bool IsBridal { get; set; } = false;
+    public DateTime? EventDate { get; set; }        // تاريخ الفرح
+    public DateTime? DeliveryDate { get; set; }     // تاريخ التوصيل المطلوب
+    public string? BridalNotes { get; set; }        // ملاحظات الحجز
 
     public ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
 

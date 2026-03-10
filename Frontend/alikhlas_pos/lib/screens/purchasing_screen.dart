@@ -6,10 +6,12 @@ import '../controllers/purchasing_controller.dart';
 import '../models/product_model.dart';
 import '../models/supplier_model.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/design_tokens.dart';
 import 'package:intl/intl.dart';
 import '../core/utils/toast_service.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import '../widgets/create_purchase_order_modal.dart';
 
 class PurchasingScreen extends StatefulWidget {
   const PurchasingScreen({super.key});
@@ -20,7 +22,7 @@ class PurchasingScreen extends StatefulWidget {
 
 class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final PurchasingController ctrl = Get.put(PurchasingController());
+  final PurchasingController ctrl = Get.find<PurchasingController>();
   final FocusNode _searchFocusNode = FocusNode();
 
   @override
@@ -46,7 +48,7 @@ class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerPr
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
               : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
         ),
       ),
@@ -91,6 +93,17 @@ class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerPr
                   style: TextStyle(color: Colors.grey[500], fontSize: 13)),
               ],
             ).animate().fade().slideX(begin: 0.1),
+            ElevatedButton.icon(
+              onPressed: () => Get.dialog(const CreatePurchaseOrderModal()),
+              icon: const Icon(Icons.shopping_cart_checkout),
+              label: const Text('إنشاء طلب شراء (Stitch Design)'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -163,6 +176,7 @@ class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerPr
                                 ),
                                 items: (filter, props) => ctrl.suppliersWithBalances.toList(),
                                 itemAsString: (SupplierModel s) => s.name,
+                                compareFn: (SupplierModel i, SupplierModel s) => i.id == s.id,
                                 decoratorProps: DropDownDecoratorProps(
                                   decoration: InputDecoration(
                                     labelText: "اختر المورد *",
@@ -468,21 +482,46 @@ class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerPr
                        child: Obx(() {
                          final paid = double.tryParse(paidAmountCtrl.text) ?? 0;
                          final isForbidden = ctrl.isLoading.value || (paid > ctrl.safeBalance.value && paid > 0);
-                         return ElevatedButton(
-                           style: ElevatedButton.styleFrom(
-                             backgroundColor: isForbidden ? Colors.grey : AppTheme.primaryColor,
-                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                           ),
-                           onPressed: isForbidden ? null : () async {
-                              bool ok = await ctrl.submitInvoice(paid, context);
-                            if (ok) {
-                               paidAmountCtrl.clear();
-                               searchCtrl.clear();
-                              }
-                           },
-                           child: ctrl.isLoading.value 
-                              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white))
-                              : const Text('ترحيل الفاتورة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                         return Row(
+                           children: [
+                             Expanded(
+                               child: ElevatedButton(
+                                 style: ElevatedButton.styleFrom(
+                                   backgroundColor: isForbidden ? Colors.grey : Colors.orange,
+                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                 ),
+                                 onPressed: isForbidden ? null : () async {
+                                    bool ok = await ctrl.submitInvoice(paid, context, status: 'Draft');
+                                  if (ok) {
+                                     paidAmountCtrl.clear();
+                                     searchCtrl.clear();
+                                    }
+                                 },
+                                 child: ctrl.isLoading.value 
+                                    ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white))
+                                    : const Text('حفظ كمسودة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                               ),
+                             ),
+                             const SizedBox(width: 8),
+                             Expanded(
+                               child: ElevatedButton(
+                                 style: ElevatedButton.styleFrom(
+                                   backgroundColor: isForbidden ? Colors.grey : AppTheme.primaryColor,
+                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                 ),
+                                 onPressed: isForbidden ? null : () async {
+                                    bool ok = await ctrl.submitInvoice(paid, context);
+                                  if (ok) {
+                                     paidAmountCtrl.clear();
+                                     searchCtrl.clear();
+                                    }
+                                 },
+                                 child: ctrl.isLoading.value 
+                                    ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white))
+                                    : const Text('ترحيل الفاتورة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                               ),
+                             ),
+                           ],
                          );
                        }),
                      ),

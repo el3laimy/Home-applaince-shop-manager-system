@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
+import '../theme/design_tokens.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/theme_controller.dart';
 import '../../controllers/notifications_controller.dart';
@@ -21,6 +22,7 @@ import '../../screens/settings_screen.dart';
 import '../../screens/users_screen.dart';
 import '../../screens/installments_screen.dart';
 import '../../screens/stock_adjustments_screen.dart';
+import '../../screens/expenses_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -41,13 +43,14 @@ class _MainShellState extends State<MainShell> {
     const CustomersScreen(),
     const SuppliersScreen(), // index 5
     const PurchasingScreen(), // index 6
-    const ReturnsScreen(),
-    const FinanceScreen(),
-    const BridalOrdersScreen(),
-    const ReportsScreen(),
-    const SettingsScreen(),
-    const UsersScreen(), // index 12 — Admin only
-    const InstallmentsScreen(), // index 13 — Admin or Manager only
+    ReturnsScreen(), // 7
+    const FinanceScreen(), // 8
+    ExpensesScreen(), // 9
+    const BridalOrdersScreen(), // 10
+    const ReportsScreen(), // 11
+    const SettingsScreen(), // 12
+    const UsersScreen(), // 13 — Admin only
+    const InstallmentsScreen(), // 14 — Admin or Manager only
   ];
 
   final List<_NavItem> _coreNavItems = [
@@ -59,14 +62,16 @@ class _MainShellState extends State<MainShell> {
     _NavItem(5, 'الموردين والديون', Icons.domain, Color(0xFFFA709A)),
     _NavItem(6, 'فواتير المشتريات', Icons.local_shipping_rounded, Color(0xFF00B4D8)),
     _NavItem(7, 'إدارة المرتجعات', Icons.assignment_return_rounded, Color(0xFFFF5E5E)),
-    _NavItem(8, 'الخزينة والمحاسبة', Icons.account_balance_wallet_rounded, Color(0xFFFFB800)),
-    _NavItem(9, 'طلبيات العرائس', Icons.auto_awesome_rounded, Color(0xFFF093FB)),
-    _NavItem(10, 'التقارير التحليلية', Icons.insights_rounded, Color(0xFF6C63FF)),
-    _NavItem(11, 'إعدادات النظام', Icons.settings_rounded, Color(0xFF9E9E9E)),
+    _NavItem(10, 'طلبيات العرائس', Icons.auto_awesome_rounded, Color(0xFFF093FB)),
   ];
 
-  static const _adminNavItem = _NavItem(12, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
-  static const _installmentsNavItem = _NavItem(13, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
+  static const _financeNavItem = _NavItem(8, 'الخزينة والمحاسبة', Icons.account_balance_wallet_rounded, Color(0xFFFFB800));
+  static const _expensesNavItem = _NavItem(9, 'إدارة المصروفات', Icons.receipt_long, Colors.deepOrangeAccent);
+  static const _reportsNavItem = _NavItem(11, 'التقارير التحليلية', Icons.insights_rounded, Color(0xFF6C63FF));
+  static const _settingsNavItem = _NavItem(12, 'إعدادات النظام', Icons.settings_rounded, Color(0xFF9E9E9E));
+
+  static const _adminNavItem = _NavItem(13, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
+  static const _installmentsNavItem = _NavItem(14, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
 
   @override
   Widget build(BuildContext context) {
@@ -78,18 +83,29 @@ class _MainShellState extends State<MainShell> {
 
     final isAdmin = authCtrl.currentUser.value?.role == 'Admin';
     final isManager = authCtrl.currentUser.value?.role == 'Manager';
-    final navItems = [..._coreNavItems, if (isAdmin) _adminNavItem, if (isAdmin || isManager) _installmentsNavItem];
+    final navItems = [
+      ..._coreNavItems,
+      if (isAdmin || isManager) _financeNavItem,
+      if (isAdmin || isManager) _expensesNavItem,
+      if (isAdmin || isManager) _reportsNavItem,
+      if (isAdmin) _settingsNavItem,
+      if (isAdmin) _adminNavItem,
+      if (isAdmin || isManager) _installmentsNavItem
+    ];
 
     return Scaffold(
       body: Row(
         children: [
           // ── Animated Sidebar ───────────────────────────────────────────────
           AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
+            duration: DesignTokens.kAnimDuration,
             curve: Curves.easeInOut,
             width: sidebarWidth,
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.surfaceDark : Colors.white,
+              color: isDark ? DesignTokens.surfaceDark : Colors.white,
+              border: Border(left: BorderSide(
+                color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(30),
+              )),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withAlpha(isDark ? 60 : 15),
@@ -189,24 +205,27 @@ class _MainShellState extends State<MainShell> {
                         message: _sidebarExpanded ? '' : item.label,
                         preferBelow: false,
                         child: AnimatedContainer(
-                          duration: 200.ms,
-                          margin: const EdgeInsets.only(bottom: 6),
+                          duration: DesignTokens.kAnimDuration,
+                          margin: const EdgeInsets.only(bottom: 4),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            gradient: isSelected
-                                ? LinearGradient(colors: [item.color.withAlpha(200), item.color.withAlpha(120)])
+                            borderRadius: BorderRadius.circular(DesignTokens.kChipRadius),
+                            color: isSelected
+                                ? item.color.withAlpha(isDark ? 20 : 15)
+                                : Colors.transparent,
+                            border: isSelected
+                                ? Border(right: BorderSide(color: item.color, width: 3))
                                 : null,
-                            color: isSelected ? null : Colors.transparent,
                           ),
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              borderRadius: BorderRadius.circular(14),
-                              splashColor: item.color.withAlpha(40),
+                              borderRadius: BorderRadius.circular(DesignTokens.kChipRadius),
+                              splashColor: item.color.withAlpha(30),
+                              hoverColor: item.color.withAlpha(10),
                               onTap: () => setState(() => _selectedIndex = item.index),
                               child: Padding(
                                 padding: EdgeInsets.symmetric(
-                                  vertical: 12,
+                                  vertical: 11,
                                   horizontal: _sidebarExpanded ? 14 : 0,
                                 ),
                                 child: Row(
@@ -216,9 +235,9 @@ class _MainShellState extends State<MainShell> {
                                   children: [
                                     Icon(item.icon,
                                         color: isSelected
-                                            ? Colors.white
-                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                        size: 22),
+                                            ? item.color
+                                            : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                                        size: 21),
                                     if (_sidebarExpanded) ...[
                                       const SizedBox(width: 12),
                                       Expanded(
@@ -226,10 +245,10 @@ class _MainShellState extends State<MainShell> {
                                           item.label,
                                           style: TextStyle(
                                             color: isSelected
-                                                ? Colors.white
-                                                : (isDark ? Colors.grey[300] : Colors.grey[700]),
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                            fontSize: 14,
+                                                ? (isDark ? Colors.white : Colors.black87)
+                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                                            fontSize: 13,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -241,7 +260,7 @@ class _MainShellState extends State<MainShell> {
                             ),
                           ),
                         ),
-                      ).animate().fadeIn(delay: Duration(milliseconds: 60 * i)).slideX(begin: -0.1);
+                      ).animate().fadeIn(delay: Duration(milliseconds: 40 * i)).slideX(begin: -0.05);
                     },
                   ),
                 ),
@@ -320,28 +339,6 @@ class _MainShellState extends State<MainShell> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Breadcrumbs ──────────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.surfaceDark : Colors.white,
-                    border: Border(bottom: BorderSide(color: Colors.grey.withAlpha(isDark ? 30 : 50))),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.home_rounded, size: 16, color: Colors.grey[500]),
-                      const SizedBox(width: 8),
-                      Text('الرئيسية', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                      if (_selectedIndex != 0) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.chevron_left_rounded, size: 16, color: Colors.grey[400]),
-                        const SizedBox(width: 8),
-                        Text(navItems.firstWhere((item) => item.index == _selectedIndex, orElse: () => navItems.first).label, 
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
-                      ]
-                    ],
-                  ),
-                ),
                 Expanded(
                   child: ClipRect(
                     child: AnimatedSwitcher(

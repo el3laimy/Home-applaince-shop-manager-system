@@ -25,7 +25,7 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             _accountingService = accountingService;
         }
 
-        [HttpGet("dashboard")]
+        [HttpGet("summary")]
         public async Task<IActionResult> GetFinanceDashboard()
         {
             var totalCash = await _dbContext.CashTransactions
@@ -45,9 +45,14 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             var pendingSupplierBalance = await _dbContext.PurchaseInvoices
                 .SumAsync(p => p.RemainingAmount);
 
+            var treasuryAccId = await GetSystemAccountIdAsync("MAIN_TREASURY");
+            var mainTreasuryBalance = await _dbContext.JournalEntryLines
+                .Where(l => l.AccountId == treasuryAccId).SumAsync(l => l.Debit - l.Credit);
+
             return Ok(new
             {
-                TotalCash = totalCash,
+                CashDrawerBalance = totalCash,
+                MainTreasuryBalance = mainTreasuryBalance,
                 TodayExpenses = todayExpenses,
                 TodaySales = todaySales,
                 TotalInventoryValue = inventoryValue,
@@ -64,12 +69,26 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             return Ok(new { SafeBalance = totalCash });
         }
 
+        public record CreateExpenseRequest(Guid CategoryId, decimal Amount, string Description);
+
         [HttpPost("expenses")]
-        public async Task<IActionResult> RecordExpense([FromBody] Expense expense)
+        public async Task<IActionResult> RecordExpense([FromBody] CreateExpenseRequest request)
         {
             try
             {
-                expense.CreatedBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
+                var category = await _dbContext.ExpenseCategories.FindAsync(request.CategoryId);
+                if (category == null || !category.IsActive)
+                    return BadRequest(new { message = "التصنيف غير موجود أو غير مفعل." });
+
+                var expense = new Expense
+                {
+                    CategoryId = category.Id,
+                    Amount = request.Amount,
+                    Description = request.Description,
+                    Date = DateTime.UtcNow,
+                    CreatedBy = User.FindFirstValue(ClaimTypes.Name) ?? "System"
+                };
+
                 await _accountingService.RecordExpenseAsync(expense, expense.CreatedBy);
                 return Ok(expense);
             }
@@ -86,6 +105,7 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             var end = to ?? DateTime.UtcNow;
 
             var expenses = await _dbContext.Expenses
+                .Include(e => e.Category)
                 .Where(e => e.Date >= start && e.Date <= end)
                 .OrderByDescending(e => e.Date)
                 .ToListAsync(ct);
@@ -97,18 +117,81 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             });
         }
 
-        [HttpGet("cash-flow")]
-        public async Task<IActionResult> GetCashFlows([FromQuery] int limit = 50, CancellationToken ct = default)
-        {
-            var flows = await _dbContext.CashTransactions
-                .OrderByDescending(c => c.Date)
-                .Take(limit)
-                .ToListAsync(ct);
+        public record TransferToTreasuryRequest(decimal Amount, string? Description);
 
-            return Ok(flows);
+        [HttpPost("transfer-to-treasury")]
+        public async Task<IActionResult> TransferToTreasury([FromBody] TransferToTreasuryRequest request)
+        {
+            var totalCash = await _dbContext.CashTransactions
+                .SumAsync(t => t.Type == TransactionType.CashIn ? t.Amount : -t.Amount);
+
+            if (request.Amount <= 0) return BadRequest(new { message = "المبلغ غير صالح." });
+            if (request.Amount > totalCash) return BadRequest(new { message = "رصيد الدرج لا يكفي للتحويل." });
+
+            var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
+            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
+            {
+                // 1. الخصم من الكاشير (درج الصندوق)
+                var cashOut = new CashTransaction
+                {
+                    Amount = request.Amount,
+                    Type = TransactionType.CashOut,
+                    Date = DateTime.UtcNow,
+                    Description = request.Description ?? "توريد نقدية للخزينة الرئيسية",
+                    CreatedBy = createdBy
+                };
+                _dbContext.CashTransactions.Add(cashOut);
+
+                // 2. إثبات التحويل المحاسبي
+                var mainAccId = await GetSystemAccountIdAsync("MAIN_TREASURY");
+                var drawerAccId = await GetSystemAccountIdAsync("CASH");
+
+                await _accountingService.CreateJournalEntryAsync(
+                    $"TRF-{DateTime.UtcNow:yyyyMMddHHmm}",
+                    request.Description ?? "توريد للخزينة الرئيسية",
+                    createdBy,
+                    false,
+                    (mainAccId, request.Amount, 0),
+                    (drawerAccId, 0, request.Amount)
+                );
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { message = "تم التحويل بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
-        [HttpPost("period-close")]
+        [HttpGet("cash-transactions")]
+        public async Task<IActionResult> GetCashFlows([FromQuery] string? period = null, [FromQuery] int limit = 50, CancellationToken ct = default)
+        {
+            var flows = _dbContext.CashTransactions.AsQueryable();
+            if (period == "today") flows = flows.Where(c => c.Date.Date == DateTime.UtcNow.Date);
+
+            var result = await flows
+                .OrderByDescending(c => c.Date)
+                .Take(limit)
+                .Select(c => new
+                {
+                    Time = c.Date.ToString("HH:mm"),
+                    ReferenceNo = c.ReceiptNumber,
+                    Type = c.Type == TransactionType.CashIn ? "in" : "out",
+                    TypeName = c.Type == TransactionType.CashIn ? "قبض نقدية" : "صرف نقدية",
+                    Description = c.Description,
+                    Amount = c.Amount
+                })
+                .ToListAsync(ct);
+
+            return Ok(new { data = result });
+        }
+
+        [HttpPost("close-period")]
         public async Task<IActionResult> ClosePeriod()
         {
             var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
@@ -121,24 +204,33 @@ namespace ALIkhlasPOS.API.Controllers.ERP
                 var equityAccId = await GetSystemAccountIdAsync("EQUITY_CAPITAL");
 
                 var salesBalance = await _dbContext.JournalEntryLines
-                    .Where(l => l.AccountId == salesAccId).SumAsync(l => l.Credit - l.Debit);
+                    .Where(l => l.AccountId == salesAccId && !l.JournalEntry.IsClosed).SumAsync(l => l.Credit - l.Debit);
                 var cogsBalance = await _dbContext.JournalEntryLines
-                    .Where(l => l.AccountId == cogsAccId).SumAsync(l => l.Debit - l.Credit);
+                    .Where(l => l.AccountId == cogsAccId && !l.JournalEntry.IsClosed).SumAsync(l => l.Debit - l.Credit);
                 var expensesBalance = await _dbContext.JournalEntryLines
-                    .Where(l => l.AccountId == expAccId).SumAsync(l => l.Debit - l.Credit);
+                    .Where(l => l.AccountId == expAccId && !l.JournalEntry.IsClosed).SumAsync(l => l.Debit - l.Credit);
 
                 decimal netIncome = salesBalance - (cogsBalance + expensesBalance);
 
                 if (netIncome != 0)
                 {
+                    // Mark previously unclosed entries as closed
+                    var unclosedEntries = await _dbContext.JournalEntries.Where(j => !j.IsClosed).ToListAsync();
+                    foreach (var entry in unclosedEntries)
+                    {
+                        entry.IsClosed = true;
+                    }
+
+                    // Create closing entry and mark it as closed immediately
                     await _accountingService.CreateJournalEntryAsync(
-                        reference: $"CLOSE-{DateTime.UtcNow:yyyyMM}",
-                        description: "إقفال الفترة وترحيل صافي الربح لرأس المال",
-                        createdBy: createdBy,
-                        (salesAccId, Debit: salesBalance, Credit: 0),
-                        (cogsAccId, Debit: 0, Credit: cogsBalance),
-                        (expAccId, Debit: 0, Credit: expensesBalance),
-                        (equityAccId, Debit: netIncome < 0 ? Math.Abs(netIncome) : 0, Credit: netIncome > 0 ? netIncome : 0)
+                        $"CLOSE-{DateTime.UtcNow:yyyyMMddHHmm}",
+                        "إقفال الفترة وترحيل صافي الربح لرأس المال",
+                        createdBy,
+                        true, // isClosed is true so the closing entry itself is not swept up later
+                        (salesAccId, salesBalance, 0),
+                        (cogsAccId, 0, cogsBalance),
+                        (expAccId, 0, expensesBalance),
+                        (equityAccId, netIncome < 0 ? Math.Abs(netIncome) : 0, netIncome > 0 ? netIncome : 0)
                     );
                 }
 
