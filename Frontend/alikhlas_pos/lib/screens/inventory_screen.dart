@@ -8,6 +8,9 @@ import '../controllers/inventory_controller.dart';
 import '../models/product_model.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/design_tokens.dart';
+import '../core/widgets/neo_button.dart';
+import '../core/widgets/neo_text_field.dart';
+import '../core/widgets/neo_dialog.dart';
 import '../services/api_service.dart';
 import '../services/barcode_print_service.dart';
 import '../core/utils/toast_service.dart';
@@ -26,20 +29,12 @@ class InventoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.put(InventoryController());
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = true; // Neo-Glass is always dark
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark
-              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
-              : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
-        ),
-      ),
+    return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -71,31 +66,29 @@ class InventoryScreen extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('إدارة المخزون والمنتجات',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+            DesignTokens.holographicText(
+              text: 'إدارة المخزون والمنتجات',
+              style: const TextStyle(fontSize: 22),
+            ),
             const SizedBox(height: 4),
             Obx(() => Text(
               '${ctrl.totalCount} منتج إجمالي — ${ctrl.lowStockProducts.length} وصل لحد التنبيه',
               style: TextStyle(color: Colors.grey[500], fontSize: 13),
             )),
           ],
-        ).animate().fade().slideX(begin: 0.1),
+        ).animate().fade().slideX(begin: 0.05),
         Row(
           children: [
             _buildFilterChip('نقص المخزون', Icons.warning_amber_rounded, Colors.orange, ctrl),
             const SizedBox(width: 12),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor, foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.refresh),
-              label: const Text('تحديث', style: TextStyle(fontWeight: FontWeight.bold)),
+            NeoButton(
+              label: 'تحديث',
+              icon: Icons.refresh,
+              color: DesignTokens.neonCyan,
               onPressed: () => ctrl.fetchProducts(reset: true),
             ),
           ],
-        ).animate().fade().slideX(begin: -0.1),
+        ).animate().fade().slideX(begin: -0.05),
       ],
     );
   }
@@ -128,23 +121,23 @@ class InventoryScreen extends StatelessWidget {
 
   Widget _buildStatCard(BuildContext context, String title, String value, IconData icon, Color color, bool isDark) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: DesignTokens.glowCardDecoration(glowColor: color, isDark: isDark),
+      child: DesignTokens.liquidBorderCard(
+        height: 80,
         child: Row(
           children: [
             Container(
-               padding: const EdgeInsets.all(10),
-               decoration: BoxDecoration(shape: BoxShape.circle, color: color.withAlpha(25),
-                   boxShadow: [BoxShadow(color: color.withAlpha(40), blurRadius: 10)]),
+               width: 40, height: 40,
+               decoration: BoxDecoration(shape: BoxShape.circle, color: color.withAlpha(25)),
                child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                 Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                 Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+                 Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                 const SizedBox(height: 2),
+                 Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
               ],
             ),
           ],
@@ -156,7 +149,7 @@ class InventoryScreen extends StatelessWidget {
   Widget _buildInventoryTable(BuildContext context, InventoryController ctrl, bool isDark) {
     final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api').replaceAll('/api', '');
     return Container(
-      decoration: DesignTokens.panelDecoration(isDark: isDark),
+      decoration: DesignTokens.neoGlassDecoration(borderRadius: DesignTokens.kNeoCardRadius),
       child: Column(
         children: [
           // Search bar & Category filter
@@ -166,12 +159,16 @@ class InventoryScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'ابحث بالاسم أو الباركود أو الفئة...',
-                      prefixIcon: const Icon(Icons.search_rounded),
+                      hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[500]),
                       filled: true,
-                      fillColor: isDark ? Colors.black.withAlpha(40) : Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(DesignTokens.kChipRadius), borderSide: BorderSide.none),
+                      fillColor: DesignTokens.glassBg,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: DesignTokens.glassBorder)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: DesignTokens.glassBorder)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: DesignTokens.neonCyan, width: 1.5)),
                     ),
                     onChanged: ctrl.onSearchChanged,
                   ),

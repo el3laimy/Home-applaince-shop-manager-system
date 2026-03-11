@@ -43,18 +43,10 @@ class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark
-              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
-              : [const Color(0xFFF8FAFC), const Color(0xFFEFF6FF)],
-        ),
-      ),
+    return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -86,13 +78,15 @@ class _PurchasingScreenState extends State<PurchasingScreen> with SingleTickerPr
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('المشتريات وإدارة الفواتير',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+                DesignTokens.holographicText(
+                  text: 'المشتريات وإدارة الفواتير',
+                  style: const TextStyle(fontSize: 22),
+                ),
                 const SizedBox(height: 4),
                 Text('إدخال فواتير الشراء وسجل التعاملات السابقة',
                   style: TextStyle(color: Colors.grey[500], fontSize: 13)),
               ],
-            ).animate().fade().slideX(begin: 0.1),
+            ).animate().fade().slideX(begin: 0.05),
             ElevatedButton.icon(
               onPressed: () => Get.dialog(const CreatePurchaseOrderModal()),
               icon: const Icon(Icons.shopping_cart_checkout),

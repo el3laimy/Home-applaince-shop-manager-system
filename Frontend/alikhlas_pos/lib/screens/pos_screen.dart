@@ -168,35 +168,38 @@ class _PosScreenState extends State<PosScreen> {
           }
           return KeyEventResult.ignored;
         },
-        child: Scaffold(
-          body: Column(
-            children: [
-              PosHeader(
-                searchController: _barcodeController,
-                onSettingsPressed: () => Get.toNamed('/settings'),
-                onNotificationsPressed: () => _showNotificationsOverlay(context),
-                onBarcodeSubmitted: _scanBarcode,
-                isLoading: _ctrl.isLoading.value,
-                errorMessage: _ctrl.errorMessage.value,
-                lastScannedProduct: _ctrl.lastScannedProduct.value,
-              ),
-              Expanded(
-                child: Row(
-                  children: [
-                    // ===== LEFT: Cart Panel =====
-                    Expanded(
-                      flex: 3,
-                      child: _buildCartPanel(isDark),
-                    ),
-                    // ===== RIGHT: Product Grid =====
-                    Expanded(
-                      flex: 5,
-                      child: _buildProductPanel(isDark),
-                    ),
-                  ],
+        child: DesignTokens.neoPageBackgroundWidget(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Column(
+              children: [
+                PosHeader(
+                  searchController: _barcodeController,
+                  onSettingsPressed: () => Get.toNamed('/settings'),
+                  onNotificationsPressed: () => _showNotificationsOverlay(context),
+                  onBarcodeSubmitted: _scanBarcode,
+                  isLoading: _ctrl.isLoading.value,
+                  errorMessage: _ctrl.errorMessage.value,
+                  lastScannedProduct: _ctrl.lastScannedProduct.value,
                 ),
-              ),
-            ],
+                Expanded(
+                  child: Row(
+                    children: [
+                      // ===== LEFT: Cart Panel =====
+                      Expanded(
+                        flex: 3,
+                        child: _buildCartPanel(isDark),
+                      ),
+                      // ===== RIGHT: Product Grid =====
+                      Expanded(
+                        flex: 5,
+                        child: _buildProductPanel(isDark),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

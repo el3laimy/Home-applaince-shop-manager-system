@@ -25,15 +25,7 @@ class CustomerProfileScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: isDark
-                ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
-                : [const Color(0xFFF8FAFC), const Color(0xFFEEF2FF)],
-          ),
-        ),
+      body: DesignTokens.neoPageBackgroundWidget(
         child: SafeArea(
           child: Column(
             children: [

@@ -16,18 +16,10 @@ class BridalOrdersScreen extends StatelessWidget {
     final ctrl = Get.put(BridalController());
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark
-              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
-              : [const Color(0xFFF8FAFC), const Color(0xFFEEF2FF)],
-        ),
-      ),
+    return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -109,9 +101,11 @@ class BridalOrdersScreen extends StatelessWidget {
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(
             children: [
-              Text('طلبيات وتجهيزات العرائس',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 16),
+               DesignTokens.holographicText(
+                 text: 'طلبيات وتجهيزات العرايس',
+                 style: const TextStyle(fontSize: 22),
+               ),
+               const SizedBox(width: 16),
               OutlinedButton.icon(
                 onPressed: () => _showRemindersDialog(context, ctrl, isDark),
                 icon: const Icon(Icons.notifications_active, color: Colors.orange),
