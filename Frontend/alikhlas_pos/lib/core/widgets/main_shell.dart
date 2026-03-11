@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../theme/app_theme.dart';
+
 import '../theme/design_tokens.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/theme_controller.dart';
@@ -15,7 +15,7 @@ import '../../screens/finance_screen.dart';
 import '../../screens/bridal_screen.dart';
 import '../../screens/customers_screen.dart';
 import '../../screens/suppliers_screen.dart';
-import '../../screens/purchasing_screen.dart';
+
 import '../../screens/returns_screen.dart';
 import '../../screens/reports_screen.dart';
 import '../../screens/settings_screen.dart';
@@ -78,7 +78,7 @@ class _MainShellState extends State<MainShell> {
     final authCtrl = Get.find<AuthController>();
     final themeCtrl = Get.put(ThemeController());
     final notifCtrl = Get.put(NotificationsController());
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final sidebarWidth = _sidebarExpanded ? 260.0 : 72.0;
 
     final isAdmin = authCtrl.currentUser.value?.role == 'Admin';
@@ -96,241 +96,303 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       body: Row(
         children: [
-          // ── Animated Sidebar ───────────────────────────────────────────────
-          AnimatedContainer(
-            duration: DesignTokens.kAnimDuration,
-            curve: Curves.easeInOut,
-            width: sidebarWidth,
-            decoration: BoxDecoration(
-              color: isDark ? DesignTokens.surfaceDark : Colors.white,
-              border: Border(left: BorderSide(
-                color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(30),
-              )),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(isDark ? 60 : 15),
-                  blurRadius: 24,
-                  offset: const Offset(4, 0),
-                )
-              ],
-            ),
-            child: Column(
-              children: [
-                // ── Header ────────────────────────────────────────
-                SizedBox(
-                  height: 72,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 16),
-                      Icon(Icons.diamond_rounded, color: AppTheme.primaryColor, size: 28),
-                      if (_sidebarExpanded) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'إخلاص ERP',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    // Notifications Bell — only visible when expanded
-                    if (_sidebarExpanded)
-                      Obx(() {
-                        final count = notifCtrl.unreadCount.value;
-                        return Tooltip(
-                          message: count > 0 ? '$count إشعار جديد' : 'لا توجد إشعارات',
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              IconButton(
-                                icon: Icon(
-                                  count > 0 ? Icons.notifications_active_rounded : Icons.notifications_rounded,
-                                  size: 20,
-                                  color: count > 0 ? Colors.orange : Colors.grey[500],
-                                ),
-                                onPressed: () => _showNotificationsDialog(context, notifCtrl),
-                                padding: EdgeInsets.zero,
-                              ),
-                              if (count > 0)
-                                Positioned(
-                                  top: 4,
-                                  left: 4,
-                                  child: Container(
-                                    width: 16, height: 16,
-                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                    alignment: Alignment.center,
-                                    child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      }),
-                    // Theme toggle — only visible when expanded
-                    if (_sidebarExpanded)
-                      Obx(() => Tooltip(
-                        message: 'الوضع: ${themeCtrl.label}',
-                        child: IconButton(
-                          icon: Icon(themeCtrl.icon, size: 20, color: Colors.grey[500]),
-                          onPressed: themeCtrl.cycle,
-                          padding: EdgeInsets.zero,
-                        ),
-                      )),
-                      IconButton(
-                        icon: Icon(
-                          _sidebarExpanded ? Icons.chevron_right : Icons.chevron_left,
-                          color: Colors.grey[500],
-                        ),
-                        onPressed: () => setState(() => _sidebarExpanded = !_sidebarExpanded),
+          // ── Neo-Glass Sidebar ─────────────────────────────────────────────
+          RepaintBoundary(
+            child: AnimatedContainer(
+              duration: DesignTokens.kAnimDuration,
+              curve: Curves.easeInOut,
+              width: sidebarWidth,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(DesignTokens.kNeoPanelRadius),
+                  bottomLeft: Radius.circular(DesignTokens.kNeoPanelRadius),
+                ),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: DesignTokens.glassBg,
+                      border: Border(
+                        left: BorderSide(color: DesignTokens.glassBorder),
+                        top: BorderSide(color: DesignTokens.glassBorder),
+                        bottom: BorderSide(color: DesignTokens.glassBorder),
                       ),
-                    ],
-                  ),
-                ).animate().fade(),
-
-                const Divider(height: 1),
-
-                // ── Navigation Items ───────────────────────────────
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    itemCount: navItems.length,
-                    itemBuilder: (ctx, i) {
-                      final item = navItems[i];
-                      final isSelected = _selectedIndex == item.index;
-
-                      return Tooltip(
-                        message: _sidebarExpanded ? '' : item.label,
-                        preferBelow: false,
-                        child: AnimatedContainer(
-                          duration: DesignTokens.kAnimDuration,
-                          margin: const EdgeInsets.only(bottom: 4),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(DesignTokens.kChipRadius),
-                            color: isSelected
-                                ? item.color.withAlpha(isDark ? 20 : 15)
-                                : Colors.transparent,
-                            border: isSelected
-                                ? Border(right: BorderSide(color: item.color, width: 3))
-                                : null,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(DesignTokens.kNeoPanelRadius),
+                        bottomLeft: Radius.circular(DesignTokens.kNeoPanelRadius),
+                      ),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x4D000000), blurRadius: 20, offset: Offset(10, 10)),
+                        BoxShadow(color: Color(0x0DFFFFFF), blurRadius: 5, spreadRadius: -2),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // ── Logo Header ─────────────────────────────────
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: _sidebarExpanded ? 20 : 12,
+                            vertical: 20,
                           ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(DesignTokens.kChipRadius),
-                              splashColor: item.color.withAlpha(30),
-                              hoverColor: item.color.withAlpha(10),
-                              onTap: () => setState(() => _selectedIndex = item.index),
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                  vertical: 11,
-                                  horizontal: _sidebarExpanded ? 14 : 0,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: _sidebarExpanded
-                                      ? MainAxisAlignment.start
-                                      : MainAxisAlignment.center,
-                                  children: [
-                                    Icon(item.icon,
-                                        color: isSelected
-                                            ? item.color
-                                            : (isDark ? Colors.grey[500] : Colors.grey[600]),
-                                        size: 21),
-                                    if (_sidebarExpanded) ...[
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          item.label,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? (isDark ? Colors.white : Colors.black87)
-                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-                                            fontSize: 13,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
+                          child: Row(
+                            children: [
+                              // Gradient Rocket Icon
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Color(0xFF06B6D4), Color(0xFF9333EA)],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF06B6D4).withAlpha(50),
+                                      blurRadius: 12,
+                                    ),
                                   ],
                                 ),
+                                child: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 22),
                               ),
-                            ),
-                          ),
-                        ),
-                      ).animate().fadeIn(delay: Duration(milliseconds: 40 * i)).slideX(begin: -0.05);
-                    },
-                  ),
-                ),
-
-                const Divider(height: 1),
-
-                // ── User Profile + Logout ─────────────────────────
-                Obx(() {
-                  final user = authCtrl.currentUser.value;
-                  return Padding(
-                    padding: EdgeInsets.all(_sidebarExpanded ? 16 : 8),
-                    child: AnimatedContainer(
-                      duration: 200.ms,
-                      padding: EdgeInsets.all(_sidebarExpanded ? 12 : 8),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: _sidebarExpanded
-                            ? MainAxisAlignment.start
-                            : MainAxisAlignment.center,
-                        children: [
-                          const CircleAvatar(
-                            radius: 18,
-                            backgroundColor: Color(0xFF6C63FF),
-                            child: Icon(Icons.person, color: Colors.white, size: 18),
-                          ),
-                          if (_sidebarExpanded) ...[
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    user?.fullName ?? 'مستخدم',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                    overflow: TextOverflow.ellipsis,
+                              if (_sidebarExpanded) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DesignTokens.holographicText(
+                                    text: 'إخلاص ERP',
+                                    style: const TextStyle(fontSize: 18),
                                   ),
-                                  Row(children: [
-                                    Container(
-                                      width: 8, height: 8,
-                                      margin: const EdgeInsets.only(left: 4),
-                                      decoration: const BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.green,
+                                ),
+                              ],
+                              // Notifications Bell
+                              if (_sidebarExpanded)
+                                Obx(() {
+                                  final count = notifCtrl.unreadCount.value;
+                                  return Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(
+                                          count > 0 ? Icons.notifications_active_rounded : Icons.notifications_rounded,
+                                          size: 20,
+                                          color: count > 0 ? Colors.orange : Colors.grey[500],
+                                        ),
+                                        onPressed: () => _showNotificationsDialog(context, notifCtrl),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                      if (count > 0)
+                                        Positioned(
+                                          top: -2,
+                                          left: -2,
+                                          child: Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color: DesignTokens.neonPinkAlt,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: DesignTokens.neonPinkAlt.withAlpha(180),
+                                                  blurRadius: 10,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                }),
+                              // Theme toggle
+                              if (_sidebarExpanded)
+                                Obx(() => IconButton(
+                                  icon: Icon(themeCtrl.icon, size: 18, color: Colors.grey[500]),
+                                  onPressed: themeCtrl.cycle,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                )),
+                              IconButton(
+                                icon: Icon(
+                                  _sidebarExpanded ? Icons.chevron_right : Icons.chevron_left,
+                                  color: Colors.grey[500],
+                                  size: 18,
+                                ),
+                                onPressed: () => setState(() => _sidebarExpanded = !_sidebarExpanded),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                        ).animate().fade(),
+
+                        // Divider
+                        Container(
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          color: Colors.white.withAlpha(10),
+                        ),
+
+                        // ── Navigation Items ───────────────────────────
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            itemCount: navItems.length,
+                            itemBuilder: (ctx, i) {
+                              final item = navItems[i];
+                              final isSelected = _selectedIndex == item.index;
+
+                              return Tooltip(
+                                message: _sidebarExpanded ? '' : item.label,
+                                preferBelow: false,
+                                child: AnimatedContainer(
+                                  duration: DesignTokens.kAnimDuration,
+                                  margin: const EdgeInsets.only(bottom: 2),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    color: isSelected
+                                        ? Colors.white.withAlpha(25)
+                                        : Colors.transparent,
+                                    boxShadow: isSelected
+                                        ? [BoxShadow(color: DesignTokens.neonCyan.withAlpha(50), blurRadius: 15)]
+                                        : null,
+                                    border: isSelected
+                                        ? Border(right: BorderSide(color: DesignTokens.neonCyan, width: 4))
+                                        : null,
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(16),
+                                      splashColor: item.color.withAlpha(30),
+                                      hoverColor: Colors.white.withAlpha(13),
+                                      onTap: () => setState(() => _selectedIndex = item.index),
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: _sidebarExpanded ? 16 : 0,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: _sidebarExpanded
+                                              ? MainAxisAlignment.start
+                                              : MainAxisAlignment.center,
+                                          children: [
+                                            Icon(item.icon,
+                                                color: isSelected
+                                                    ? DesignTokens.neonCyan
+                                                    : Colors.grey[500],
+                                                size: 21),
+                                            if (_sidebarExpanded) ...[
+                                              const SizedBox(width: 14),
+                                              Expanded(
+                                                child: Text(
+                                                  item.label,
+                                                  style: TextStyle(
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : Colors.grey[400],
+                                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                                    fontSize: 13,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    Text(
-                                      _roleLabel(user?.role),
-                                      style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                                  ),
+                                ),
+                              ).animate().fadeIn(delay: Duration(milliseconds: 30 * i)).slideX(begin: -0.03);
+                            },
+                          ),
+                        ),
+
+                        // Divider
+                        Container(
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          color: Colors.white.withAlpha(10),
+                        ),
+
+                        // ── User Profile (Neo-Glass) ──────────────────
+                        Obx(() {
+                          final user = authCtrl.currentUser.value;
+                          return Padding(
+                            padding: EdgeInsets.all(_sidebarExpanded ? 16 : 8),
+                            child: Container(
+                              padding: EdgeInsets.all(_sidebarExpanded ? 14 : 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(13),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white.withAlpha(13)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: _sidebarExpanded
+                                    ? MainAxisAlignment.start
+                                    : MainAxisAlignment.center,
+                                children: [
+                                  // Avatar with cyan border
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: DesignTokens.neonCyan.withAlpha(80),
+                                        width: 2,
+                                      ),
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF6C63FF), Color(0xFF9333EA)],
+                                      ),
                                     ),
-                                  ]),
+                                    child: const Icon(Icons.person, color: Colors.white, size: 18),
+                                  ),
+                                  if (_sidebarExpanded) ...[
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            user?.fullName ?? 'مستخدم',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            _roleLabel(user?.role),
+                                            style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.settings, size: 16, color: Colors.grey[500]),
+                                      tooltip: 'الإعدادات',
+                                      onPressed: () => setState(() => _selectedIndex = 12),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: const Icon(Icons.logout_rounded, size: 16, color: Colors.redAccent),
+                                      tooltip: 'تسجيل الخروج',
+                                      onPressed: () => _confirmLogout(context, authCtrl),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.logout_rounded, size: 18, color: Colors.redAccent),
-                              tooltip: 'تسجيل الخروج',
-                              onPressed: () => _confirmLogout(context, authCtrl),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                          ],
-                        ],
-                      ),
+                          );
+                        }),
+                      ],
                     ),
-                  );
-                }),
-              ],
+                  ),
+                ),
+              ),
             ),
           ),
 

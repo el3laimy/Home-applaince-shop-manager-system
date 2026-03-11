@@ -61,19 +61,10 @@ class _UsersScreenState extends State<UsersScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [DesignTokens.bgDark, const Color(0xFF0F1629)]
-              : [const Color(0xFFF8FAFC), const Color(0xFFEEF2FF)],
-        ),
-      ),
+    return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -86,7 +77,10 @@ class _UsersScreenState extends State<UsersScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('إدارة المستخدمين', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                         DesignTokens.holographicText(
+                           text: 'إدارة المستخدمين',
+                           style: const TextStyle(fontSize: 20),
+                         ),
                         Text('إضافة وتعديل وإدارة صلاحيات المستخدمين', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                       ],
                     ),
