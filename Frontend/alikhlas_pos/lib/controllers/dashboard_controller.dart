@@ -117,7 +117,9 @@ class DashboardController extends GetxController {
 
       recentInvoices.assignAll(data['recentInvoices'] ?? []);
       topProfitableProducts.assignAll(data['topProfitableProducts'] ?? []);
-      salesTrend.assignAll(data['salesTrend'] ?? []);
+      // Task 2.3: Fill missing dates to ensure chart is always safe
+      final rawTrend = (data['salesTrend'] as List? ?? []).cast<Map<String, dynamic>>();
+      salesTrend.assignAll(_fillMissingDates(rawTrend));
 
       // Fetch detailed alert lists
       try {
@@ -139,6 +141,46 @@ class DashboardController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /// Task 2.3: Ensures salesTrend always has consecutive dates (last 7 days)
+  /// by filling missing dates with zero values.
+  List<Map<String, dynamic>> _fillMissingDates(List<Map<String, dynamic>> rawData) {
+    const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    final result = <Map<String, dynamic>>[];
+    final now = DateTime.now();
+
+    // Build a lookup map from date string → data point
+    final Map<String, Map<String, dynamic>> lookup = {};
+    for (final item in rawData) {
+      final dateStr = item['date']?.toString() ?? '';
+      if (dateStr.isNotEmpty) {
+        // Normalize to yyyy-MM-dd
+        final parsed = DateTime.tryParse(dateStr);
+        if (parsed != null) {
+          final key = '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}';
+          lookup[key] = item;
+        }
+      }
+    }
+
+    // Generate the last 7 days
+    for (int i = 6; i >= 0; i--) {
+      final day = now.subtract(Duration(days: i));
+      final key = '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+      if (lookup.containsKey(key)) {
+        result.add(lookup[key]!);
+      } else {
+        result.add({
+          'date': key,
+          'dayName': days[day.weekday % 7],
+          'total': 0,
+          'profit': 0,
+        });
+      }
+    }
+
+    return result;
   }
 }
 

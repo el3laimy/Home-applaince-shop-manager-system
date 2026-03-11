@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../models/customer_model.dart';
 import '../services/api_service.dart';
@@ -105,7 +105,7 @@ class CustomerController extends GetxController {
     }
   }
 
-  Future<bool> addCustomer(String name, String? phone, String? address, String? notes, BuildContext ctx) async {
+  Future<bool> addCustomer(String name, String? phone, String? address, String? notes) async {
     try {
       await ApiService.post('customers', {
         'name': name,
@@ -180,7 +180,7 @@ class CustomerController extends GetxController {
     }
   }
 
-  Future<bool> deleteCustomer(String id, BuildContext ctx) async {
+  Future<bool> deleteCustomer(String id) async {
     try {
       await ApiService.delete('customers/$id');
       customers.removeWhere((c) => c.id == id);

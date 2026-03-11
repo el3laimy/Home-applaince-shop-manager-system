@@ -65,6 +65,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.Accounting.IAccountingService, ALIkhlasPOS.Application.Services.Accounting.AccountingService>();
 builder.Services.AddScoped<IBarcodeService, BarcodeService>();
 builder.Services.AddScoped<IProductCacheService, ProductCacheService>();
+builder.Services.AddScoped<ALIkhlasPOS.Application.Services.InvoicePdfGenerator>();
 
 // BUG-07: SMS factory and named HttpClient for VictoryLink / Twilio / Unifonic
 builder.Services.AddHttpClient("SmsClient")
@@ -78,6 +79,7 @@ builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.DatabaseBackupService>
 
 // Learn more about configuring OpenAPI
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 
@@ -123,6 +125,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ALIkhlasPOS.API.Hubs.DashboardHub>("/hubs/dashboard");
 
 app.Run();
 

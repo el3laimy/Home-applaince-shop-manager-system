@@ -144,7 +144,7 @@ public class DatabaseBackupService : BackgroundService
                     rmProcess?.WaitForExit();
 
                     _logger.LogInformation($"Database backup completed successfully: {backupPath}");
-                    CleanOldBackups();
+                    CleanOldBackups(backupDir);
                 }
                 else
                 {
@@ -159,11 +159,11 @@ public class DatabaseBackupService : BackgroundService
         }
     }
 
-    private void CleanOldBackups()
+    private void CleanOldBackups(string backupFolder)
     {
         try
         {
-            var directoryInfo = new DirectoryInfo(_backupFolder);
+            var directoryInfo = new DirectoryInfo(backupFolder);
             var files = directoryInfo.GetFiles("backup_*.sql")
                                      .OrderByDescending(f => f.CreationTime)
                                      .ToList();

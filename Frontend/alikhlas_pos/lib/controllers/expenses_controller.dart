@@ -27,6 +27,7 @@ class ExpensesController extends GetxController {
       final response = await ApiService.get('ExpenseCategories');
       _categories.assignAll(response as List);
     } catch (e) {
+    } catch (e) {
       debugPrint('Error fetching expense categories: $e');
     }
   }
@@ -93,12 +94,6 @@ class ExpensesController extends GetxController {
       return false;
     } finally {
       _isLoading.value = false;
-    }
-  }
-      Get.snackbar('خطأ', 'فشل في تسجيل المصروف',
-          backgroundColor: Colors.red.withAlpha(200), colorText: Colors.white);
-      debugPrint('Error creating expense: $e');
-      return false;
     }
   }
 

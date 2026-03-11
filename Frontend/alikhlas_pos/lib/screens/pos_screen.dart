@@ -147,7 +147,7 @@ class _PosScreenState extends State<PosScreen> {
           if (event is KeyDownEvent) {
             // F12 = confirm checkout (Pay)
             if (event.logicalKey == LogicalKeyboardKey.f12) {
-              if (_ctrl.cartItems.isNotEmpty) _ctrl.confirmCheckout(context);
+              if (_ctrl.cartItems.isNotEmpty) _ctrl.confirmCheckout();
               return KeyEventResult.handled;
             }
             // F2 = Focus barcode scanner (Search)
@@ -372,7 +372,7 @@ class _PosScreenState extends State<PosScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('الإجمالي', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
-                // BUG-01: Use ج.م not ر.س
+                // BUG-01: Use ج.م consistently
                 Text(
                   '${_ctrl.total.toStringAsFixed(2)} ج.م',
                   style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: AppTheme.primaryColor),
@@ -440,7 +440,7 @@ class _PosScreenState extends State<PosScreen> {
                     label: 'دفع نقدي',
                     icon: Icons.payments_outlined,
                     color: const Color(0xFF27AE60),
-                    onPressed: () => _ctrl.confirmCheckout(context),
+                    onPressed: () => _ctrl.confirmCheckout(),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -671,7 +671,7 @@ class _PosScreenState extends State<PosScreen> {
             TextField(
               controller: pCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'السعر الجديد (ر.س)'),
+              decoration: const InputDecoration(labelText: 'السعر الجديد (ج.م)'),
               autofocus: true,
             ),
           ],
@@ -817,7 +817,6 @@ class _PosScreenState extends State<PosScreen> {
                   Get.back();
                   _ctrl.selectedPaymentType.value = PaymentType.installment;
                   await _ctrl.confirmCheckout(
-                    context,
                     downPayment: down,
                     numberOfMonths: months,
                     interestRate: rate,
@@ -859,7 +858,7 @@ class _PosScreenState extends State<PosScreen> {
           ElevatedButton(
             onPressed: () {
               Get.back();
-              _ctrl.confirmCheckout(context, paymentReference: refCtrl.text);
+              _ctrl.confirmCheckout(paymentReference: refCtrl.text);
             },
             child: const Text('تأكيد الدفع'),
           ),
@@ -944,7 +943,7 @@ class _PosScreenState extends State<PosScreen> {
                   }
 
                   Get.back();
-                  _ctrl.confirmCheckout(context, splitCashAmount: cash, splitVisaAmount: visa);
+                  _ctrl.confirmCheckout(splitCashAmount: cash, splitVisaAmount: visa);
                   FocusScope.of(context).requestFocus(_barcodeFocusNode);
                 },
                 child: const Text('تأكيد الدفع', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1172,7 +1171,7 @@ class _CartItemCard extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        '${item.effectivePrice.toStringAsFixed(2)} ر.س',
+                        '${item.effectivePrice.toStringAsFixed(2)} ج.م',
                         style: TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
                       const SizedBox(width: 8),

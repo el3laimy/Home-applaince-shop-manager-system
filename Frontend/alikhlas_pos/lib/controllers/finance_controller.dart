@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import '../core/utils/toast_service.dart';
@@ -11,6 +10,9 @@ class FinanceController extends GetxController {
   final RxDouble todaySales = 0.0.obs;
   final RxList<Map<String, dynamic>> cashTransactions = <Map<String, dynamic>>[].obs;
 
+  // Date filter (Task 3.1)
+  final Rx<DateTime> selectedDate = DateTime.now().obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -20,13 +22,14 @@ class FinanceController extends GetxController {
   Future<void> fetchFinanceSummary() async {
     isLoading.value = true;
     try {
-      final data = await ApiService.get('erp/finance/summary');
+      final dateStr = '${selectedDate.value.year}-${selectedDate.value.month.toString().padLeft(2, '0')}-${selectedDate.value.day.toString().padLeft(2, '0')}';
+      final data = await ApiService.get('erp/finance/summary?date=$dateStr');
       cashDrawerBalance.value = (data['cashDrawerBalance'] as num? ?? 0).toDouble();
       mainTreasuryBalance.value = (data['mainTreasuryBalance'] as num? ?? 0).toDouble();
       todayExpenses.value = (data['todayExpenses'] as num? ?? 0).toDouble();
       todaySales.value = (data['todaySales'] as num? ?? 0).toDouble();
 
-      final transactions = await ApiService.get('erp/finance/cash-transactions?period=today');
+      final transactions = await ApiService.get('erp/finance/cash-transactions?period=today&date=$dateStr');
       cashTransactions.assignAll(
         (transactions['data'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>()
       );
@@ -35,59 +38,52 @@ class FinanceController extends GetxController {
     }
   }
 
-  Future<bool> recordExpense(Map<String, dynamic> expenseData, BuildContext context) async {
+  Future<bool> recordExpense(Map<String, dynamic> expenseData) async {
     isLoading.value = true;
     try {
       await ApiService.post('erp/finance/expenses', expenseData);
       await fetchFinanceSummary();
-      _snap(context, 'تم تسجيل المصروف بنجاح', Colors.green);
+      ToastService.showSuccess('تم تسجيل المصروف بنجاح');
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     } finally {
       isLoading.value = false;
     }
   }
 
-  Future<bool> closePeriod(BuildContext context) async {
+  Future<bool> closePeriod() async {
     isLoading.value = true;
     try {
       final data = await ApiService.post('erp/finance/close-period', {});
-      _snap(context, 'تم إقفال الفترة. صافي الربح: ${data['netProfit']} ج.م', Colors.green);
+      ToastService.showSuccess('تم إقفال الفترة. صافي الربح: ${data['netProfit']} ج.م');
       await fetchFinanceSummary();
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     } finally {
       isLoading.value = false;
     }
   }
 
-  Future<bool> transferToTreasury(double amount, String description, BuildContext context) async {
+  Future<bool> transferToTreasury(double amount, String description) async {
     isLoading.value = true;
     try {
       await ApiService.post('erp/finance/transfer-to-treasury', {
         'amount': amount,
         'description': description
       });
-      _snap(context, 'تم توريد النقدية بنجاح', Colors.green);
+      ToastService.showSuccess('تم توريد النقدية بنجاح');
       await fetchFinanceSummary();
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     } finally {
       isLoading.value = false;
     }
-  }
-
-  void _snap(BuildContext $1, String msg, Color color) {
-    if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
-    else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }
-    else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
-    else { ToastService.showInfo(msg); }
   }
 
 }

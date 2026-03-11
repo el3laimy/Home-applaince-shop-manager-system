@@ -66,6 +66,29 @@ class FinanceScreen extends StatelessWidget {
         ).animate().fade().slideX(begin: 0.1),
         Row(
           children: [
+            // Date filter (Task 3.1)
+            Obx(() {
+              final d = ctrl.selectedDate.value;
+              final isToday = d.year == DateTime.now().year && d.month == DateTime.now().month && d.day == DateTime.now().day;
+              return TextButton.icon(
+                icon: const Icon(Icons.calendar_month, size: 18),
+                label: Text(isToday ? 'اليوم' : '${d.day}/${d.month}/${d.year}',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isToday ? Colors.grey : AppTheme.primaryColor)),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: ctrl.selectedDate.value,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    ctrl.selectedDate.value = picked;
+                    ctrl.fetchFinanceSummary();
+                  }
+                },
+              );
+            }),
+            const SizedBox(width: 8),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal, foregroundColor: Colors.white,
@@ -278,7 +301,7 @@ class FinanceScreen extends StatelessWidget {
                       'type': selectedType,
                       'amount': double.tryParse(amountCtrl.text) ?? 0,
                       'description': descCtrl.text,
-                    }, context);
+                    });
                     amountCtrl.clear();
                     descCtrl.clear();
                   },
@@ -319,7 +342,7 @@ class FinanceScreen extends StatelessWidget {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
             onPressed: () async {
               Get.back();
-              await ctrl.closePeriod(context);
+              await ctrl.closePeriod();
             },
             child: const Text('تأكيد الإقفال', style: TextStyle(color: Colors.white)),
           ),
@@ -357,7 +380,7 @@ class FinanceScreen extends StatelessWidget {
               final amount = double.tryParse(amountCtrl.text) ?? 0;
               if (amount <= 0) return;
               Get.back();
-              await ctrl.transferToTreasury(amount, descCtrl.text, context);
+              await ctrl.transferToTreasury(amount, descCtrl.text);
             },
             child: const Text('تأكيد التوريد', style: TextStyle(color: Colors.white)),
           ),
