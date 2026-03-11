@@ -65,6 +65,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.Accounting.IAccountingService, ALIkhlasPOS.Application.Services.Accounting.AccountingService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IInvoiceService, ALIkhlasPOS.Application.Services.InvoiceService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IPurchaseService, ALIkhlasPOS.Application.Services.PurchaseService>();
+builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IReturnInvoiceService, ALIkhlasPOS.Application.Services.ReturnInvoiceService>();
 builder.Services.AddScoped<IBarcodeService, BarcodeService>();
 builder.Services.AddScoped<IProductCacheService, ProductCacheService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Services.InvoicePdfGenerator>();
