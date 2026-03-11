@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:get/get.dart' hide Response;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:get/get.dart' hide Response, FormData, MultipartFile;
 import '../controllers/auth_controller.dart';
 
 class ApiService {

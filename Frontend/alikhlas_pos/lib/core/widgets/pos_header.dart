@@ -161,7 +161,7 @@ class PosHeader extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(lastScannedProduct!.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text('تمت الإضافة بنجاح - ${lastScannedProduct!.price.toStringAsFixed(2)} ر.س', 
+                          Text('تمت الإضافة بنجاح - ${lastScannedProduct!.price.toStringAsFixed(2)} ج.م', 
                             style: TextStyle(color: Colors.grey[600], fontSize: 11)),
                         ],
                       ),

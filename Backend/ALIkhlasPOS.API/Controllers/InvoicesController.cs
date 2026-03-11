@@ -6,6 +6,7 @@ using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace ALIkhlasPOS.API.Controllers;
 
@@ -18,6 +19,7 @@ public class InvoicesController : ControllerBase
     private readonly IProductCacheService _productCacheService;
     private readonly IAccountingService _accountingService;
     private readonly ALIkhlasPOS.Application.Services.InvoicePdfGenerator _pdfGenerator;
+    private readonly IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> _hubContext;
 
     public InvoicesController(
         ApplicationDbContext dbContext, 

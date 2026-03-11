@@ -15,6 +15,7 @@ public class ExpensesController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IAccountingService _accountingService;
+    private readonly IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> _hubContext;
 
     public ExpensesController(ApplicationDbContext dbContext, IAccountingService accountingService, IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> hubContext)
     {

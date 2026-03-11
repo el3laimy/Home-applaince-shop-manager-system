@@ -10,6 +10,7 @@ import '../core/theme/design_tokens.dart';
 import '../services/receipt_service.dart';
 import '../services/barcode_print_service.dart';
 import '../services/api_service.dart';
+import 'package:file_picker/file_picker.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

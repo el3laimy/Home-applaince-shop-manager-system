@@ -211,13 +211,13 @@ class _CreatePurchaseOrderModalState extends State<CreatePurchaseOrderModal> {
                       ),
                       child: Obx(() => Column(
                         children: [
-                          _summaryRow('المجموع الفرعي:', '${_subtotal.toStringAsFixed(2)} ر.س'),
+                          _summaryRow('المجموع الفرعي:', '${_subtotal.toStringAsFixed(2)} ج.م'),
                           const SizedBox(height: 12),
-                          _summaryRow('ضريبة القيمة المضافة (15%):', '${_vat.toStringAsFixed(2)} ر.س'),
+                          _summaryRow('ضريبة القيمة المضافة (15%):', '${_vat.toStringAsFixed(2)} ج.م'),
                           const Divider(height: 32, color: Colors.grey),
                           _summaryRow(
                             'الإجمالي النهائي:',
-                            '${_total.toStringAsFixed(2)} ر.س',
+                            '${_total.toStringAsFixed(2)} ج.م',
                             labelStyle: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                             valueStyle: TextStyle(color: AppTheme.primaryColor, fontSize: 20, fontWeight: FontWeight.w900),
                           ),
@@ -367,14 +367,14 @@ class _CreatePurchaseOrderModalState extends State<CreatePurchaseOrderModal> {
                             ),
                             Expanded(
                               child: Text(
-                                '${item.unitPrice.toStringAsFixed(2)} ر.س',
+                                '${item.unitPrice.toStringAsFixed(2)} ج.م',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.white, fontSize: 14),
                               ),
                             ),
                             Expanded(
                               child: Text(
-                                '${item.total.toStringAsFixed(2)} ر.س',
+                                '${item.total.toStringAsFixed(2)} ج.م',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                               ),

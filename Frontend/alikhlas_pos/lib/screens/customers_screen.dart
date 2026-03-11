@@ -253,7 +253,6 @@ class CustomersScreen extends StatelessWidget {
                 phoneCtrl.text.isEmpty ? null : phoneCtrl.text,
                 addressCtrl.text.isEmpty ? null : addressCtrl.text,
                 notesCtrl.text.isEmpty ? null : notesCtrl.text,
-                context,
               );
               if (ok) Get.back();
             },
@@ -328,7 +327,7 @@ class CustomersScreen extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await ctrl.deleteCustomer(c.id, context);
+              await ctrl.deleteCustomer(c.id);
               Get.back();
             },
             child: const Text('حذف', style: TextStyle(color: Colors.white)),

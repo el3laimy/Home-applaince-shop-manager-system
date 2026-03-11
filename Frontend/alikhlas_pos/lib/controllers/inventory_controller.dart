@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +31,10 @@ class InventoryController extends GetxController {
   static const int pageSize = 50;
 
   bool get hasMore => products.length < totalCount.value;
+
+  // Form state (moved from StatefulWidget — Task 1.2)
+  final RxBool isCustomCategory = false.obs;
+  final RxnString selectedFormCategory = RxnString();
 
   @override
   void onInit() {
@@ -119,7 +123,7 @@ class InventoryController extends GetxController {
     }
   }
 
-  Future<bool> addProduct(Map<String, dynamic> productData, BuildContext context) async {
+  Future<bool> addProduct(Map<String, dynamic> productData) async {
     if (isLoading.value) return false;
     isLoading.value = true;
     try {
@@ -127,10 +131,10 @@ class InventoryController extends GetxController {
       await fetchProducts(reset: true);
       await fetchCategories();
       await fetchNextBarcode();
-      _snap(context, 'تم إضافة المنتج بنجاح ✅', Colors.green);
+      ToastService.showSuccess('تم إضافة المنتج بنجاح ✅');
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     } finally {
       isLoading.value = false;
@@ -138,7 +142,7 @@ class InventoryController extends GetxController {
   }
 
   /// Picks an image file and uploads it for the product, returning the imageUrl
-  Future<String?> pickAndUploadImage(String productId, BuildContext context) async {
+  Future<String?> pickAndUploadImage(String productId) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
@@ -164,53 +168,53 @@ class InventoryController extends GetxController {
       final response = await request.send();
       if (response.statusCode == 200) {
         final body = await response.stream.bytesToString();
-        _snap(context, 'تم رفع الصورة بنجاح 📷', Colors.green);
+        ToastService.showSuccess('تم رفع الصورة بنجاح 📷');
         await fetchProducts(reset: true);
         return body;
       } else {
-        _snap(context, 'فشل رفع الصورة', Colors.red);
+        ToastService.showError('فشل رفع الصورة');
       }
     } catch (e) {
-      _snap(context, 'خطأ في رفع الصورة', Colors.red);
+      ToastService.showError('خطأ في رفع الصورة');
     }
     return null;
   }
 
-  Future<bool> updateProduct(String id, Map<String, dynamic> data, BuildContext context) async {
+  Future<bool> updateProduct(String id, Map<String, dynamic> data) async {
     isLoading.value = true;
     try {
       await ApiService.put('products/$id', data);
       await fetchProducts(reset: true);
-      _snap(context, 'تم تحديث المنتج بنجاح', Colors.green);
+      ToastService.showSuccess('تم تحديث المنتج بنجاح');
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     } finally {
       isLoading.value = false;
     }
   }
 
-  Future<bool> deleteProduct(String id, BuildContext context) async {
+  Future<bool> deleteProduct(String id) async {
     try {
       await ApiService.delete('products/$id');
       products.removeWhere((p) => p.id == id);
-      _snap(context, 'تم حذف المنتج', Colors.orange);
+      ToastService.showWarning('تم حذف المنتج');
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     }
   }
 
-  Future<bool> adjustStock(String id, double adjustment, String reason, BuildContext context) async {
+  Future<bool> adjustStock(String id, double adjustment, String reason) async {
     try {
       await ApiService.patch('products/$id/stock', {'adjustmentAmount': adjustment, 'reason': reason});
       await fetchProducts(reset: true);
-      _snap(context, 'تم تعديل الرصيد بنجاح', Colors.green);
+      ToastService.showSuccess('تم تعديل الرصيد بنجاح');
       return true;
     } on ApiException catch (e) {
-      _snap(context, e.message, Colors.red);
+      ToastService.showError(e.message);
       return false;
     }
   }
@@ -230,13 +234,4 @@ class InventoryController extends GetxController {
   }
 
   List<ProductModel> get lowStockProducts => products.where((p) => p.isLowStock).toList();
-
-  void _snap(BuildContext $1, String msg, Color color) {
-    if (color == Colors.red || color == Colors.redAccent) { ToastService.showError(msg); }
-    else if (color == Colors.green || color == Colors.greenAccent) { ToastService.showSuccess(msg); }
-    else if (color == Colors.orange || color == Colors.orangeAccent) { ToastService.showWarning(msg); }
-    else { ToastService.showInfo(msg); }
-  }
-
-
 }

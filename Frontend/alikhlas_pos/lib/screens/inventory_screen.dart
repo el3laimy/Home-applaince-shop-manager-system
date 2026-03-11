@@ -12,42 +12,16 @@ import '../services/api_service.dart';
 import '../services/barcode_print_service.dart';
 import '../core/utils/toast_service.dart';
 
-class InventoryScreen extends StatefulWidget {
+class InventoryScreen extends StatelessWidget {
   const InventoryScreen({super.key});
 
-  @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
-}
-
-class _InventoryScreenState extends State<InventoryScreen> {
-  // Add Product Form Controllers
-  final nameCtrl = TextEditingController();
-  final barcodeCtrl = TextEditingController();
-  final purchasePriceCtrl = TextEditingController();
-  final salePriceCtrl = TextEditingController();
-  final stockCtrl = TextEditingController();
-  
-  // Custom Category State
-  String? selectedFormCategory;
-  final customCategoryCtrl = TextEditingController();
-  bool isCustomCategory = false;
-
-  @override
-  void initState() {
-    super.initState();
-    Get.put(InventoryController());
-  }
-
-  @override
-  void dispose() {
-    nameCtrl.dispose();
-    barcodeCtrl.dispose();
-    purchasePriceCtrl.dispose();
-    salePriceCtrl.dispose();
-    stockCtrl.dispose();
-    customCategoryCtrl.dispose();
-    super.dispose();
-  }
+  // Add Product Form Controllers — created fresh per build, disposed by Flutter framework
+  static final nameCtrl = TextEditingController();
+  static final barcodeCtrl = TextEditingController();
+  static final purchasePriceCtrl = TextEditingController();
+  static final salePriceCtrl = TextEditingController();
+  static final stockCtrl = TextEditingController();
+  static final customCategoryCtrl = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -335,7 +309,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               _actionIcon(Icons.print_outlined, Colors.orange, 'طباعة ملصق',
                                   () => _showPrintLabelDialog(context, p, isDark)),
                               _actionIcon(Icons.camera_alt_outlined, DesignTokens.neonPurple, 'تغيير الصورة',
-                                  () => ctrl.pickAndUploadImage(p.id, context)),
+                                  () => ctrl.pickAndUploadImage(p.id)),
                               _actionIcon(Icons.edit_outlined, DesignTokens.neonBlue, 'تعديل',
                                   () => _showEditProductDialog(context, p, isDark, ctrl)),
                               _actionIcon(Icons.delete_outline_rounded, DesignTokens.neonRed, 'حذف',
@@ -546,9 +520,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (!isCustomCategory)
+                        if (!ctrl.isCustomCategory.value)
                           DropdownButtonFormField<String>(
-                            value: selectedFormCategory,
+                            value: ctrl.selectedFormCategory.value,
                             decoration: InputDecoration(
                                labelText: 'الفئة',
                                prefixIcon: const Icon(Icons.category, color: AppTheme.primaryColor, size: 20),
@@ -563,16 +537,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             ],
                             onChanged: (val) {
                                if (val == '__NEW__') {
-                                  setState(() {
-                                    isCustomCategory = true;
-                                    selectedFormCategory = null;
-                                  });
+                                 ctrl.isCustomCategory.value = true;
+                                 ctrl.selectedFormCategory.value = null;
                                } else {
-                                  setState(() { selectedFormCategory = val; });
+                                 ctrl.selectedFormCategory.value = val;
                                }
                             },
                           ),
-                        if (isCustomCategory)
+                        if (ctrl.isCustomCategory.value)
                           Row(
                             children: [
                               Expanded(child: _input(customCategoryCtrl, 'اسم الفئة الجديدة', Icons.edit, isDark)),
@@ -580,10 +552,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 icon: const Icon(Icons.close, color: Colors.red),
                                 tooltip: 'إلغاء وإختيار من القائمة',
                                 onPressed: () {
-                                   setState(() {
-                                     isCustomCategory = false;
-                                     customCategoryCtrl.clear();
-                                   });
+                                   ctrl.isCustomCategory.value = false;
+                                   customCategoryCtrl.clear();
                                 },
                               )
                             ],
@@ -632,10 +602,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
 
     String? finalCategory;
-    if (isCustomCategory && customCategoryCtrl.text.isNotEmpty) {
+    if (ctrl.isCustomCategory.value && customCategoryCtrl.text.isNotEmpty) {
       finalCategory = customCategoryCtrl.text;
-    } else if (!isCustomCategory && selectedFormCategory != null) {
-      finalCategory = selectedFormCategory;
+    } else if (!ctrl.isCustomCategory.value && ctrl.selectedFormCategory.value != null) {
+      finalCategory = ctrl.selectedFormCategory.value;
     }
 
     showDialog(
@@ -680,15 +650,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 'wholesalePrice': double.tryParse(purchasePriceCtrl.text) ?? 0,
                 'price': double.tryParse(salePriceCtrl.text) ?? 0,
                 'stockQuantity': int.tryParse(stockCtrl.text) ?? 0,
-              }, context);
+              });
 
               if (success) {
                 nameCtrl.clear(); barcodeCtrl.clear(); customCategoryCtrl.clear();
                 purchasePriceCtrl.clear(); salePriceCtrl.clear(); stockCtrl.clear();
-                setState(() {
-                  isCustomCategory = false;
-                  selectedFormCategory = null;
-                });
+                ctrl.isCustomCategory.value = false;
+                  ctrl.selectedFormCategory.value = null;
               }
             },
           ),
@@ -742,7 +710,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             label: const Text('نعم، احذف'),
             onPressed: () {
               Navigator.pop(ctx);
-              ctrl.deleteProduct(p.id, context);
+              ctrl.deleteProduct(p.id);
             },
           ),
         ],
@@ -826,7 +794,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     'wholesalePrice': double.tryParse(editPurchaseCtrl.text) ?? 0,
                     'price': double.tryParse(editSaleCtrl.text) ?? 0,
                     'stockQuantity': double.tryParse(editStockCtrl.text) ?? 0,
-                  }, context);
+                  });
                 },
               ),
             ],

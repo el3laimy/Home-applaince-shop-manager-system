@@ -43,7 +43,13 @@ class PosController extends GetxController {
 
   // Computed totals
   double get subtotal => cartItems.fold(0, (sum, item) => sum + item.totalPrice);
-  double get total => subtotal - globalDiscount.value;
+  double get total {
+    // Task 3.2: Clamp discount to never exceed subtotal (prevent negative total)
+    if (globalDiscount.value > subtotal) {
+      globalDiscount.value = subtotal;
+    }
+    return subtotal - globalDiscount.value;
+  }
   int get totalItems => cartItems.fold(0, (sum, item) => sum + item.quantity);
 
   @override
@@ -222,8 +228,7 @@ class PosController extends GetxController {
 
   /// Submit the invoice to the backend and trigger receipt printing
   /// [downPayment], [numberOfMonths], [interestRate], and [installmentPeriod] are used for installment invoices.
-  Future<bool> confirmCheckout(
-    BuildContext context, {
+  Future<bool> confirmCheckout({
     double downPayment = 0.0,
     int numberOfMonths = 0,
     double interestRate = 0.0,
@@ -299,7 +304,7 @@ class PosController extends GetxController {
 
       clearCart();
 
-      _showSuccess(context, 'تم إنشاء الفاتورة $invoiceNo ✓\nالإجمالي: ${total.toStringAsFixed(2)} ج.م');
+      _showSuccess('تم إنشاء الفاتورة $invoiceNo ✓\nالإجمالي: ${total.toStringAsFixed(2)} ج.م');
 
       // BUG-05: Auto-create installment schedule after successful installment invoice
       if (paymentTypeSnapshot == PaymentType.installment &&
@@ -336,10 +341,10 @@ class PosController extends GetxController {
 
       return true;
     } on ApiException catch (e) {
-      _showError(context, e.message);
+      _showError(e.message);
       return false;
     } catch (_) {
-      _showError(context, 'خطأ في الاتصال بالخادم');
+      _showError('خطأ في الاتصال بالخادم');
       return false;
     } finally {
       isLoading.value = false;
@@ -355,11 +360,11 @@ class PosController extends GetxController {
     });
   }
 
-  void _showSuccess(BuildContext context, String msg) {
+  void _showSuccess(String msg) {
     ToastService.showSuccess(msg);
   }
 
-  void _showError(BuildContext context, String msg) {
+  void _showError(String msg) {
     ToastService.showError(msg);
   }
 

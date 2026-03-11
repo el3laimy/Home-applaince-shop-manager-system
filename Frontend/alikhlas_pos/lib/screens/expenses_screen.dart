@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../controllers/expenses_controller.dart';
 import '../core/theme/app_theme.dart';
-import '../core/theme/app_colors.dart';
+import '../core/theme/design_tokens.dart';
 
 class ExpensesScreen extends StatelessWidget {
   ExpensesScreen({super.key});
@@ -138,7 +138,7 @@ class ExpensesScreen extends StatelessWidget {
                 children: [
                   if (expense['receiptImagePath'] != null && (expense['receiptImagePath'] as String).isNotEmpty)
                     IconButton(
-                      icon: const Icon(Icons.receipt, color: AppColors.primary),
+                      icon: const Icon(Icons.receipt, color: Color(0xFF6C63FF)),
                       tooltip: 'عرض الإيصال',
                       onPressed: () {
                         // For a real app, you can launch url or show a dialog with image from network

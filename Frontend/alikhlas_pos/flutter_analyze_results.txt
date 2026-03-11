@@ -2,88 +2,135 @@ Analyzing alikhlas_pos...
 
    info • Don't use 'BuildContext's across async gaps • lib/controllers/auth_controller.dart:69:18 • use_build_context_synchronously
    info • Don't use 'BuildContext's across async gaps • lib/controllers/auth_controller.dart:72:18 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/bridal_controller.dart:60:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/bridal_controller.dart:63:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/bridal_controller.dart:72:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/bridal_controller.dart:75:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/customer_controller.dart:42:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/customer_controller.dart:44:41 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/customer_controller.dart:52:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/customer_controller.dart:54:41 • use_build_context_synchronously
+warning • Unused import: 'package:flutter/material.dart' • lib/controllers/bridal_controller.dart:1:8 • unused_import
+warning • Unused import: '../models/customer_model.dart' • lib/controllers/bridal_controller.dart:3:8 • unused_import
+   info • Don't invoke 'print' in production code • lib/controllers/dashboard_controller.dart:82:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/controllers/dashboard_controller.dart:85:7 • avoid_print
+  error • The name of a constructor must match the name of the enclosing class • lib/controllers/expenses_controller.dart:98:7 • invalid_constructor_name
+  error • Expected an identifier • lib/controllers/expenses_controller.dart:98:20 • missing_identifier
+  error • Expected an identifier • lib/controllers/expenses_controller.dart:98:27 • missing_identifier
+  error • Named parameters must be enclosed in curly braces ('{' and '}') • lib/controllers/expenses_controller.dart:99:26 • named_parameter_outside_group
+  error • Using a colon as the separator before a default value is no longer supported • lib/controllers/expenses_controller.dart:99:26 • obsolete_colon_for_default_value
+  error • Methods can't be invoked in constant expressions • lib/controllers/expenses_controller.dart:99:28 • const_eval_method_invocation
+  error • Named parameters must be enclosed in curly braces ('{' and '}') • lib/controllers/expenses_controller.dart:99:64 • named_parameter_outside_group
+  error • Using a colon as the separator before a default value is no longer supported • lib/controllers/expenses_controller.dart:99:64 • obsolete_colon_for_default_value
+  error • 'debugPrint' must have a method body because 'ExpensesController' isn't abstract • lib/controllers/expenses_controller.dart:100:7 • concrete_class_with_abstract_member
+  error • Expected an identifier • lib/controllers/expenses_controller.dart:100:18 • missing_identifier
+  error • Expected to find ')' • lib/controllers/expenses_controller.dart:100:43 • expected_token
+  error • Expected a class member • lib/controllers/expenses_controller.dart:101:7 • expected_class_member
+  error • Expected a class member • lib/controllers/expenses_controller.dart:101:14 • expected_class_member
+  error • Expected a class member • lib/controllers/expenses_controller.dart:101:19 • expected_class_member
+  error • Expected a method, getter, setter or operator declaration • lib/controllers/expenses_controller.dart:103:3 • expected_executable
+  error • Undefined name '_expenses' • lib/controllers/expenses_controller.dart:108:7 • undefined_identifier
+  error • Undefined name '_categories' • lib/controllers/expenses_controller.dart:123:7 • undefined_identifier
+  error • Expected a method, getter, setter or operator declaration • lib/controllers/expenses_controller.dart:134:1 • expected_executable
    info • Don't use 'BuildContext's across async gaps • lib/controllers/finance_controller.dart:43:13 • use_build_context_synchronously
    info • Don't use 'BuildContext's across async gaps • lib/controllers/finance_controller.dart:46:13 • use_build_context_synchronously
    info • Don't use 'BuildContext's across async gaps • lib/controllers/finance_controller.dart:57:13 • use_build_context_synchronously
    info • Don't use 'BuildContext's across async gaps • lib/controllers/finance_controller.dart:61:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/finance_controller.dart:75:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/finance_controller.dart:79:13 • use_build_context_synchronously
    info • The imported package 'http_parser' isn't a dependency of the importing package • lib/controllers/inventory_controller.dart:5:8 • depend_on_referenced_packages
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:103:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:106:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:140:15 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:144:15 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:147:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:157:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:160:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:171:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:130:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:133:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:167:15 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:171:15 • use_build_context_synchronously
    info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:174:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:183:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:186:13 • use_build_context_synchronously
-warning • The value of the local variable 'invoiceId' isn't used • lib/controllers/pos_controller.dart:209:13 • unused_local_variable
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/pos_controller.dart:220:20 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/pos_controller.dart:244:18 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/pos_controller.dart:247:18 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:184:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:187:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:198:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:201:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:210:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/inventory_controller.dart:213:13 • use_build_context_synchronously
+warning • The value of the field '_lastInvoiceId' isn't used • lib/controllers/pos_controller.dart:37:11 • unused_field
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/pos_controller.dart:302:20 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/pos_controller.dart:339:18 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/pos_controller.dart:342:18 • use_build_context_synchronously
    info • Don't invoke 'print' in production code • lib/controllers/purchasing_controller.dart:75:8 • avoid_print
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:37:15 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:39:15 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:42:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:102:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:107:13 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:110:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:88:15 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:90:15 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:93:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:166:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:174:13 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/controllers/returns_controller.dart:177:13 • use_build_context_synchronously
 warning • Unused import: 'package:flutter/material.dart' • lib/controllers/settings_controller.dart:1:8 • unused_import
 warning • The value of the local variable 'closedShift' isn't used • lib/controllers/shift_controller.dart:74:15 • unused_local_variable
 warning • Unused import: 'package:flutter/material.dart' • lib/controllers/stock_adjustment_controller.dart:1:8 • unused_import
+   info • The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/core/theme/design_tokens.dart:1:8 • unnecessary_import
    info • The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/core/widgets/main_shell.dart:1:8 • unnecessary_import
-warning • Duplicate import • lib/core/widgets/main_shell.dart:17:8 • duplicate_import
+warning • Duplicate import • lib/core/widgets/main_shell.dart:18:8 • duplicate_import
 warning • Unused import: '../theme/app_theme.dart' • lib/core/widgets/z_report_dialog.dart:5:8 • unused_import
-warning • Unused import: '../models/customer_model.dart' • lib/screens/bridal_screen.dart:6:8 • unused_import
-   info • Unnecessary use of string interpolation • lib/screens/bridal_screen.dart:164:49 • unnecessary_string_interpolations
-warning • Unused import: '../models/customer_model.dart' • lib/screens/customers_screen.dart:5:8 • unused_import
-warning • Unused import: '../services/api_service.dart' • lib/screens/customers_screen.dart:6:8 • unused_import
+   info • Unnecessary use of string interpolation • lib/screens/bridal_screen.dart:224:43 • unnecessary_string_interpolations
+   info • Don't use 'BuildContext's across async gaps • lib/screens/bridal_screen.dart:689:76 • use_build_context_synchronously
+   info • Unnecessary use of 'toList' in a spread • lib/screens/bridal_screen.dart:914:32 • unnecessary_to_list_in_spreads
+  error • The method 'fetchAndShowPdf' isn't defined for the type 'PdfService' • lib/screens/customer_profile_screen.dart:97:34 • undefined_method
 warning • Unused import: '../core/utils/toast_service.dart' • lib/screens/customers_screen.dart:8:8 • unused_import
-warning • The declaration '_buildShimmerLoading' isn't referenced • lib/screens/dashboard_screen.dart:588:10 • unused_element
-   info • 'MaterialStateProperty' is deprecated and shouldn't be used. Use WidgetStateProperty instead. Moved to the Widgets layer to make code available outside of Material. This feature was deprecated after v3.19.0-0.3.pre • lib/screens/finance_screen.dart:181:40 • deprecated_member_use
-   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/finance_screen.dart:242:17 • deprecated_member_use
-warning • The declaration '_exportCsv' isn't referenced • lib/screens/installments_screen.dart:128:16 • unused_element
-warning • The value of the local variable 'baseUrl' isn't used • lib/screens/installments_screen.dart:132:13 • unused_local_variable
+warning • Unused import: '../core/utils/formatters.dart' • lib/screens/customers_screen.dart:9:8 • unused_import
+warning • The declaration '_showEditDialog' isn't referenced • lib/screens/customers_screen.dart:267:8 • unused_element
+warning • The declaration '_showDeleteConfirm' isn't referenced • lib/screens/customers_screen.dart:316:8 • unused_element
+   info • The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/screens/dashboard_screen.dart:1:8 • unnecessary_import
+warning • Unused import: '../core/theme/app_theme.dart' • lib/screens/dashboard_screen.dart:8:8 • unused_import
+  error • Target of URI doesn't exist: '../core/theme/app_colors.dart' • lib/screens/expenses_screen.dart:7:8 • uri_does_not_exist
+  error • The class 'ExpensesController' doesn't have an unnamed constructor • lib/screens/expenses_screen.dart:12:49 • new_with_undefined_constructor_default
+  error • Invalid constant value • lib/screens/expenses_screen.dart:141:62 • invalid_constant
+  error • Undefined name 'AppColors' • lib/screens/expenses_screen.dart:141:62 • undefined_identifier
+  error • The method 'deleteExpense' isn't defined for the type 'ExpensesController' • lib/screens/expenses_screen.dart:173:38 • undefined_method
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/expenses_screen.dart:243:25 • deprecated_member_use
+  error • The method 'createCategory' isn't defined for the type 'ExpensesController' • lib/screens/expenses_screen.dart:370:50 • undefined_method
+   info • 'MaterialStateProperty' is deprecated and shouldn't be used. Use WidgetStateProperty instead. Moved to the Widgets layer to make code available outside of Material. This feature was deprecated after v3.19.0-0.3.pre • lib/screens/finance_screen.dart:182:40 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/finance_screen.dart:243:17 • deprecated_member_use
+warning • Unused import: '../core/theme/design_tokens.dart' • lib/screens/installments_screen.dart:9:8 • unused_import
+warning • The declaration '_exportCsv' isn't referenced • lib/screens/installments_screen.dart:131:16 • unused_element
    info • The imported package 'collection' isn't a dependency of the importing package • lib/screens/inventory_screen.dart:6:8 • depend_on_referenced_packages
 warning • Unused import: 'package:collection/collection.dart' • lib/screens/inventory_screen.dart:6:8 • unused_import
-warning • Unused import: '../services/api_service.dart' • lib/screens/inventory_screen.dart:10:8 • unused_import
-   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/inventory_screen.dart:592:29 • deprecated_member_use
-   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/inventory_screen.dart:820:23 • deprecated_member_use
-warning • Unused import: '../core/utils/formatters.dart' • lib/screens/pos_screen.dart:10:8 • unused_import
-   info • Unnecessary use of string interpolation • lib/screens/pos_screen.dart:404:33 • unnecessary_string_interpolations
-   info • Unnecessary use of string interpolation • lib/screens/pos_screen.dart:438:39 • unnecessary_string_interpolations
+warning • Unused import: '../services/api_service.dart' • lib/screens/inventory_screen.dart:11:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/inventory_screen.dart:551:29 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/inventory_screen.dart:779:23 • deprecated_member_use
+warning • Unused import: '../core/theme/app_theme.dart' • lib/screens/invoice_detail_screen.dart:9:8 • unused_import
+warning • The value of the local variable 'paymentLabels' isn't used • lib/screens/invoice_detail_screen.dart:117:11 • unused_local_variable
+   info • Unnecessary use of string interpolation • lib/screens/invoice_detail_screen.dart:225:57 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/invoice_detail_screen.dart:227:57 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/invoice_detail_screen.dart:229:57 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/invoice_detail_screen.dart:254:57 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/invoice_detail_screen.dart:259:89 • unnecessary_string_interpolations
+warning • Unused import: '../controllers/notifications_controller.dart' • lib/screens/pos_screen.dart:8:8 • unused_import
+warning • Unused import: '../core/utils/formatters.dart' • lib/screens/pos_screen.dart:11:8 • unused_import
+warning • The value of the local variable 'perInstallment' isn't used • lib/screens/pos_screen.dart:725:17 • unused_local_variable
+   info • Don't use 'BuildContext's across async gaps • lib/screens/pos_screen.dart:827:33 • use_build_context_synchronously
+warning • The declaration '_installCalcRow' isn't referenced • lib/screens/pos_screen.dart:959:10 • unused_element
+   info • Unnecessary use of string interpolation • lib/screens/pos_screen.dart:1210:17 • unnecessary_string_interpolations
 warning • Unused import: '../models/product_model.dart' • lib/screens/purchasing_screen.dart:6:8 • unused_import
-warning • Unused import: 'package:intl/intl.dart' • lib/screens/purchasing_screen.dart:9:8 • unused_import
-warning • Unused import: '../core/utils/toast_service.dart' • lib/screens/purchasing_screen.dart:10:8 • unused_import
-   info • 'RawKeyboardListener' is deprecated and shouldn't be used. Use KeyboardListener instead. This feature was deprecated after v3.18.0-2.0.pre • lib/screens/purchasing_screen.dart:234:44 • deprecated_member_use
-warning • Dead code • lib/screens/purchasing_screen.dart:300:87 • dead_code
-warning • The left operand can't be null, so the right operand is never executed • lib/screens/purchasing_screen.dart:300:90 • dead_null_aware_expression
-   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/returns_screen.dart:255:23 • deprecated_member_use
-   info • The 'child' argument should be last in widget constructor invocations • lib/screens/returns_screen.dart:279:25 • sort_child_properties_last
-warning • Unused import: 'package:printing/printing.dart' • lib/screens/settings_screen.dart:6:8 • unused_import
-   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:143:13 • deprecated_member_use
-   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:214:13 • deprecated_member_use
-   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:223:13 • deprecated_member_use
-   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:325:13 • deprecated_member_use
-warning • Unused import: 'package:intl/intl.dart' • lib/screens/stock_adjustments_screen.dart:7:8 • unused_import
-   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/stock_adjustments_screen.dart:196:28 • deprecated_member_use
-   info • Don't use 'BuildContext's across async gaps • lib/screens/stock_adjustments_screen.dart:236:41 • use_build_context_synchronously
-warning • Unused import: 'package:toastification/toastification.dart' • lib/screens/suppliers_screen.dart:7:8 • unused_import
-   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:296:40 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:299:51 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:321:38 • use_build_context_synchronously
-   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:355:42 • use_build_context_synchronously
-   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/users_screen.dart:230:15 • deprecated_member_use
-warning • The '!' will have no effect because the receiver can't be null • lib/screens/users_screen.dart:247:39 • unnecessary_non_null_assertion
+warning • Unused import: 'package:intl/intl.dart' • lib/screens/purchasing_screen.dart:10:8 • unused_import
+warning • Unused import: '../core/utils/toast_service.dart' • lib/screens/purchasing_screen.dart:11:8 • unused_import
+   info • 'RawKeyboardListener' is deprecated and shouldn't be used. Use KeyboardListener instead. This feature was deprecated after v3.18.0-2.0.pre • lib/screens/purchasing_screen.dart:236:44 • deprecated_member_use
+warning • Dead code • lib/screens/purchasing_screen.dart:302:87 • dead_code
+warning • The left operand can't be null, so the right operand is never executed • lib/screens/purchasing_screen.dart:302:90 • dead_null_aware_expression
+   info • Parameter 'key' could be a super parameter • lib/screens/returns_screen.dart:12:3 • use_super_parameters
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/returns_screen.dart:86:33 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/returns_screen.dart:311:21 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/returns_screen.dart:336:46 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/returns_screen.dart:338:65 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/returns_screen.dart:457:46 • deprecated_member_use
+   info • Unnecessary use of 'toList' in a spread • lib/screens/returns_screen.dart:475:34 • unnecessary_to_list_in_spreads
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:147:13 • deprecated_member_use
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:218:13 • deprecated_member_use
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:227:13 • deprecated_member_use
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings_screen.dart:329:13 • deprecated_member_use
+  error • Undefined name 'FilePicker' • lib/screens/settings_screen.dart:399:39 • undefined_identifier
+warning • Unused import: '../core/theme/design_tokens.dart' • lib/screens/stock_adjustments_screen.dart:5:8 • unused_import
+warning • Unused import: 'package:intl/intl.dart' • lib/screens/stock_adjustments_screen.dart:8:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/stock_adjustments_screen.dart:197:28 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/screens/stock_adjustments_screen.dart:237:41 • use_build_context_synchronously
+warning • Unused import: 'package:toastification/toastification.dart' • lib/screens/suppliers_screen.dart:8:8 • unused_import
+   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:297:40 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:300:51 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:322:38 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/suppliers_screen.dart:356:42 • use_build_context_synchronously
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/users_screen.dart:231:15 • deprecated_member_use
+warning • The '!' will have no effect because the receiver can't be null • lib/screens/users_screen.dart:248:39 • unnecessary_non_null_assertion
+  error • The name 'FormData' is defined in the libraries 'package:dio/src/form_data.dart (via package:dio/dio.dart)' and 'package:get/get_connect/http/src/multipart/form_data.dart (via package:get/get.dart)' • lib/services/api_service.dart:145:7 • ambiguous_import
+  error • The name 'FormData' is defined in the libraries 'package:dio/src/form_data.dart (via package:dio/dio.dart)' and 'package:get/get_connect/http/src/multipart/form_data.dart (via package:get/get.dart)' • lib/services/api_service.dart:145:27 • ambiguous_import
+  error • The name 'MultipartFile' is defined in the libraries 'package:dio/src/multipart_file.dart (via package:dio/dio.dart)' and 'package:get/get_connect/http/src/multipart/multipart_file.dart (via package:get/get.dart)' • lib/services/api_service.dart:146:24 • ambiguous_import
 warning • Unused import: '../services/api_service.dart' • lib/services/report_pdf_service.dart:6:8 • unused_import
 warning • Unused import: 'package:flutter_animate/flutter_animate.dart' • lib/widgets/create_purchase_order_modal.dart:5:8 • unused_import
 warning • The operand can't be 'null', so the condition is always 'true' • lib/widgets/create_purchase_order_modal.dart:339:66 • unnecessary_null_comparison
