@@ -16,21 +16,18 @@ namespace ALIkhlasPOS.API.Controllers;
 public class InvoicesController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
-    private readonly IProductCacheService _productCacheService;
-    private readonly IAccountingService _accountingService;
+    private readonly IInvoiceService _invoiceService;
     private readonly ALIkhlasPOS.Application.Services.InvoicePdfGenerator _pdfGenerator;
     private readonly IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> _hubContext;
 
     public InvoicesController(
         ApplicationDbContext dbContext, 
-        IProductCacheService productCacheService, 
-        IAccountingService accountingService,
+        IInvoiceService invoiceService,
         ALIkhlasPOS.Application.Services.InvoicePdfGenerator pdfGenerator,
         IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> hubContext)
     {
         _dbContext = dbContext;
-        _productCacheService = productCacheService;
-        _accountingService = accountingService;
+        _invoiceService = invoiceService;
         _pdfGenerator = pdfGenerator;
         _hubContext = hubContext;
     }
@@ -214,228 +211,64 @@ public class InvoicesController : ControllerBase
         if (request.ScannedItems == null || !request.ScannedItems.Any())
             return BadRequest(new { message = "يجب أن تحتوي الفاتورة على صنف واحد على الأقل." });
 
-        // Extract cashier ID from JWT token
         var cashierIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var cashierId = cashierIdStr != null ? Guid.Parse(cashierIdStr) : (Guid?)null;
+        var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
+        var isAdmin = User.FindFirstValue(ClaimTypes.Role) == "Admin";
 
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            var dto = new ALIkhlasPOS.Application.DTOs.Invoices.InvoiceCreateDto(
+                request.ScannedItems.Select(s => new ALIkhlasPOS.Application.DTOs.Invoices.ScanItemDto(s.Barcode, s.Quantity, s.CustomPrice)).ToList(),
+                request.PaymentType,
+                request.CustomerId,
+                request.DiscountAmount,
+                request.DownPayment,
+                request.VatRate,
+                request.InterestRate,
+                request.InstallmentPeriod,
+                request.InstallmentCount,
+                request.Status,
+                request.Notes,
+                request.IsBridal,
+                request.EventDate,
+                request.DeliveryDate,
+                request.BridalNotes,
+                request.PaymentReference,
+                request.SplitCashAmount,
+                request.SplitVisaAmount
+            );
 
-            // BUG-14: Sequential invoice number — safe under high load
-            var today = DateTime.UtcNow.ToString("yyyyMMdd");
-            var lastNo = await _dbContext.Invoices
-                .Where(i => i.InvoiceNo.StartsWith($"INV-{today}-"))
-                .OrderByDescending(i => i.InvoiceNo)
-                .Select(i => i.InvoiceNo)
-                .FirstOrDefaultAsync(cancellationToken);
+            var response = await _invoiceService.CreateInvoiceAsync(dto, cashierId, createdBy, isAdmin, cancellationToken);
+            
+            // Trigger SignalR broadcast for live dashboard update
+            await _hubContext.Clients.All.SendAsync("UpdateDashboard", cancellationToken);
 
-            int seq = 1;
-            if (lastNo != null)
+            // Exact same return shape as before
+            return Ok(new
             {
-                var parts = lastNo.Split('-');
-                if (parts.Length == 3 && int.TryParse(parts[2], out var lastSeq))
-                    seq = lastSeq + 1;
-            }
-
-        var invoice = new Invoice
-        {
-            InvoiceNo = $"INV-{today}-{seq:D5}",
-            PaymentType = request.PaymentType,
-            Status = request.Status,
-            CustomerId = request.CustomerId,
-            CashierId = cashierId,
-            DiscountAmount = request.DiscountAmount,
-            VatRate = request.VatRate,
-            Notes = request.Notes,
-            IsBridal = request.IsBridal,
-            EventDate = request.EventDate,
-            DeliveryDate = request.DeliveryDate,
-            BridalNotes = request.BridalNotes,
-            InterestRate = request.InterestRate,
-            InstallmentPeriod = request.InstallmentPeriod,
-            InstallmentCount = request.InstallmentCount,
-            CreatedBy = User.FindFirstValue(ClaimTypes.Name) ?? "System",
-            PaymentReference = request.PaymentReference
-        };
-
-        // ── Scanner Aggregation (group repeated scans of the same barcode & price) ──
-        var groupedScans = request.ScannedItems
-            .GroupBy(i => new { i.Barcode, i.CustomPrice })
-            .Select(g => new { g.Key.Barcode, g.Key.CustomPrice, Quantity = g.Sum(x => x.Quantity) })
-            .ToList();
-
-        foreach (var scan in groupedScans)
-        {
-            var barcode = scan.Barcode;
-            var quantity = scan.Quantity;
-            var customPrice = scan.CustomPrice;
-
-            var product = await _productCacheService.GetProductByBarcodeAsync(barcode, cancellationToken);
-            if (product == null)
-                return BadRequest(new { message = $"لا يوجد منتج بهذا الباركود: {barcode}" });
-
-            // Check bundle components
-            var bundleComponents = await _dbContext.Bundles
-                .Where(b => b.ParentProductId == product.Id)
-                .ToListAsync(cancellationToken);
-
-            if (bundleComponents.Any())
-            {
-                foreach (var bundleItem in bundleComponents)
-                {
-                    var subProduct = await _dbContext.Products.FindAsync(new object[] { bundleItem.SubProductId }, cancellationToken);
-                    if (subProduct != null)
-                    {
-                        int totalSubQtyRequired = bundleItem.QuantityRequired * quantity;
-                        if (subProduct.StockQuantity < totalSubQtyRequired)
-                            return BadRequest(new { message = $"الكمية غير كافية للمنتج المكوّن: {subProduct.Name}. المتاح: {subProduct.StockQuantity}" });
-
-                        subProduct.StockQuantity -= totalSubQtyRequired;
-                        _dbContext.Products.Update(subProduct);
-                        
-                        _dbContext.StockMovements.Add(new StockMovement
-                        {
-                            ProductId = subProduct.Id,
-                            Type = StockMovementType.Sale,
-                            Quantity = -(int)totalSubQtyRequired,
-                            BalanceAfter = (int)subProduct.StockQuantity,
-                            ReferenceId = invoice.Id,
-                            ReferenceNumber = invoice.InvoiceNo,
-                            CreatedBy = invoice.CreatedBy,
-                            Notes = $"مرتبط بالمنتج المجمّع {product.Name}"
-                        });
-                        
-                        if (!string.IsNullOrEmpty(subProduct.GlobalBarcode))
-                            await _productCacheService.RemoveProductCacheAsync(subProduct.GlobalBarcode, cancellationToken);
-                        if (!string.IsNullOrEmpty(subProduct.InternalBarcode))
-                            await _productCacheService.RemoveProductCacheAsync(subProduct.InternalBarcode, cancellationToken);
-                    }
-                }
-            }
-            else
-            {
-                if (product.StockQuantity < quantity)
-                    return BadRequest(new { message = $"الكمية غير كافية للمنتج: {product.Name}. المتاح: {product.StockQuantity}, المطلوب: {quantity}" });
-
-                product.StockQuantity -= quantity;
-                _dbContext.Products.Update(product);
-
-                _dbContext.StockMovements.Add(new StockMovement
-                {
-                    ProductId = product.Id,
-                    Type = StockMovementType.Sale,
-                    Quantity = -(int)quantity,
-                    BalanceAfter = (int)product.StockQuantity,
-                    ReferenceId = invoice.Id,
-                    ReferenceNumber = invoice.InvoiceNo,
-                    CreatedBy = invoice.CreatedBy
-                });
-            }
-
-            await _productCacheService.SetProductCacheAsync(product, cancellationToken);
-
-            // Verify Custom Price is not below Purchase Price (if applicable)
-            decimal finalPrice = product.Price;
-            if (customPrice.HasValue)
-            {
-                if (customPrice.Value < product.PurchasePrice)
-                {
-                    // Allow admin to override, but for now we reject if below cost
-                    var role = User.FindFirstValue(ClaimTypes.Role);
-                    if (role != "Admin")
-                    {
-                        return BadRequest(new { message = $"لا يمكن بيع المنتج {product.Name} بسعر أقل من التكلفة ({product.PurchasePrice})." });
-                    }
-                }
-                finalPrice = customPrice.Value;
-            }
-
-            invoice.Items.Add(new InvoiceItem
-            {
-                ProductId = product.Id,
-                Quantity = quantity,
-                UnitPrice = finalPrice
+                Id = response.Id,
+                InvoiceNo = response.InvoiceNo,
+                SubTotal = response.SubTotal,
+                DiscountAmount = response.DiscountAmount,
+                VatAmount = response.VatAmount,
+                TotalAmount = response.TotalAmount,
+                PaidAmount = response.PaidAmount,
+                RemainingAmount = response.RemainingAmount,
+                ItemCount = response.ItemCount
             });
         }
-
-        // ── Financial calculations ────────────────────────────────────────────
-        var subTotal = invoice.Items.Sum(i => i.TotalPrice);
-
-        // Auto-apply shop VAT if no explicit VatRate provided
-        var effectiveVatRate = request.VatRate;
-        if (effectiveVatRate == 0)
+        catch (ArgumentException ex)
         {
-            var shopSettings = await _dbContext.ShopSettings.FirstOrDefaultAsync(cancellationToken);
-            if (shopSettings?.VatEnabled == true)
-                effectiveVatRate = shopSettings.DefaultVatRate;
+            return BadRequest(new { message = ex.Message });
         }
-
-        var vatAmount = Math.Round((subTotal - request.DiscountAmount) * (effectiveVatRate / 100m), 2);
-        var totalAmount = subTotal - request.DiscountAmount + vatAmount;
-
-        invoice.SubTotal = subTotal;
-        invoice.VatRate = effectiveVatRate;
-        invoice.VatAmount = vatAmount;
-        invoice.TotalAmount = totalAmount;
-
-
-        // Payment tracking for installments
-        if (request.PaymentType == PaymentType.Installment)
+        catch (InvalidOperationException ex)
         {
-            invoice.PaidAmount = request.DownPayment;
-            // Apply interest on the remaining amount
-            var remaining = totalAmount - request.DownPayment;
-            var interest = remaining * (request.InterestRate / 100m);
-            var totalWithInterest = remaining + interest;
-            invoice.RemainingAmount = totalWithInterest;
-            invoice.TotalAmount = totalAmount + interest; // updated to include interest
+            return BadRequest(new { message = ex.Message });
         }
-        else
+        catch (Exception ex)
         {
-            invoice.PaidAmount = totalAmount;
-            invoice.RemainingAmount = 0;
+            return BadRequest(new { message = $"حدث خطأ أثناء حفظ الفاتورة أو المعاملة المالية: {ex.Message}" });
         }
-
-        // ── Recording to Treasury & Accounting ──
-        // FIX-D: Update Customer balance fields
-        if (invoice.CustomerId.HasValue)
-        {
-            var customer = await _dbContext.Customers.FindAsync(new object[] { invoice.CustomerId.Value }, cancellationToken);
-            if (customer != null)
-            {
-                customer.TotalPurchases += invoice.TotalAmount;
-                customer.TotalPaid += invoice.PaidAmount;
-            }
-        }
-
-        _dbContext.Invoices.Add(invoice);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _accountingService.RecordCashSaleAsync(invoice, invoice.CreatedBy, request.SplitCashAmount, request.SplitVisaAmount);
-        
-        await transaction.CommitAsync(cancellationToken);
-
-        // Trigger SignalR broadcast for live dashboard update
-        await _hubContext.Clients.All.SendAsync("UpdateDashboard", cancellationToken);
-
-        return Ok(new
-        {
-            invoice.Id,
-            invoice.InvoiceNo,
-            invoice.SubTotal,
-            invoice.DiscountAmount,
-            invoice.VatAmount,
-            invoice.TotalAmount,
-            invoice.PaidAmount,
-            invoice.RemainingAmount,
-            ItemCount = invoice.Items.Count
-        });
-    }
-    catch (Exception ex)
-    {
-        await transaction.RollbackAsync(cancellationToken);
-        return BadRequest(new { message = $"حدث خطأ أثناء حفظ الفاتورة أو المعاملة المالية: {ex.Message}" });
-    }
     }
 }
