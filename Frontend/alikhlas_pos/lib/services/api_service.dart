@@ -1,8 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart' hide Response, FormData, MultipartFile;
 import '../controllers/auth_controller.dart';
 
@@ -11,7 +9,7 @@ class ApiService {
   
 
   static void initialize() {
-    String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+    String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api';
     if (!baseUrl.endsWith('/')) {
       baseUrl += '/';
     }
@@ -61,8 +59,9 @@ class ApiService {
 
   static Future<bool> _attemptTokenRefresh() async {
     try {
-      final token = (await SharedPreferences.getInstance()).getString('auth_token');
-      final refreshToken = (await SharedPreferences.getInstance()).getString('refresh_token');
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      final refreshToken = prefs.getString('refresh_token');
       
       if (token == null || refreshToken == null) return false;
 
@@ -77,8 +76,8 @@ class ApiService {
         final newToken = response.data['token'];
         final newRefreshToken = response.data['refreshToken'];
 
-        await (await SharedPreferences.getInstance()).setString('auth_token', newToken);
-        await (await SharedPreferences.getInstance()).setString('refresh_token', newRefreshToken);
+        await prefs.setString('auth_token', newToken);
+        await prefs.setString('refresh_token', newRefreshToken);
         return true;
       }
     } catch (_) {}

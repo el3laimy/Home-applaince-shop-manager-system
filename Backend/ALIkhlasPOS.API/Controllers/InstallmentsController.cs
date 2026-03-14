@@ -111,6 +111,17 @@ public class InstallmentsController : ControllerBase
         var installments = await _dbContext.Installments
             .Where(i => i.InvoiceId == invoiceId)
             .OrderBy(i => i.DueDate)
+            .Select(i => new
+            {
+                i.Id,
+                i.InvoiceId,
+                i.CustomerId,
+                i.Amount,
+                i.DueDate,
+                i.Status,
+                i.PaidAt,
+                i.ReminderSent
+            })
             .ToListAsync(cancellationToken);
         return Ok(installments);
     }

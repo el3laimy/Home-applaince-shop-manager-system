@@ -407,6 +407,44 @@ namespace ALIkhlasPOS.Application.Services.Accounting
             await _dbContext.SaveChangesAsync();
         }
 
+        // ── Record Shift Closing Difference ──────────────────────────────
+        public async Task RecordShiftClosureAsync(Shift shift, string createdBy)
+        {
+            if (shift.Difference == 0) return;
+
+            var cashAccountId = await GetSystemAccountIdAsync("CASH");
+            
+            if (shift.Difference < 0)
+            {
+                // Shortage (Deficit): Decrease Cash (Credit), Record Expense (Debit)
+                var shortageAccountId = await GetSystemAccountIdAsync("SPOILAGE_EXPENSES"); // Reusing for now or could create 'CASH_SHORTAGE'
+                
+                decimal shortageAmount = Math.Abs(shift.Difference);
+                await CreateJournalEntryAsync(
+                    reference: $"SHIFT-{shift.Id.ToString()[..8]}",
+                    description: $"عجز في الوردية الدفترية ({shift.Id.ToString()[..8]})",
+                    createdBy: createdBy,
+                    false,
+                    (shortageAccountId, Debit: shortageAmount, Credit: 0),
+                    (cashAccountId, Debit: 0, Credit: shortageAmount)
+                );
+            }
+            else
+            {
+                // Overage (Surplus): Increase Cash (Debit), Record Other Revenue (Credit)
+                var otherRevenueAccountId = await GetSystemAccountIdAsync("OTHER_REVENUES"); // Will auto-create if missing mapping
+                
+                await CreateJournalEntryAsync(
+                    reference: $"SHIFT-{shift.Id.ToString()[..8]}",
+                    description: $"زيادة في الوردية الدفترية ({shift.Id.ToString()[..8]})",
+                    createdBy: createdBy,
+                    false,
+                    (cashAccountId, Debit: shift.Difference, Credit: 0),
+                    (otherRevenueAccountId, Debit: 0, Credit: shift.Difference)
+                );
+            }
+        }
+
         // ── Helper: get or auto-create system accounts ─────────────────────────
         // NOTE: In production, these should be pre-seeded via a setup wizard.
         //       This fallback is intentionally kept for development only.

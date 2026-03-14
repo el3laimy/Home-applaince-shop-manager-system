@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ALIkhlasPOS.Application.Interfaces;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -15,10 +16,12 @@ namespace ALIkhlasPOS.API.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPasswordService _passwordService;
 
-    public UsersController(ApplicationDbContext dbContext)
+    public UsersController(ApplicationDbContext dbContext, IPasswordService passwordService)
     {
         _dbContext = dbContext;
+        _passwordService = passwordService;
     }
 
     // ── DTOs ─────────────────────────────────────────────────────────────────
@@ -85,7 +88,7 @@ public class UsersController : ControllerBase
         {
             Username = req.Username.Trim(),
             FullName = req.FullName.Trim(),
-            PasswordHash = AuthController.HashPassword(req.Password),
+            PasswordHash = _passwordService.HashPassword(req.Password),
             Role = req.Role,
             IsActive = true
         };
@@ -123,7 +126,7 @@ public class UsersController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 6)
             return BadRequest(new { message = "كلمة المرور يجب أن تكون 6 أحرف على الأقل." });
 
-        user.PasswordHash = AuthController.HashPassword(req.NewPassword);
+        user.PasswordHash = _passwordService.HashPassword(req.NewPassword);
         await _dbContext.SaveChangesAsync(ct);
 
         return Ok(new { message = "تم إعادة تعيين كلمة المرور بنجاح." });

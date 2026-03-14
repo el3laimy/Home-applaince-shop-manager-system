@@ -57,7 +57,7 @@ class DashboardController extends GetxController {
   }
 
   void _initSignalR() {
-    String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+    String baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api';
     // Remove trailing slash if any, then remove /api
     if (baseUrl.endsWith('/')) baseUrl = baseUrl.substring(0, baseUrl.length - 1);
     String hubUrl = baseUrl.replaceAll(RegExp(r'/api$'), '/hubs/dashboard');

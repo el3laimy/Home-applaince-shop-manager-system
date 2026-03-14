@@ -112,6 +112,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void initState() {
     super.initState();
+    Get.put(ShiftController());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_barcodeFocusNode);
     });
@@ -134,7 +135,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final shiftCtrl = Get.put(ShiftController());
+    final shiftCtrl = Get.find<ShiftController>();
 
     return Obx(() {
       if (shiftCtrl.isLoading.value && !shiftCtrl.hasActiveShift.value && shiftCtrl.currentShift.value == null) {
@@ -203,6 +204,52 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ),
       );
+
+      if (shiftCtrl.hasError.value) {
+        return Stack(
+          children: [
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: IgnorePointer(child: posContent),
+            ),
+            Container(color: Colors.black54),
+            Center(
+              child: SizedBox(
+                width: 400,
+                child: DesignTokens.liquidBorderCard(
+                  height: 380,
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.redAccent),
+                      const SizedBox(height: 24),
+                      const Text('فشل الاتصال بالخادم', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 12),
+                      Text('لا يمكن التحقق من حالة الوردية الحالية. يرجى التأكد من تشغيل الخادم والاتصال بالشبكة.', 
+                          textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400], fontSize: 13, height: 1.5)),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: DesignTokens.cardDarkHover,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () => shiftCtrl.retryCheckShift(),
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                          label: const Text('إعادة المحاولة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
 
       if (!shiftCtrl.hasActiveShift.value) {
         return Stack(
@@ -557,19 +604,25 @@ class _PosScreenState extends State<PosScreen> {
             if (_ctrl.quickAccessProducts.isEmpty) {
               return _buildEmptyProducts();
             }
-            return GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 0.8,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                // Adapt columns: aim for ~180px wide cards, minimum 2 columns
+                final crossAxisCount = (constraints.maxWidth / 180).floor().clamp(2, 6);
+                return GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 0.8,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
               itemCount: _ctrl.quickAccessProducts.length,
               itemBuilder: (context, index) {
                 return _ProductCard(
                   product: _ctrl.quickAccessProducts[index],
                   onTap: () => _ctrl.addProductToCart(_ctrl.quickAccessProducts[index]),
+                );
+              },
                 );
               },
             );
@@ -1296,7 +1349,7 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final imageBaseUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api').replaceAll('/api', '');
+    final imageBaseUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api').replaceAll('/api', '');
     return GestureDetector(
       onTap: onTap,
       child: Container(

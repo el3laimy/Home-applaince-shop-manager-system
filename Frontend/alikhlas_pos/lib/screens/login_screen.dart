@@ -6,14 +6,27 @@ import '../controllers/auth_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/design_tokens.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _usernameCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _usernameCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final authCtrl = Get.put(AuthController());
-    final usernameCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
+    final authCtrl = Get.find<AuthController>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -67,7 +80,7 @@ class LoginScreen extends StatelessWidget {
 
                       // Username Input
                       TextField(
-                        controller: usernameCtrl,
+                        controller: _usernameCtrl,
                         decoration: InputDecoration(
                           labelText: 'اسم المستخدم',
                           prefixIcon: const Icon(Icons.person_outline),
@@ -81,11 +94,11 @@ class LoginScreen extends StatelessWidget {
                       
                       // Password Input
                       TextField(
-                        controller: passwordCtrl,
+                        controller: _passwordCtrl,
                         obscureText: true,
                         onSubmitted: (_) {
                           if (!authCtrl.isLoading.value) {
-                            authCtrl.login(usernameCtrl.text, passwordCtrl.text, context);
+                            authCtrl.login(_usernameCtrl.text, _passwordCtrl.text, context);
                           }
                         },
                         decoration: InputDecoration(
@@ -112,7 +125,7 @@ class LoginScreen extends StatelessWidget {
                           ),
                           onPressed: authCtrl.isLoading.value
                               ? null
-                              : () => authCtrl.login(usernameCtrl.text, passwordCtrl.text, context),
+                              : () => authCtrl.login(_usernameCtrl.text, _passwordCtrl.text, context),
                           child: authCtrl.isLoading.value
                               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : const Text('دخول', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

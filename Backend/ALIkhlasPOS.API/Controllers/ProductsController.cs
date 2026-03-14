@@ -71,6 +71,14 @@ public class ProductsController : ControllerBase
             .OrderBy(p => p.Category).ThenBy(p => p.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(p => new
+            {
+                p.Id, p.Name, p.Description, p.Category,
+                p.Price, p.PurchasePrice, p.WholesalePrice,
+                p.StockQuantity, p.MinStockAlert,
+                p.GlobalBarcode, p.InternalBarcode,
+                p.ImageUrl, p.IsActive, p.CreatedAt, p.UpdatedAt
+            })
             .ToListAsync(cancellationToken);
 
         return Ok(new { total, page, pageSize, data = products });
@@ -82,7 +90,14 @@ public class ProductsController : ControllerBase
     {
         var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
         if (product == null) return NotFound();
-        return Ok(product);
+        return Ok(new
+        {
+            product.Id, product.Name, product.Description, product.Category,
+            product.Price, product.PurchasePrice, product.WholesalePrice,
+            product.StockQuantity, product.MinStockAlert,
+            product.GlobalBarcode, product.InternalBarcode,
+            product.ImageUrl, product.IsActive, product.CreatedAt, product.UpdatedAt
+        });
     }
 
     // GET /api/products/barcode/{barcode} — Used by POS Scanner (hits Redis cache first)
@@ -213,7 +228,14 @@ public class ProductsController : ControllerBase
         }
 
         await _productCacheService.SetProductCacheAsync(product, cancellationToken);
-        return Ok(product);
+        return Ok(new
+        {
+            product.Id, product.Name, product.Description, product.Category,
+            product.Price, product.PurchasePrice, product.WholesalePrice,
+            product.StockQuantity, product.MinStockAlert,
+            product.GlobalBarcode, product.InternalBarcode,
+            product.ImageUrl, product.IsActive, product.CreatedAt, product.UpdatedAt
+        });
     }
 
     // PATCH /api/products/{id}/stock — Stock adjustment for manual inventory count
@@ -269,6 +291,11 @@ public class ProductsController : ControllerBase
         var adjustments = await _dbContext.Set<StockAdjustment>()
             .Where(a => a.ProductId == id)
             .OrderByDescending(a => a.CreatedAt)
+            .Select(a => new
+            {
+                a.Id, a.ProductId, a.Type, a.QuantityAdjusted,
+                a.Cost, a.Reason, a.CreatedBy, a.CreatedAt
+            })
             .ToListAsync(cancellationToken);
             
         return Ok(adjustments);

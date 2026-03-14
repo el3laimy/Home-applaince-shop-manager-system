@@ -17,18 +17,15 @@ public class InvoicesController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IInvoiceService _invoiceService;
-    private readonly ALIkhlasPOS.Application.Services.InvoicePdfGenerator _pdfGenerator;
     private readonly IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> _hubContext;
 
     public InvoicesController(
         ApplicationDbContext dbContext, 
         IInvoiceService invoiceService,
-        ALIkhlasPOS.Application.Services.InvoicePdfGenerator pdfGenerator,
         IHubContext<ALIkhlasPOS.API.Hubs.DashboardHub> hubContext)
     {
         _dbContext = dbContext;
         _invoiceService = invoiceService;
-        _pdfGenerator = pdfGenerator;
         _hubContext = hubContext;
     }
 
@@ -104,13 +101,39 @@ public class InvoicesController : ControllerBase
             .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
 
         if (invoice == null) return NotFound();
-        return Ok(invoice);
+
+        // Map to anonymous DTO to prevent JSON circular reference errors
+        var result = new
+        {
+            invoice.Id,
+            invoice.InvoiceNo,
+            invoice.CreatedAt,
+            invoice.Status,
+            invoice.PaymentType,
+            invoice.TotalAmount,
+            invoice.DiscountAmount,
+            invoice.VatAmount,
+            invoice.PaidAmount,
+            invoice.RemainingAmount,
+            invoice.Notes,
+            Customer = invoice.Customer != null ? new { invoice.Customer.Id, invoice.Customer.Name, invoice.Customer.Phone } : null,
+            Items = invoice.Items.Select(item => new
+            {
+                item.Id,
+                item.ProductId,
+                ProductName = item.Product != null ? item.Product.Name : "غير معروف",
+                item.Quantity,
+                item.UnitPrice,
+                item.TotalPrice
+            }).ToList()
+        };
+
+        return Ok(result);
     }
 
     // ── GET /api/invoices/{id}/pdf — Generate PDF receipt ───────────────────
     [HttpGet("{id:guid}/pdf")]
-    [AllowAnonymous] // Might want to secure this depending on architecture, but usually receipts are safe if ID is UUID
-    public async Task<IActionResult> DownloadPdf(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetInvoicePdf(Guid id, [FromServices] ALIkhlasPOS.Application.Services.InvoicePdfGenerator pdfGenerator, CancellationToken cancellationToken)
     {
         var invoice = await _dbContext.Invoices
             .Include(i => i.Customer)
@@ -121,7 +144,7 @@ public class InvoicesController : ControllerBase
 
         try
         {
-            var pdfBytes = _pdfGenerator.GenerateInvoicePdf(invoice);
+            var pdfBytes = pdfGenerator.GenerateInvoicePdf(invoice);
             return File(pdfBytes, "application/pdf", $"Invoice_{invoice.InvoiceNo}.pdf");
         }
         catch (Exception ex)

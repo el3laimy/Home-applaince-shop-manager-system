@@ -249,9 +249,10 @@ class PosController extends GetxController {
 
     try {
       final scannedItems = cartItems.expand((item) =>
-        List.generate(item.quantity, (_) => {
-          'barcode': item.barcode,
-          if (item.customPrice != null) 'customPrice': item.customPrice,
+        List.generate(item.quantity, (_) {
+          final map = <String, dynamic>{'barcode': item.barcode};
+          if (item.customPrice != null) map['customPrice'] = item.customPrice;
+          return map;
         })
       ).toList();
 

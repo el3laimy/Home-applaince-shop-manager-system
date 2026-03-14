@@ -59,10 +59,11 @@ namespace ALIkhlasPOS.IntegrationTests
                 // Seed test admin user
                 if (!db.Users.Any())
                 {
+                    var passwordService = scope.ServiceProvider.GetRequiredService<Application.Interfaces.IPasswordService>();
                     db.Users.Add(new Domain.Entities.User
                     {
                         Username = "admin",
-                        PasswordHash = API.Controllers.AuthController.HashPassword("admin123"),
+                        PasswordHash = passwordService.HashPassword("admin123"),
                         FullName = "مدير النظام الأساسي",
                         Role = "Admin",
                         IsActive = true

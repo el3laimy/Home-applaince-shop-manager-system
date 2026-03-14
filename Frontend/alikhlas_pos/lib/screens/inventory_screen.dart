@@ -30,30 +30,36 @@ class InventoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = Get.put(InventoryController());
     final isDark = true; // Neo-Glass is always dark
-
     return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context, ctrl, isDark),
-              const SizedBox(height: 16),
-              _buildStatsRow(context, ctrl, isDark),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 3, child: _buildInventoryTable(context, ctrl, isDark)),
-                    const SizedBox(width: 20),
-                    SizedBox(width: 320, child: _buildAddProductPanel(context, ctrl, isDark)),
-                  ],
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 950;
+            return Padding(
+              padding: EdgeInsets.all(isNarrow ? 12 : DesignTokens.kPagePadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context, ctrl, isDark),
+                  const SizedBox(height: 16),
+                  _buildStatsRow(context, ctrl, isDark),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: isNarrow
+                        ? _buildInventoryTable(context, ctrl, isDark)
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 3, child: _buildInventoryTable(context, ctrl, isDark)),
+                              const SizedBox(width: 20),
+                              SizedBox(width: 320, child: _buildAddProductPanel(context, ctrl, isDark)),
+                            ],
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -131,14 +137,16 @@ class InventoryScreen extends StatelessWidget {
                child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                 Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                 const SizedBox(height: 2),
-                 Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                   Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 12), overflow: TextOverflow.ellipsis),
+                   const SizedBox(height: 2),
+                   Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white), overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
           ],
         ),
@@ -147,7 +155,7 @@ class InventoryScreen extends StatelessWidget {
   }
 
   Widget _buildInventoryTable(BuildContext context, InventoryController ctrl, bool isDark) {
-    final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api').replaceAll('/api', '');
+    final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api').replaceAll('/api', '');
     return Container(
       decoration: DesignTokens.neoGlassDecoration(borderRadius: DesignTokens.kNeoCardRadius),
       child: Column(

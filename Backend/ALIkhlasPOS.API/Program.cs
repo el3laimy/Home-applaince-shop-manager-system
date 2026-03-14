@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using ALIkhlasPOS.Application.Interfaces;
 using ALIkhlasPOS.Application.Services;
 using ALIkhlasPOS.Domain.Entities;
@@ -6,6 +7,7 @@ using ALIkhlasPOS.Infrastructure.Data;
 using ALIkhlasPOS.Infrastructure.Services;
 using ALIkhlasPOS.API.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -66,6 +68,7 @@ builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.Accounting.IAccoun
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IInvoiceService, ALIkhlasPOS.Application.Services.InvoiceService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IPurchaseService, ALIkhlasPOS.Application.Services.PurchaseService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IReturnInvoiceService, ALIkhlasPOS.Application.Services.ReturnInvoiceService>();
+builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IBarcodeService, BarcodeService>();
 builder.Services.AddScoped<IProductCacheService, ProductCacheService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Services.InvoicePdfGenerator>();
@@ -83,6 +86,29 @@ builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.DatabaseBackupService>
 // Learn more about configuring OpenAPI
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
+
+// ── CORS Policy ──────────────────────────────────────────────────────────
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// ── Rate Limiting (login brute-force protection) ─────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("login", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+    });
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
 
 var app = builder.Build();
 
@@ -102,16 +128,20 @@ if (app.Environment.IsDevelopment())
     // Seed default admin user if none exists (password hashed with BCrypt)
     if (!db.Users.Any())
     {
+        var seedPasswordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
         db.Users.Add(new User
         {
             Username = "admin",
-            PasswordHash = ALIkhlasPOS.API.Controllers.AuthController.HashPassword("admin123"),
+            PasswordHash = seedPasswordService.HashPassword("admin123"),
             FullName = "مدير النظام الأساسي",
             Role = "Admin",
             IsActive = true
         });
         db.SaveChanges();
     }
+
+    // Seed the foundational Chart of Accounts for the ERP
+    await ALIkhlasPOS.Infrastructure.Data.AccountSeeder.SeedChartOfAccountsAsync(scope.ServiceProvider);
     
     // Optional: Preload Cache on Startup
     var cacheService = scope.ServiceProvider.GetRequiredService<IProductCacheService>();
@@ -119,6 +149,12 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Enable CORS
+app.UseCors();
+
+// Enable Rate Limiting
+app.UseRateLimiter();
 
 // Serve static files (product images stored in wwwroot/uploads/)
 app.UseStaticFiles();

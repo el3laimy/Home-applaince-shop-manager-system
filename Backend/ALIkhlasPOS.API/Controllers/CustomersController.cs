@@ -1,5 +1,6 @@
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -12,12 +13,12 @@ namespace ALIkhlasPOS.API.Controllers;
 public class CustomersController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
-    private readonly ALIkhlasPOS.Application.Services.InvoicePdfGenerator _pdfGenerator;
+    private readonly ILogger<CustomersController> _logger; // Added
 
-    public CustomersController(ApplicationDbContext dbContext, ALIkhlasPOS.Application.Services.InvoicePdfGenerator pdfGenerator)
+    public CustomersController(ApplicationDbContext dbContext, ILogger<CustomersController> logger) // Modified
     {
         _dbContext = dbContext;
-        _pdfGenerator = pdfGenerator;
+        _logger = logger; // Added
     }
 
     public record CreateCustomerRequest(string Name, string? Phone, string? Address, string? Notes);
@@ -26,6 +27,7 @@ public class CustomersController : ControllerBase
 
     // GET /api/customers
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? search = null,
         [FromQuery] int page = 1,
@@ -49,16 +51,39 @@ public class CustomersController : ControllerBase
         var customers = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(c => new
+            {
+                c.Id,
+                c.Name,
+                c.Phone,
+                c.Address,
+                c.Notes,
+                c.TotalPurchases,
+                c.TotalPaid,
+                c.CreatedAt
+            })
             .ToListAsync(cancellationToken);
 
         return Ok(new { total, page, pageSize, data = customers });
     }
 
-    // GET /api/customers/{id}
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var customer = await _dbContext.Customers.FindAsync(new object[] { id }, cancellationToken);
+        var customer = await _dbContext.Customers
+            .Where(c => c.Id == id)
+            .Select(c => new
+            {
+                c.Id,
+                c.Name,
+                c.Phone,
+                c.Address,
+                c.Notes,
+                c.TotalPurchases,
+                c.TotalPaid,
+                c.CreatedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
         if (customer == null) return NotFound();
         return Ok(customer);
     }
@@ -132,7 +157,7 @@ public class CustomersController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        Console.WriteLine($"[DEBUG] Customer {id}: Found {invoices.Count} invoices");
+        _logger.LogDebug("Customer {CustomerId}: Found {InvoiceCount} invoices", id, invoices.Count);
 
         var invoiceIds = invoices.Select(i => i.Id).ToList();
 
@@ -173,13 +198,15 @@ public class CustomersController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        // 4. Combine and Sort Timeline
-        var timeline = new List<object>();
-        timeline.AddRange(invoices);
-        timeline.AddRange(installments);
-        timeline.AddRange(returnInvoices);
+        // Sort all timeline entries by date (strongly-typed)
+        var allEntries = invoices.Select(i => new { i.Date, Entry = (object)i })
+            .Concat(installments.Select(i => new { i.Date, Entry = (object)i }))
+            .Concat(returnInvoices.Select(r => new { r.Date, Entry = (object)r }))
+            .OrderByDescending(x => x.Date)
+            .Select(x => x.Entry)
+            .ToList();
 
-        timeline = timeline.OrderByDescending(t => (DateTime)((dynamic)t).Date).ToList();
+        var timeline = allEntries;
 
         // Calculate Totals
         var totalPurchases = invoices.Sum(i => i.TotalAmount);
@@ -205,7 +232,7 @@ public class CustomersController : ControllerBase
 
     // GET /api/customers/{id}/statement/pdf — Export Statement as PDF
     [HttpGet("{id:guid}/statement/pdf")]
-    public async Task<IActionResult> GetStatementPdf(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetStatementPdf(Guid id, [FromServices] ALIkhlasPOS.Application.Services.InvoicePdfGenerator pdfGenerator, CancellationToken cancellationToken)
     {
         // Re-use the data fetching logic from GetStatement
         var customer = await _dbContext.Customers.FindAsync(new object[] { id }, cancellationToken);
@@ -232,7 +259,7 @@ public class CustomersController : ControllerBase
 
         try
         {
-            var pdfBytes = _pdfGenerator.GenerateCustomerStatementPdf(customer, timeline);
+            var pdfBytes = pdfGenerator.GenerateCustomerStatementPdf(customer, timeline);
             return File(pdfBytes, "application/pdf", $"Statement_{customer.Name.Replace(" ", "_")}.pdf");
         }
         catch (Exception ex)

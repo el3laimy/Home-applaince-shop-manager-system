@@ -46,7 +46,8 @@ class CustomerController extends GetxController {
             .map((c) => CustomerModel.fromJson(c as Map<String, dynamic>))
             .toList(),
       );
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('Error fetching customers: $e\n$stack');
     } finally {
       isLoading.value = false;
     }

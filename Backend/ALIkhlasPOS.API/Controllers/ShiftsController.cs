@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ALIkhlasPOS.Infrastructure.Data;
 using ALIkhlasPOS.Domain.Entities;
+using ALIkhlasPOS.Application.Interfaces.Accounting;
 using System.Security.Claims;
 
 namespace ALIkhlasPOS.API.Controllers
@@ -13,10 +14,12 @@ namespace ALIkhlasPOS.API.Controllers
     public class ShiftsController : ControllerBase
     {
         private readonly ApplicationDbContext _dbContext;
+        private readonly IAccountingService _accountingService;
 
-        public ShiftsController(ApplicationDbContext dbContext)
+        public ShiftsController(ApplicationDbContext dbContext, IAccountingService accountingService)
         {
             _dbContext = dbContext;
+            _accountingService = accountingService;
         }
 
         private Guid GetCurrentUserId()
@@ -41,7 +44,11 @@ namespace ALIkhlasPOS.API.Controllers
                 if (activeShift == null)
                     return Ok(new { hasActiveShift = false });
 
-                return Ok(new { hasActiveShift = true, shift = activeShift });
+                return Ok(new { hasActiveShift = true, shift = new {
+                    activeShift.Id, activeShift.StartTime, activeShift.OpeningCash,
+                    activeShift.ExpectedCash, activeShift.Status, activeShift.TotalSales,
+                    activeShift.TotalCashIn, activeShift.TotalCashOut
+                } });
             }
             catch (Exception ex)
             {
@@ -87,7 +94,9 @@ namespace ALIkhlasPOS.API.Controllers
                 _dbContext.Shifts.Add(shift);
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
-                return Ok(new { message = "تم فتح الوردية بنجاح", shift });
+                return Ok(new { message = "تم فتح الوردية بنجاح", shift = new {
+                    shift.Id, shift.StartTime, shift.OpeningCash, shift.Status
+                } });
             }
             catch (Exception ex)
             {
@@ -134,23 +143,25 @@ namespace ALIkhlasPOS.API.Controllers
                 shift.TotalCashIn += shiftInstallments.Sum(i => i.Amount);
 
                 // 3. Expenses (only those created in this shift by this cashier)
-                var cashierIdStr = userId.ToString();
+                // NOTE: Expenses.CreatedBy stores username (from User.Identity.Name), not userId.
+                var cashierUsername = User.Identity?.Name ?? "";
                 var shiftExpenses = await _dbContext.Expenses
-                    .Where(e => e.Date >= shift.StartTime && e.CreatedBy == cashierIdStr)
+                    .Where(e => e.Date >= shift.StartTime && e.CreatedBy == cashierUsername)
                     .SumAsync(e => e.Amount, cancellationToken);
                 
                 shift.TotalCashOut += shiftExpenses;
 
-                // 4. Return Invoices (Cash Refunds) 
+                // 4. Return Invoices (Cash Refunds) — filter by CashierId on original invoice
                 var shiftReturns = await _dbContext.ReturnInvoices
-                    .Where(r => r.CreatedAt >= shift.StartTime && r.CreatedBy == cashierIdStr)
+                    .Include(r => r.OriginalInvoice)
+                    .Where(r => r.CreatedAt >= shift.StartTime && r.OriginalInvoice != null && r.OriginalInvoice.CashierId == userId)
                     .SumAsync(r => r.RefundAmount, cancellationToken);
                 
                 shift.TotalCashOut += shiftReturns;
 
                 // Optional: Purchasing (if Cashier pays suppliers from drawer)
                 var shiftPurchases = await _dbContext.PurchaseInvoices
-                    .Where(p => p.CreatedAt >= shift.StartTime && p.CreatedBy == cashierIdStr) // Assuming cash
+                    .Where(p => p.CreatedAt >= shift.StartTime && p.CreatedBy == cashierUsername)
                     .SumAsync(p => p.PaidAmount, cancellationToken);
                 
                 shift.TotalCashOut += shiftPurchases;
@@ -167,9 +178,15 @@ namespace ALIkhlasPOS.API.Controllers
                 // Save Z-Report
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 
-                // Note: Depending on accounting setup, you might want to automatically generate a JournalEntry for the difference (Shortage/Overage). For now, it stays in the Shift report.
+                // Record the Cash Shortage or Overage Journal Entry
+                await _accountingService.RecordShiftClosureAsync(shift, cashierUsername);
 
-                return Ok(new { message = "تم الإقفال بنجاح وإصدار تقرير Z", shift });
+                return Ok(new { message = "تم الإقفال بنجاح وإصدار تقرير Z", shift = new {
+                    shift.Id, shift.StartTime, shift.EndTime, shift.OpeningCash,
+                    shift.TotalSales, shift.TotalCashIn, shift.TotalCashOut,
+                    shift.ExpectedCash, shift.ActualCash, shift.Difference,
+                    shift.Status, shift.Notes
+                } });
             }
             catch (Exception ex)
             {

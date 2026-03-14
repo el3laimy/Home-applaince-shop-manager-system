@@ -113,7 +113,16 @@ namespace ALIkhlasPOS.API.Controllers.ERP
             return Ok(new
             {
                 Total = expenses.Sum(e => e.Amount),
-                Data = expenses
+                Data = expenses.Select(e => new
+                {
+                    e.Id,
+                    e.Amount,
+                    e.Description,
+                    e.Date,
+                    e.CreatedBy,
+                    e.CategoryId,
+                    CategoryName = e.Category != null ? e.Category.Name : "غير مصنف"
+                })
             });
         }
 
@@ -247,20 +256,29 @@ namespace ALIkhlasPOS.API.Controllers.ERP
         private async Task<Guid> GetSystemAccountIdAsync(string systemCode)
         {
             var acc = await _dbContext.Set<Account>().FirstOrDefaultAsync(a => a.Code == systemCode);
-            if (acc == null)
+            if (acc != null) return acc.Id;
+
+            // Account doesn't exist — create it with race-condition protection
+            acc = new Account
             {
-                acc = new Account
+                Code = systemCode,
+                Name = systemCode switch
                 {
-                    Code = systemCode,
-                    Name = systemCode switch
-                    {
-                        "EQUITY_CAPITAL" => "رأس المال",
-                        _ => $"حساب نظام - {systemCode}"
-                    },
-                    Type = systemCode == "EQUITY_CAPITAL" ? AccountType.Equity : AccountType.Asset
-                };
-                _dbContext.Set<Account>().Add(acc);
+                    "EQUITY_CAPITAL" => "رأس المال",
+                    _ => $"حساب نظام - {systemCode}"
+                },
+                Type = systemCode == "EQUITY_CAPITAL" ? AccountType.Equity : AccountType.Asset
+            };
+            _dbContext.Set<Account>().Add(acc);
+            try
+            {
                 await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Another thread created the account — re-fetch it
+                _dbContext.Entry(acc).State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                acc = await _dbContext.Set<Account>().FirstAsync(a => a.Code == systemCode);
             }
             return acc.Id;
         }

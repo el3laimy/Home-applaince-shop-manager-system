@@ -129,11 +129,19 @@ public class ExpensesController : ControllerBase
     public async Task<IActionResult> UploadReceipt(IFormFile file, CancellationToken ct)
     {
         if (file == null || file.Length == 0) return BadRequest("الملف غير صالح.");
-        
+
+        // Security: only allow image and PDF file types
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".webp" };
+        var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(fileExtension))
+            return BadRequest(new { message = $"نوع الملف غير مسموح. الأنواع المسموحة: {string.Join(", ", allowedExtensions)}" });
+
+        if (file.Length > 5 * 1024 * 1024) // 5MB max
+            return BadRequest(new { message = "حجم الملف يتجاوز الحد المسموح (5 ميجابايت)." });
+
         var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "expenses");
         if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
         
-        var fileExtension = Path.GetExtension(file.FileName);
         var fileName = $"{Guid.NewGuid()}{fileExtension}";
         var filePath = Path.Combine(uploadsFolder, fileName);
         
