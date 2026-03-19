@@ -15,47 +15,85 @@ public class BarcodeService : IBarcodeService
     }
 
     /// <summary>
-    /// Generates a sequential internal barcode in the format: 200-YYYY-NNNNN
-    /// Example: 200-2026-00001, 200-2026-00002, ...
-    /// Prefix 200 = internal store code
-    /// YYYY    = current year (enables per-year sequences)
-    /// NNNNN   = 5-digit sequence (up to 99,999 products/year)
+    /// Generates a sequential internal barcode using a PostgreSQL sequence.
+    /// Format: 200-YYYY-NNNNN — atomic and race-condition safe.
     /// </summary>
     public async Task<string> GenerateInternalBarcodeAsync(CancellationToken cancellationToken = default)
     {
         var year = DateTime.UtcNow.Year;
-        var prefix = $"200-{year}-";
 
-        // Find the highest existing sequence number for this year
-        var lastBarcode = await _dbContext.Set<Product>()
-            .Where(p => p.InternalBarcode != null && p.InternalBarcode.StartsWith(prefix))
-            .Select(p => p.InternalBarcode!)
-            .OrderByDescending(b => b)
-            .FirstOrDefaultAsync(cancellationToken);
+        // Atomic: PostgreSQL sequence guarantees unique values across concurrent calls
+        // Uses EF Core's Database facade — automatically participates in active transactions
+        var result = await _dbContext.Database
+            .SqlQueryRaw<long>("SELECT nextval('internal_barcode_seq') AS \"Value\"")
+            .FirstAsync(cancellationToken);
 
-        int nextSeq = 1;
-        if (lastBarcode != null)
-        {
-            var parts = lastBarcode.Split('-');
-            if (parts.Length == 3 && int.TryParse(parts[2], out int lastSeq))
-                nextSeq = lastSeq + 1;
-        }
-
-        return $"{prefix}{nextSeq:D5}";
+        return $"200-{year}-{result:D5}";
     }
 
+    /// <summary>
+    /// Validates barcode format: EAN-13, EAN-8, UPC-A, or internal 200-YYYY-NNNNN.
+    /// </summary>
     public bool ValidateBarcodeFormat(string barcode)
     {
         if (string.IsNullOrWhiteSpace(barcode))
             return false;
 
-        // EAN-13 format: 13 digits
-        var ean13Regex = new Regex(@"^\d{13}$");
-        // New sequential internal format: 200-YYYY-NNNNN
-        var sequentialRegex = new Regex(@"^200-\d{4}-\d{5}$");
-        // Legacy internal Code 128 format: starts with 200 + 7 digits
-        var legacyRegex = new Regex(@"^200\d{7}$");
+        // EAN-13: 13 digits
+        if (Regex.IsMatch(barcode, @"^\d{13}$"))
+            return true;
 
-        return ean13Regex.IsMatch(barcode) || sequentialRegex.IsMatch(barcode) || legacyRegex.IsMatch(barcode);
+        // EAN-8: 8 digits
+        if (Regex.IsMatch(barcode, @"^\d{8}$"))
+            return true;
+
+        // UPC-A: 12 digits
+        if (Regex.IsMatch(barcode, @"^\d{12}$"))
+            return true;
+
+        // Internal sequential: 200-YYYY-NNNNN
+        if (Regex.IsMatch(barcode, @"^200-\d{4}-\d{5}$"))
+            return true;
+
+        // Legacy internal Code 128: starts with 200 + 7 digits
+        if (Regex.IsMatch(barcode, @"^200\d{7}$"))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Validates the EAN-13 check digit using the Modulo 10 (GS1) algorithm.
+    /// </summary>
+    public bool ValidateEAN13Checksum(string barcode)
+    {
+        if (string.IsNullOrWhiteSpace(barcode) || barcode.Length != 13 || !barcode.All(char.IsDigit))
+            return false;
+
+        var first12 = barcode[..12];
+        var expectedCheck = CalculateEAN13Checksum(first12);
+        return barcode == expectedCheck;
+    }
+
+    /// <summary>
+    /// Calculates the EAN-13 check digit for the first 12 digits.
+    /// Returns the full 13-digit barcode with the correct check digit.
+    /// Algorithm: GS1 Modulo 10 — odd positions ×1, even positions ×3.
+    /// </summary>
+    public string CalculateEAN13Checksum(string first12Digits)
+    {
+        if (string.IsNullOrWhiteSpace(first12Digits) || first12Digits.Length != 12 || !first12Digits.All(char.IsDigit))
+            throw new ArgumentException("يجب أن يتكون الإدخال من 12 رقماً بالضبط.", nameof(first12Digits));
+
+        int sum = 0;
+        for (int i = 0; i < 12; i++)
+        {
+            int digit = first12Digits[i] - '0';
+            // Positions: 1-indexed — odd ×1, even ×3
+            sum += (i % 2 == 0) ? digit : digit * 3;
+        }
+
+        int checkDigit = (10 - (sum % 10)) % 10;
+        return first12Digits + checkDigit;
     }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 class ShiftController extends GetxController {
   var isLoading = false.obs;
   var hasActiveShift = false.obs;
+  var hasError = false.obs; // Tracks if the API check failed
   var currentShift = Rxn<Shift>();
   var shiftHistory = <Shift>[].obs;
 
@@ -15,9 +16,15 @@ class ShiftController extends GetxController {
     checkCurrentShift();
   }
 
+  Future<void> retryCheckShift() async {
+    hasError.value = false;
+    await checkCurrentShift();
+  }
+
   Future<void> checkCurrentShift() async {
     try {
       isLoading.value = true;
+      hasError.value = false;
       final response = await ApiService.get('shifts/current');
       
       hasActiveShift.value = response['hasActiveShift'] ?? false;
@@ -29,6 +36,7 @@ class ShiftController extends GetxController {
       }
     } catch (e) {
       debugPrint('Error checking shift: $e');
+      hasError.value = true; // Mark as error instead of assuming no shift!
       hasActiveShift.value = false;
       currentShift.value = null;
     } finally {

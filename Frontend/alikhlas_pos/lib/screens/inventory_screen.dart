@@ -30,30 +30,36 @@ class InventoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = Get.put(InventoryController());
     final isDark = true; // Neo-Glass is always dark
-
     return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context, ctrl, isDark),
-              const SizedBox(height: 16),
-              _buildStatsRow(context, ctrl, isDark),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 3, child: _buildInventoryTable(context, ctrl, isDark)),
-                    const SizedBox(width: 20),
-                    SizedBox(width: 320, child: _buildAddProductPanel(context, ctrl, isDark)),
-                  ],
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 950;
+            return Padding(
+              padding: EdgeInsets.all(isNarrow ? 12 : DesignTokens.kPagePadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context, ctrl, isDark),
+                  const SizedBox(height: 16),
+                  _buildStatsRow(context, ctrl, isDark),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: isNarrow
+                        ? _buildInventoryTable(context, ctrl, isDark)
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 3, child: _buildInventoryTable(context, ctrl, isDark)),
+                              const SizedBox(width: 20),
+                              SizedBox(width: 320, child: _buildAddProductPanel(context, ctrl, isDark)),
+                            ],
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -131,14 +137,16 @@ class InventoryScreen extends StatelessWidget {
                child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                 Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                 const SizedBox(height: 2),
-                 Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                   Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 12), overflow: TextOverflow.ellipsis),
+                   const SizedBox(height: 2),
+                   Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white), overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
           ],
         ),
@@ -147,7 +155,7 @@ class InventoryScreen extends StatelessWidget {
   }
 
   Widget _buildInventoryTable(BuildContext context, InventoryController ctrl, bool isDark) {
-    final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api').replaceAll('/api', '');
+    final hostUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api').replaceAll('/api', '');
     return Container(
       decoration: DesignTokens.neoGlassDecoration(borderRadius: DesignTokens.kNeoCardRadius),
       child: Column(
@@ -198,6 +206,39 @@ class InventoryScreen extends StatelessWidget {
               ],
             ),
           ),
+          // ── Batch Selection Toolbar ─────────────────────────
+          Obx(() {
+            if (ctrl.selectedIds.isEmpty) return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: DesignTokens.neonCyan.withAlpha(15),
+                border: Border(
+                  bottom: BorderSide(color: DesignTokens.neonCyan.withAlpha(40)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: DesignTokens.neonCyan, size: 18),
+                  const SizedBox(width: 8),
+                  Text('${ctrl.selectedIds.length} منتج محدد', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: ctrl.clearSelection,
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('إلغاء التحديد', style: TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: () => _showBatchPrintDialog(context, ctrl),
+                    icon: const Icon(Icons.print, size: 16),
+                    label: const Text('طباعة ملصقات المحدد', style: TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(backgroundColor: DesignTokens.neonCyan, foregroundColor: Colors.black),
+                  ),
+                ],
+              ),
+            );
+          }),
           // Table Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -207,6 +248,23 @@ class InventoryScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
+                // Select All checkbox
+                Obx(() => SizedBox(
+                  width: 32,
+                  child: Checkbox(
+                    value: ctrl.products.isNotEmpty && ctrl.selectedIds.length == ctrl.products.length,
+                    tristate: true,
+                    onChanged: (_) {
+                      if (ctrl.selectedIds.length == ctrl.products.length) {
+                        ctrl.clearSelection();
+                      } else {
+                        ctrl.selectAll();
+                      }
+                    },
+                    activeColor: DesignTokens.neonCyan,
+                    side: BorderSide(color: Colors.grey[600]!),
+                  ),
+                )),
                 const SizedBox(width: 50), // image col
                 const SizedBox(width: 12),
                 Expanded(flex: 2, child: Text('رمز المنتج', style: _tableHeaderStyle(isDark))),
@@ -239,6 +297,16 @@ class InventoryScreen extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
+                        // Selection checkbox
+                        Obx(() => SizedBox(
+                          width: 32,
+                          child: Checkbox(
+                            value: ctrl.isSelected(p.id),
+                            onChanged: (_) => ctrl.toggleSelect(p.id),
+                            activeColor: DesignTokens.neonCyan,
+                            side: BorderSide(color: Colors.grey[700]!),
+                          ),
+                        )),
                         // Image
                         Container(
                           width: 42, height: 42,
@@ -368,6 +436,125 @@ class InventoryScreen extends StatelessWidget {
     fontWeight: FontWeight.w700, fontSize: 12,
     color: isDark ? Colors.grey[400] : Colors.grey[600],
   );
+
+  // ── Batch Print Dialog ──────────────────────────────────────────────────
+  void _showBatchPrintDialog(BuildContext context, InventoryController ctrl) {
+    final selectedProducts = ctrl.selectedProducts;
+    if (selectedProducts.isEmpty) return;
+
+    final quantities = <String, int>{};
+    for (final p in selectedProducts) {
+      quantities[p.id] = 1;
+    }
+    final qtyMap = quantities.obs;
+    final selectedSize = LabelSize.size50x25.name.obs;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.print, color: DesignTokens.neonCyan),
+            const SizedBox(width: 8),
+            Text('طباعة ملصقات (${selectedProducts.length} منتج)'),
+          ],
+        ),
+        content: SizedBox(
+          width: 450,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Label size selector
+              const Text('حجم الملصق:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              Obx(() => Row(
+                children: LabelSize.all.map((size) {
+                  final isActive = selectedSize.value == size.name;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        label: Text('${size.name}mm', style: TextStyle(fontSize: 11, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+                        selected: isActive,
+                        onSelected: (_) => selectedSize.value = size.name,
+                        selectedColor: DesignTokens.neonCyan.withAlpha(40),
+                        checkmarkColor: DesignTokens.neonCyan,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              )),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              // Product list with quantities
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: selectedProducts.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final p = selectedProducts[i];
+                    return Obx(() => ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(p.name, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                        p.globalBarcode.isNotEmpty ? p.globalBarcode : (p.internalBarcode ?? '-'),
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, size: 20),
+                            onPressed: () {
+                              final current = qtyMap[p.id] ?? 1;
+                              if (current > 1) qtyMap[p.id] = current - 1;
+                            },
+                          ),
+                          Text('${qtyMap[p.id]}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, size: 20),
+                            onPressed: () {
+                              final current = qtyMap[p.id] ?? 1;
+                              if (current < 100) qtyMap[p.id] = current + 1;
+                            },
+                          ),
+                        ],
+                      ),
+                    ));
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Total labels count
+              Obx(() {
+                final total = qtyMap.values.fold(0, (sum, v) => sum + v);
+                return Text('إجمالي الملصقات: $total ملصق', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13));
+              }),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton.icon(
+            icon: const Icon(Icons.print),
+            label: const Text('طباعة الآن'),
+            style: FilledButton.styleFrom(backgroundColor: DesignTokens.neonCyan, foregroundColor: Colors.black),
+            onPressed: () {
+              final labelSize = LabelSize.fromName(selectedSize.value);
+              BarcodePrintService.printBatchLabels(selectedProducts, qtyMap, labelSize: labelSize);
+              Navigator.pop(ctx);
+              ctrl.clearSelection();
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showPrintLabelDialog(BuildContext context, ProductModel p, bool isDark) {
      final qtyCtrl = TextEditingController(text: '1');

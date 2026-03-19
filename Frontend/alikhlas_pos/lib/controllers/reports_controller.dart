@@ -97,7 +97,7 @@ class ReportsController extends GetxController {
       final sd = startDate.value.toIso8601String().split('T')[0];
       final ed = endDate.value.add(const Duration(days: 1)).toIso8601String().split('T')[0];
       
-      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api';
+      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api';
       final url = Uri.parse('$baseUrl/reports/sales/export?startDate=$sd&endDate=$ed');
       
       final token = (await SharedPreferences.getInstance()).getString('auth_token');

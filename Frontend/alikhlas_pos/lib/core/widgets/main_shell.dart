@@ -23,6 +23,7 @@ import '../../screens/users_screen.dart';
 import '../../screens/installments_screen.dart';
 import '../../screens/stock_adjustments_screen.dart';
 import '../../screens/expenses_screen.dart';
+import '../../screens/audit_trail_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -51,6 +52,7 @@ class _MainShellState extends State<MainShell> {
     const SettingsScreen(), // 12
     const UsersScreen(), // 13 — Admin only
     const InstallmentsScreen(), // 14 — Admin or Manager only
+    const AuditTrailScreen(), // 15 — Admin only
   ];
 
   final List<_NavItem> _coreNavItems = [
@@ -72,14 +74,13 @@ class _MainShellState extends State<MainShell> {
 
   static const _adminNavItem = _NavItem(13, 'المستخدمون', Icons.manage_accounts_rounded, Colors.purple);
   static const _installmentsNavItem = _NavItem(14, 'الأقساط', Icons.payments_rounded, Colors.deepOrange);
+  static const _auditTrailNavItem = _NavItem(15, 'سجل المراجعة', Icons.history_rounded, Color(0xFFFF9800));
 
   @override
   Widget build(BuildContext context) {
     final authCtrl = Get.find<AuthController>();
     final themeCtrl = Get.put(ThemeController());
     final notifCtrl = Get.put(NotificationsController());
-
-    final sidebarWidth = _sidebarExpanded ? 260.0 : 72.0;
 
     final isAdmin = authCtrl.currentUser.value?.role == 'Admin';
     final isManager = authCtrl.currentUser.value?.role == 'Manager';
@@ -90,11 +91,19 @@ class _MainShellState extends State<MainShell> {
       if (isAdmin || isManager) _reportsNavItem,
       if (isAdmin) _settingsNavItem,
       if (isAdmin) _adminNavItem,
-      if (isAdmin || isManager) _installmentsNavItem
+      if (isAdmin || isManager) _installmentsNavItem,
+      if (isAdmin) _auditTrailNavItem,
     ];
 
     return Scaffold(
-      body: Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Auto-collapse sidebar on narrow windows
+          final isWindowNarrow = constraints.maxWidth < 900;
+          final effectiveExpanded = isWindowNarrow ? false : _sidebarExpanded;
+          final sidebarWidth = effectiveExpanded ? 260.0 : 72.0;
+
+          return Row(
         children: [
           // ── Neo-Glass Sidebar ─────────────────────────────────────────────
           RepaintBoundary(
@@ -131,7 +140,7 @@ class _MainShellState extends State<MainShell> {
                         // ── Logo Header ─────────────────────────────────
                         Padding(
                           padding: EdgeInsets.symmetric(
-                            horizontal: _sidebarExpanded ? 20 : 12,
+                            horizontal: effectiveExpanded ? 20 : 12,
                             vertical: 20,
                           ),
                           child: Row(
@@ -156,7 +165,7 @@ class _MainShellState extends State<MainShell> {
                                 ),
                                 child: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 22),
                               ),
-                              if (_sidebarExpanded) ...[
+                              if (effectiveExpanded) ...[
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DesignTokens.holographicText(
@@ -166,7 +175,7 @@ class _MainShellState extends State<MainShell> {
                                 ),
                               ],
                               // Notifications Bell
-                              if (_sidebarExpanded)
+                              if (effectiveExpanded)
                                 Obx(() {
                                   final count = notifCtrl.unreadCount.value;
                                   return Stack(
@@ -205,23 +214,24 @@ class _MainShellState extends State<MainShell> {
                                   );
                                 }),
                               // Theme toggle
-                              if (_sidebarExpanded)
+                              if (effectiveExpanded)
                                 Obx(() => IconButton(
                                   icon: Icon(themeCtrl.icon, size: 18, color: Colors.grey[500]),
                                   onPressed: themeCtrl.cycle,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
                                 )),
-                              IconButton(
-                                icon: Icon(
-                                  _sidebarExpanded ? Icons.chevron_right : Icons.chevron_left,
-                                  color: Colors.grey[500],
-                                  size: 18,
+                              if (!isWindowNarrow)
+                                IconButton(
+                                  icon: Icon(
+                                    _sidebarExpanded ? Icons.chevron_right : Icons.chevron_left,
+                                    color: Colors.grey[500],
+                                    size: 18,
+                                  ),
+                                  onPressed: () => setState(() => _sidebarExpanded = !_sidebarExpanded),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
                                 ),
-                                onPressed: () => setState(() => _sidebarExpanded = !_sidebarExpanded),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
                             ],
                           ),
                         ).animate().fade(),
@@ -243,7 +253,7 @@ class _MainShellState extends State<MainShell> {
                               final isSelected = _selectedIndex == item.index;
 
                               return Tooltip(
-                                message: _sidebarExpanded ? '' : item.label,
+                                message: effectiveExpanded ? '' : item.label,
                                 preferBelow: false,
                                 child: AnimatedContainer(
                                   duration: DesignTokens.kAnimDuration,
@@ -270,10 +280,10 @@ class _MainShellState extends State<MainShell> {
                                       child: Padding(
                                         padding: EdgeInsets.symmetric(
                                           vertical: 12,
-                                          horizontal: _sidebarExpanded ? 16 : 0,
+                                          horizontal: effectiveExpanded ? 16 : 0,
                                         ),
                                         child: Row(
-                                          mainAxisAlignment: _sidebarExpanded
+                                          mainAxisAlignment: effectiveExpanded
                                               ? MainAxisAlignment.start
                                               : MainAxisAlignment.center,
                                           children: [
@@ -282,7 +292,7 @@ class _MainShellState extends State<MainShell> {
                                                     ? DesignTokens.neonCyan
                                                     : Colors.grey[500],
                                                 size: 21),
-                                            if (_sidebarExpanded) ...[
+                                            if (effectiveExpanded) ...[
                                               const SizedBox(width: 14),
                                               Expanded(
                                                 child: Text(
@@ -320,16 +330,16 @@ class _MainShellState extends State<MainShell> {
                         Obx(() {
                           final user = authCtrl.currentUser.value;
                           return Padding(
-                            padding: EdgeInsets.all(_sidebarExpanded ? 16 : 8),
+                            padding: EdgeInsets.all(effectiveExpanded ? 16 : 8),
                             child: Container(
-                              padding: EdgeInsets.all(_sidebarExpanded ? 14 : 10),
+                              padding: EdgeInsets.all(effectiveExpanded ? 14 : 10),
                               decoration: BoxDecoration(
                                 color: Colors.white.withAlpha(13),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: Colors.white.withAlpha(13)),
                               ),
                               child: Row(
-                                mainAxisAlignment: _sidebarExpanded
+                                mainAxisAlignment: effectiveExpanded
                                     ? MainAxisAlignment.start
                                     : MainAxisAlignment.center,
                                 children: [
@@ -349,7 +359,7 @@ class _MainShellState extends State<MainShell> {
                                     ),
                                     child: const Icon(Icons.person, color: Colors.white, size: 18),
                                   ),
-                                  if (_sidebarExpanded) ...[
+                                  if (effectiveExpanded) ...[
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
@@ -423,6 +433,8 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
         ],
+          );
+        },
       ),
     );
   }

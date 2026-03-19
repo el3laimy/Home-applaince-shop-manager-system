@@ -86,9 +86,9 @@ public class ApplicationDbContext : DbContext
             .HasIndex(p => p.GlobalBarcode)
             .IsUnique()
             .HasFilter("\"GlobalBarcode\" IS NOT NULL");
-        modelBuilder.Entity<Product>().Property(p => p.Price).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Product>().Property(p => p.PurchasePrice).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Product>().Property(p => p.WholesalePrice).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<Product>().Property(p => p.Price).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Product>().Property(p => p.PurchasePrice).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Product>().Property(p => p.WholesalePrice).HasColumnType("numeric(18,4)");
 
         // --- Bundle ---
         modelBuilder.Entity<Bundle>()
@@ -97,23 +97,23 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Bundle>()
             .HasOne(b => b.SubProduct).WithMany()
             .HasForeignKey(b => b.SubProductId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<Bundle>().Property(b => b.DiscountAmount).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<Bundle>().Property(b => b.DiscountAmount).HasColumnType("numeric(18,4)");
 
         // --- ProductUnit ---
         modelBuilder.Entity<ProductUnit>()
             .HasOne(u => u.Product).WithMany()
             .HasForeignKey(u => u.ProductId).OnDelete(DeleteBehavior.Cascade);
-        modelBuilder.Entity<ProductUnit>().Property(u => u.UnitPrice).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<ProductUnit>().Property(u => u.UnitPrice).HasColumnType("numeric(18,4)");
 
         // --- Invoice (updated with new financial fields) ---
-        modelBuilder.Entity<Invoice>().Property(i => i.SubTotal).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Invoice>().Property(i => i.TotalAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Invoice>().Property(i => i.DiscountAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Invoice>().Property(i => i.VatRate).HasColumnType("numeric(5,2)");
-        modelBuilder.Entity<Invoice>().Property(i => i.VatAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Invoice>().Property(i => i.PaidAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Invoice>().Property(i => i.RemainingAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<InvoiceItem>().Property(i => i.UnitPrice).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<Invoice>().Property(i => i.SubTotal).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Invoice>().Property(i => i.TotalAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Invoice>().Property(i => i.DiscountAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Invoice>().Property(i => i.VatRate).HasColumnType("numeric(5,4)");
+        modelBuilder.Entity<Invoice>().Property(i => i.VatAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Invoice>().Property(i => i.PaidAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Invoice>().Property(i => i.RemainingAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<InvoiceItem>().Property(i => i.UnitPrice).HasColumnType("numeric(18,4)");
         modelBuilder.Entity<Invoice>()
             .HasOne(i => i.Customer)
             .WithMany(c => c.Invoices)
@@ -124,36 +124,53 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<ReturnInvoice>()
             .HasOne(r => r.OriginalInvoice).WithMany()
             .HasForeignKey(r => r.OriginalInvoiceId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<ReturnInvoice>().Property(r => r.RefundAmount).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<ReturnInvoice>().Property(r => r.RefundAmount).HasColumnType("numeric(18,4)");
         modelBuilder.Entity<ReturnInvoiceItem>()
             .HasOne(ri => ri.Product).WithMany()
             .HasForeignKey(ri => ri.ProductId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<ReturnInvoiceItem>().Property(ri => ri.UnitPrice).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<ReturnInvoiceItem>().Property(ri => ri.UnitPrice).HasColumnType("numeric(18,4)");
 
         // --- Installment ---
-        modelBuilder.Entity<Installment>().Property(i => i.Amount).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<Installment>().Property(i => i.Amount).HasColumnType("numeric(18,4)");
 
         // --- Customer ---
         modelBuilder.Entity<Customer>().HasQueryFilter(c => c.IsActive);
-        modelBuilder.Entity<Customer>().Property(c => c.TotalPurchases).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Customer>().Property(c => c.TotalPaid).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<Customer>().Property(c => c.TotalPurchases).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Customer>().Property(c => c.TotalPaid).HasColumnType("numeric(18,4)");
 
         // --- ERP Accounting ---
-        modelBuilder.Entity<JournalEntryLine>().Property(l => l.Debit).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<JournalEntryLine>().Property(l => l.Credit).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<CashTransaction>().Property(t => t.Amount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Expense>().Property(e => e.Amount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<Supplier>().Property(s => s.OpeningBalance).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.TotalAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.Discount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.NetAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.PaidAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.RemainingAmount).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoiceItem>().Property(p => p.UnitPrice).HasColumnType("numeric(18,2)");
-        modelBuilder.Entity<PurchaseInvoiceItem>().Property(p => p.TotalPrice).HasColumnType("numeric(18,2)");
+        modelBuilder.Entity<JournalEntryLine>().Property(l => l.Debit).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<JournalEntryLine>().Property(l => l.Credit).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<CashTransaction>().Property(t => t.Amount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Expense>().Property(e => e.Amount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<Supplier>().Property(s => s.OpeningBalance).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.TotalAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.Discount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.NetAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.PaidAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoice>().Property(p => p.RemainingAmount).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoiceItem>().Property(p => p.UnitPrice).HasColumnType("numeric(18,4)");
+        modelBuilder.Entity<PurchaseInvoiceItem>().Property(p => p.TotalPrice).HasColumnType("numeric(18,4)");
 
         // --- Shop Settings ---
-        modelBuilder.Entity<ShopSettings>().Property(s => s.DefaultVatRate).HasColumnType("numeric(5,2)");
+        modelBuilder.Entity<ShopSettings>().Property(s => s.DefaultVatRate).HasColumnType("numeric(5,4)");
+
+        // --- Performance & Sequences ---
+        modelBuilder.HasSequence<long>("invoice_seq")
+            .StartsAt(1)
+            .IncrementsBy(1);
+            
+        modelBuilder.HasSequence<long>("internal_barcode_seq")
+            .StartsAt(1)
+            .IncrementsBy(1);
+            
+        modelBuilder.HasSequence<long>("voucher_seq")
+            .StartsAt(1)
+            .IncrementsBy(1);
+
+        modelBuilder.Entity<Invoice>()
+            .HasIndex(i => i.InvoiceNo)
+            .IsUnique();
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

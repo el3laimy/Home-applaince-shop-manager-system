@@ -22,6 +22,12 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("internal_barcode_seq");
+
+            modelBuilder.HasSequence("invoice_seq");
+
+            modelBuilder.HasSequence("voucher_seq");
+
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Account", b =>
                 {
                     b.Property<Guid>("Id")
@@ -102,7 +108,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("DiscountAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -133,7 +139,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("CreatedBy")
                         .IsRequired()
@@ -193,11 +199,17 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("text");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
+
                     b.Property<decimal>("TotalPaid")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("TotalPurchases")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -211,7 +223,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
@@ -294,7 +306,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -350,7 +362,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("DiscountAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<DateTime?>("EventDate")
                         .HasColumnType("timestamp with time zone");
@@ -375,7 +387,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("PaidAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("PaymentReference")
                         .HasColumnType("text");
@@ -384,26 +396,35 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("RemainingAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("SubTotal")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("TotalAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("VatAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("VatRate")
-                        .HasColumnType("numeric(5,2)");
+                        .HasColumnType("numeric(5,4)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("InvoiceNo")
+                        .IsUnique();
 
                     b.ToTable("Invoices");
                 });
@@ -424,7 +445,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -478,10 +499,10 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Credit")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("Debit")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
@@ -538,10 +559,16 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("PurchasePrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
 
                     b.Property<decimal>("StockQuantity")
                         .HasColumnType("numeric");
@@ -550,7 +577,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("WholesalePrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -577,7 +604,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<int>("UnitType")
                         .HasColumnType("integer");
@@ -606,7 +633,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("Discount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("InvoiceNo")
                         .HasMaxLength(50)
@@ -616,16 +643,16 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("NetAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
                     b.Property<decimal>("PaidAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("RemainingAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -634,7 +661,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("TotalAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -661,10 +688,10 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("TotalPrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -727,7 +754,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("RefundAmount")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("ReturnNo")
                         .IsRequired()
@@ -756,7 +783,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.HasKey("Id");
 
@@ -845,7 +872,7 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("character varying(10)");
 
                     b.Property<decimal>("DefaultVatRate")
-                        .HasColumnType("numeric(5,2)");
+                        .HasColumnType("numeric(5,4)");
 
                     b.Property<string>("LogoBase64")
                         .HasColumnType("text");
@@ -999,11 +1026,17 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("OpeningBalance")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");

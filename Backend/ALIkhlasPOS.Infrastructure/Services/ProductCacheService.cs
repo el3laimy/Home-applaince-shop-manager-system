@@ -22,11 +22,18 @@ public class ProductCacheService : IProductCacheService
     {
         var cacheKey = $"Product_{barcode}";
         
-        // 1. Check Redis Cache First
-        var cachedProductXml = await _cache.GetStringAsync(cacheKey, cancellationToken);
-        if (!string.IsNullOrEmpty(cachedProductXml))
+        // 1. Check Redis Cache First (wrapped in try-catch for graceful fallback)
+        try
         {
-            return JsonSerializer.Deserialize<Product>(cachedProductXml);
+            var cachedProductXml = await _cache.GetStringAsync(cacheKey, cancellationToken);
+            if (!string.IsNullOrEmpty(cachedProductXml))
+            {
+                return JsonSerializer.Deserialize<Product>(cachedProductXml);
+            }
+        }
+        catch
+        {
+            // Redis is down, proceed to fallback DB query
         }
 
         // 2. Fallback to Database if not cached
@@ -45,23 +52,30 @@ public class ProductCacheService : IProductCacheService
 
     public async Task SetProductCacheAsync(Product product, CancellationToken cancellationToken = default)
     {
-        var options = new DistributedCacheEntryOptions
+        try
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12) // Cache duration
-        };
+            var options = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12) // Cache duration
+            };
 
-        var productJson = JsonSerializer.Serialize(product);
-        
-        // Cache by Global Barcode if available
-        if (!string.IsNullOrEmpty(product.GlobalBarcode))
-        {
-            await _cache.SetStringAsync($"Product_{product.GlobalBarcode}", productJson, options, cancellationToken);
+            var productJson = JsonSerializer.Serialize(product);
+            
+            // Cache by Global Barcode if available
+            if (!string.IsNullOrEmpty(product.GlobalBarcode))
+            {
+                await _cache.SetStringAsync($"Product_{product.GlobalBarcode}", productJson, options, cancellationToken);
+            }
+            
+            // Cache by Internal Barcode if available
+            if (!string.IsNullOrEmpty(product.InternalBarcode))
+            {
+                await _cache.SetStringAsync($"Product_{product.InternalBarcode}", productJson, options, cancellationToken);
+            }
         }
-        
-        // Cache by Internal Barcode if available
-        if (!string.IsNullOrEmpty(product.InternalBarcode))
+        catch
         {
-            await _cache.SetStringAsync($"Product_{product.InternalBarcode}", productJson, options, cancellationToken);
+            // Ignore cache set failures (Redis might be down)
         }
     }
 
@@ -82,6 +96,13 @@ public class ProductCacheService : IProductCacheService
 
     public async Task RemoveProductCacheAsync(string barcode, CancellationToken cancellationToken = default)
     {
-        await _cache.RemoveAsync($"Product_{barcode}", cancellationToken);
+        try
+        {
+            await _cache.RemoveAsync($"Product_{barcode}", cancellationToken);
+        }
+        catch
+        {
+            // Ignore cache remove failures
+        }
     }
 }

@@ -29,5 +29,8 @@ namespace ALIkhlasPOS.Application.Interfaces.Accounting
 
         /// <summary>تسجيل دفعة قسط (من ح/ الخزينة إلى ح/ ذمم العملاء)</summary>
         Task RecordInstallmentPaymentAsync(Installment installment, decimal amountPaid, string receiptNo, string createdBy);
+
+        /// <summary>تسجيل الفروقات المالية عند إغلاق الوردية (عجز أو زيادة نقدية)</summary>
+        Task RecordShiftClosureAsync(Shift shift, string createdBy);
     }
 }

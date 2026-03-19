@@ -234,4 +234,28 @@ class InventoryController extends GetxController {
   }
 
   List<ProductModel> get lowStockProducts => products.where((p) => p.isLowStock).toList();
+
+  // ── Batch Selection for Label Printing ──────────────────────────────────
+  final RxSet<String> selectedIds = <String>{}.obs;
+
+  bool isSelected(String id) => selectedIds.contains(id);
+
+  void toggleSelect(String id) {
+    if (selectedIds.contains(id)) {
+      selectedIds.remove(id);
+    } else {
+      selectedIds.add(id);
+    }
+  }
+
+  void selectAll() {
+    selectedIds.addAll(products.map((p) => p.id));
+  }
+
+  void clearSelection() {
+    selectedIds.clear();
+  }
+
+  List<ProductModel> get selectedProducts =>
+      products.where((p) => selectedIds.contains(p.id)).toList();
 }

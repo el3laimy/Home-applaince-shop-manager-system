@@ -112,7 +112,7 @@ class ExpensesScreen extends StatelessWidget {
           itemBuilder: (context, index) {
             final expense = controller.expenses[index];
             final date = DateTime.parse(expense['date']);
-            final amount = expense['amount'] as double;
+            final amount = (expense['amount'] as num).toDouble();
             final categoryName = expense['categoryName'] as String? ?? 'أخرى';
             final description = expense['description'] as String? ?? '';
 

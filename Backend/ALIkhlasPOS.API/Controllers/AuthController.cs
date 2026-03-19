@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using ALIkhlasPOS.Application.Interfaces;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -17,30 +18,26 @@ public class AuthController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IConfiguration _config;
+    private readonly IPasswordService _passwordService;
 
-    public AuthController(ApplicationDbContext dbContext, IConfiguration config)
+    public AuthController(ApplicationDbContext dbContext, IConfiguration config, IPasswordService passwordService)
     {
         _dbContext = dbContext;
         _config = config;
+        _passwordService = passwordService;
     }
 
     [HttpPost("login")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
 
-        if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
+        if (user == null || !_passwordService.VerifyPassword(request.Password, user.PasswordHash))
             return Unauthorized(new { message = "اسم المستخدم أو كلمة المرور غير صحيحة" });
 
         if (!user.IsActive)
             return StatusCode(403, new { message = "الحساب موقوف، يرجى مراجعة المسؤول." });
-
-        // ── Auto-upgrade legacy plaintext passwords to BCrypt on first successful login ──
-        if (!user.PasswordHash.StartsWith("$2"))
-        {
-            user.PasswordHash = HashPassword(request.Password);
-            await _dbContext.SaveChangesAsync();
-        }
 
         var token = GenerateJwtToken(user);
         var refreshToken = GenerateRefreshToken();
@@ -55,11 +52,14 @@ public class AuthController : ControllerBase
         _dbContext.RefreshTokens.Add(refreshTokenEntity);
         await _dbContext.SaveChangesAsync();
 
+        bool requiresPasswordChange = user.Username.Equals("admin", StringComparison.OrdinalIgnoreCase) && request.Password == "admin123";
+
         return Ok(new
         {
             Token = token,
             RefreshToken = refreshToken,
-            User = new { user.Id, user.Username, user.FullName, user.Role }
+            User = new { user.Id, user.Username, user.FullName, user.Role },
+            RequiresPasswordChange = requiresPasswordChange
         });
     }
 
@@ -77,6 +77,16 @@ public class AuthController : ControllerBase
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == username);
         if (user == null || !user.IsActive)
             return Unauthorized(new { message = "User not found or inactive." });
+
+        // Cleanup: remove expired refresh tokens for this user (older than 30 days)
+        var expiredTokens = await _dbContext.RefreshTokens
+            .Where(t => t.UserId == user.Id && t.Expires < DateTime.UtcNow.AddDays(-30))
+            .ToListAsync();
+        if (expiredTokens.Any())
+        {
+            _dbContext.RefreshTokens.RemoveRange(expiredTokens);
+            await _dbContext.SaveChangesAsync();
+        }
 
         var refreshTokenEntity = await _dbContext.RefreshTokens
             .FirstOrDefaultAsync(t => t.Token == request.RefreshToken && t.UserId == user.Id);
@@ -121,10 +131,10 @@ public class AuthController : ControllerBase
         var user = await _dbContext.Users.FindAsync(Guid.Parse(userId));
         if (user == null) return NotFound();
 
-        if (!VerifyPassword(request.CurrentPassword, user.PasswordHash))
+        if (!_passwordService.VerifyPassword(request.CurrentPassword, user.PasswordHash))
             return BadRequest(new { message = "كلمة المرور الحالية غير صحيحة." });
 
-        user.PasswordHash = HashPassword(request.NewPassword);
+        user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
         await _dbContext.SaveChangesAsync();
 
         return Ok(new { message = "تم تغيير كلمة المرور بنجاح." });
@@ -211,23 +221,7 @@ public class AuthController : ControllerBase
         return principal;
     }
 
-    /// <summary>Hashes a plaintext password using BCrypt (work factor 12).</summary>
-    public static string HashPassword(string plainText) =>
-        BCrypt.Net.BCrypt.HashPassword(plainText, workFactor: 12);
-
-    /// <summary>
-    /// Verifies a password against its stored hash.
-    /// Handles both BCrypt hashes (starting with $2) and legacy plaintext
-    /// to allow a graceful migration path.
-    /// </summary>
-    private static bool VerifyPassword(string input, string hash)
-    {
-        if (hash.StartsWith("$2"))
-            return BCrypt.Net.BCrypt.Verify(input, hash);
-
-        // Legacy plaintext comparison (only until auto-upgrade kicks in on login)
-        return input == hash;
-    }
+    // Password hashing/verification is now handled by IPasswordService (DI).
 }
 
 public class LoginRequest

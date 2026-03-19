@@ -112,6 +112,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void initState() {
     super.initState();
+    Get.put(ShiftController());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_barcodeFocusNode);
     });
@@ -134,7 +135,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final shiftCtrl = Get.put(ShiftController());
+    final shiftCtrl = Get.find<ShiftController>();
 
     return Obx(() {
       if (shiftCtrl.isLoading.value && !shiftCtrl.hasActiveShift.value && shiftCtrl.currentShift.value == null) {
@@ -187,7 +188,7 @@ class _PosScreenState extends State<PosScreen> {
                     children: [
                       // ===== LEFT: Cart Panel =====
                       Expanded(
-                        flex: 3,
+                        flex: 2,
                         child: _buildCartPanel(isDark),
                       ),
                       // ===== RIGHT: Product Grid =====
@@ -198,11 +199,77 @@ class _PosScreenState extends State<PosScreen> {
                     ],
                   ),
                 ),
+                // ── Keyboard Shortcuts Bar ──
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withAlpha(5) : Colors.grey[100],
+                    border: Border(top: BorderSide(color: isDark ? Colors.white.withAlpha(8) : Colors.grey[200]!)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _ShortcutHint(label: 'بحث', shortcut: 'F2'),
+                      const SizedBox(width: 24),
+                      _ShortcutHint(label: 'خصم', shortcut: 'F4'),
+                      const SizedBox(width: 24),
+                      _ShortcutHint(label: 'دفع', shortcut: 'F12'),
+                      const SizedBox(width: 24),
+                      _ShortcutHint(label: 'مسح السلة', shortcut: 'Esc'),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
         ),
       );
+
+      if (shiftCtrl.hasError.value) {
+        return Stack(
+          children: [
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: IgnorePointer(child: posContent),
+            ),
+            Container(color: Colors.black54),
+            Center(
+              child: SizedBox(
+                width: 400,
+                child: DesignTokens.liquidBorderCard(
+                  height: 380,
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.redAccent),
+                      const SizedBox(height: 24),
+                      const Text('فشل الاتصال بالخادم', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 12),
+                      Text('لا يمكن التحقق من حالة الوردية الحالية. يرجى التأكد من تشغيل الخادم والاتصال بالشبكة.', 
+                          textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400], fontSize: 13, height: 1.5)),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: DesignTokens.cardDarkHover,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () => shiftCtrl.retryCheckShift(),
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                          label: const Text('إعادة المحاولة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
 
       if (!shiftCtrl.hasActiveShift.value) {
         return Stack(
@@ -340,14 +407,15 @@ class _PosScreenState extends State<PosScreen> {
   Widget _buildCartSummary(bool isDark) {
     return Obx(() {
       return Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withAlpha(5) : Colors.grey[50],
           borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
           border: Border(top: BorderSide(color: isDark ? Colors.white.withAlpha(10) : Colors.grey[200]!)),
         ),
-        child: Column(
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
             _buildSummaryRow('المجموع الفرعي', _ctrl.subtotal),
             // BUG-01/02: Use real VAT from API (not hardcoded 15%)
             if (_ctrl.vatAmount.value > 0)
@@ -383,59 +451,45 @@ class _PosScreenState extends State<PosScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            // ── Print & Utility Actions ──────────────────────────────
-            Obx(() => Row(
-              children: [
-                if (_ctrl.hasLastReceipt) ...[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        await _ctrl.reprintLastReceipt();
-                        if (mounted) {
-                          Get.snackbar('طباعة', 'تم إرسال الفاتورة ${_ctrl.lastInvoiceNo.value ?? ''} للطابعة',
-                            backgroundColor: Colors.green.withAlpha(200), colorText: Colors.white,
-                            snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 2));
-                        }
-                      },
-                      icon: Icon(Icons.receipt_long_rounded, size: 16, color: DesignTokens.neonCyan),
-                      label: Text('إعادة طباعة', style: TextStyle(fontSize: 11, color: DesignTokens.neonCyan)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: DesignTokens.neonCyan.withAlpha(80)),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            // ── Utility Row: Reprint + Print Test ──
+            Obx(() {
+               // Access an observable safely so GetX registers it, even if hasLastReceipt is false.
+               // .value must be called inside the Obx builder.
+               final hasReceipt = _ctrl.hasLastReceipt; 
+               // Also access another observable just in case hasLastReceipt isn't observable
+               final _ = _ctrl.cartItems.length;
+               
+               return Row(
+                children: [
+                  if (hasReceipt)
+                    Expanded(
+                      child: _MiniActionButton(
+                        icon: Icons.receipt_long_rounded,
+                        label: 'إعادة طباعة',
+                        color: DesignTokens.neonCyan,
+                        onPressed: () async {
+                          await _ctrl.reprintLastReceipt();
+                          if (mounted) {
+                            Get.snackbar('طباعة', 'تم إرسال الفاتورة ${_ctrl.lastInvoiceNo.value ?? ''} للطابعة',
+                              backgroundColor: Colors.green.withAlpha(200), colorText: Colors.white,
+                              snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 2));
+                          }
+                        },
                       ),
                     ),
+                  if (hasReceipt) const SizedBox(width: 6),
+                  Expanded(
+                    child: _MiniActionButton(
+                      icon: Icons.print_rounded,
+                      label: 'طباعة تجريبية',
+                      color: isDark ? Colors.grey[400]! : Colors.grey[600]!,
+                      onPressed: () => ReceiptService.printTestPage(),
+                    ),
                   ),
-                  const SizedBox(width: 8),
                 ],
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _ctrl.cartItems.isEmpty ? null : _showClearCartDialog,
-                    icon: Icon(Icons.remove_shopping_cart_rounded, size: 16, color: _ctrl.cartItems.isEmpty ? Colors.grey : DesignTokens.neonRed),
-                    label: Text('مسح السلة', style: TextStyle(fontSize: 11, color: _ctrl.cartItems.isEmpty ? Colors.grey : DesignTokens.neonRed)),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: (_ctrl.cartItems.isEmpty ? Colors.grey : DesignTokens.neonRed).withAlpha(80)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => ReceiptService.printTestPage(),
-                    icon: Icon(Icons.print_rounded, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                    label: Text('طباعة تجريبية', style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: (isDark ? Colors.grey[700]! : Colors.grey[300]!)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              ],
-            )),
-            const SizedBox(height: 12),
+              );
+            }),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -458,12 +512,12 @@ class _PosScreenState extends State<PosScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
                   child: _CheckoutButton(
-                    label: 'دفع بالفيزا',
+                    label: 'فيزا',
                     icon: Icons.credit_card_outlined,
                     color: const Color(0xFF2980B9),
                     onPressed: () {
@@ -472,10 +526,10 @@ class _PosScreenState extends State<PosScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _CheckoutButton(
-                    label: 'تحويل بنكي',
+                    label: 'تحويل',
                     icon: Icons.account_balance_outlined,
                     color: const Color(0xFF8E44AD),
                     onPressed: () {
@@ -484,25 +538,21 @@ class _PosScreenState extends State<PosScreen> {
                     },
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
+                const SizedBox(width: 8),
                 Expanded(
                   child: _CheckoutButton(
-                    label: 'دفع مقسم',
+                    label: 'مقسم',
                     icon: Icons.pie_chart_outline,
                     color: Colors.orange.shade700,
                     onPressed: () {
-                      _ctrl.selectedPaymentType.value = PaymentType.cash; // Defaults to cash as base
+                      _ctrl.selectedPaymentType.value = PaymentType.cash;
                       _showSplitPaymentDialog();
                     },
                   ),
                 ),
               ],
-            ),
-          ],
+            ],
+          ),
         ),
       );
     });
@@ -527,8 +577,8 @@ class _PosScreenState extends State<PosScreen> {
       children: [
         // Category Selector
         Container(
-          height: 100,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          height: 56,
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Obx(() {
             return ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -557,19 +607,25 @@ class _PosScreenState extends State<PosScreen> {
             if (_ctrl.quickAccessProducts.isEmpty) {
               return _buildEmptyProducts();
             }
-            return GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 0.8,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                // Adapt columns: aim for ~180px wide cards, minimum 2 columns
+                final crossAxisCount = (constraints.maxWidth / 180).floor().clamp(2, 6);
+                return GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 0.8,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
               itemCount: _ctrl.quickAccessProducts.length,
               itemBuilder: (context, index) {
                 return _ProductCard(
                   product: _ctrl.quickAccessProducts[index],
                   onTap: () => _ctrl.addProductToCart(_ctrl.quickAccessProducts[index]),
+                );
+              },
                 );
               },
             );
@@ -1092,7 +1148,7 @@ class _CustomerSelector extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: hasCustomer ? AppTheme.primaryColor : Colors.white,
+                  color: hasCustomer ? AppTheme.primaryColor : (Theme.of(context).brightness == Brightness.dark ? DesignTokens.cardDark : Colors.white),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -1148,12 +1204,14 @@ class _CartItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.find<PosController>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? DesignTokens.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[100]!),
+        border: Border.all(color: isDark ? Colors.white.withAlpha(10) : Colors.grey[100]!),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1166,7 +1224,11 @@ class _CartItemCard extends StatelessWidget {
                 children: [
                   Text(
                     item.productName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold, 
+                      fontSize: 14,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1175,7 +1237,7 @@ class _CartItemCard extends StatelessWidget {
                     children: [
                       Text(
                         '${item.effectivePrice.toStringAsFixed(2)} ج.م',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13),
                       ),
                       const SizedBox(width: 8),
                       InkWell(
@@ -1191,15 +1253,19 @@ class _CartItemCard extends StatelessWidget {
             // Quantity Controls
             Row(
               children: [
-                _buildQtyBtn(Icons.remove, () => ctrl.updateQuantity(index, item.quantity - 1)),
+                _buildQtyBtn(Icons.remove, () => ctrl.updateQuantity(index, item.quantity - 1), isDark),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     '${item.quantity}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold, 
+                      fontSize: 16,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                   ),
                 ),
-                _buildQtyBtn(Icons.add, () => ctrl.updateQuantity(index, item.quantity + 1)),
+                _buildQtyBtn(Icons.add, () => ctrl.updateQuantity(index, item.quantity + 1), isDark),
               ],
             ),
 
@@ -1210,7 +1276,11 @@ class _CartItemCard extends StatelessWidget {
               width: 80,
               child: Text(
                 '${item.totalPrice.toStringAsFixed(2)}',
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                style: TextStyle(
+                  fontWeight: FontWeight.w900, 
+                  fontSize: 14,
+                  color: isDark ? DesignTokens.neonCyan : AppTheme.primaryColor,
+                ),
                 textAlign: TextAlign.end,
               ),
             ),
@@ -1220,17 +1290,17 @@ class _CartItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildQtyBtn(IconData icon, VoidCallback onTap) {
+  Widget _buildQtyBtn(IconData icon, VoidCallback onTap, bool isDark) {
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: Colors.grey[50],
+          color: isDark ? Colors.white.withAlpha(10) : Colors.grey[50],
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: isDark ? Colors.white.withAlpha(20) : Colors.grey[200]!),
         ),
-        child: Icon(icon, size: 16, color: Colors.black87),
+        child: Icon(icon, size: 16, color: isDark ? Colors.white : Colors.black87),
       ),
     );
   }
@@ -1287,118 +1357,183 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends StatefulWidget {
   final ProductModel product;
   final VoidCallback onTap;
 
   const _ProductCard({required this.product, required this.onTap});
 
   @override
+  State<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<_ProductCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final imageBaseUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5290/api').replaceAll('/api', '');
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? DesignTokens.cardDark : Colors.white,
-          borderRadius: BorderRadius.circular(DesignTokens.kCardRadius),
-          border: Border.all(color: isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(15)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(isDark ? 30 : 8),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+    final imageBaseUrl = (dotenv.env['API_BASE_URL'] ?? 'http://localhost:5291/api').replaceAll('/api', '');
+    
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          transform: Matrix4.translationValues(0, _isHovered ? -4 : 0, 0),
+          decoration: BoxDecoration(
+            color: isDark ? DesignTokens.cardDark : Colors.white,
+            borderRadius: BorderRadius.circular(DesignTokens.kCardRadius),
+            border: Border.all(
+              color: _isHovered 
+                ? (isDark ? DesignTokens.neonCyan.withAlpha(80) : AppTheme.primaryColor.withAlpha(80))
+                : (isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(15)),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Image & Badge
-            Expanded(
-              flex: 3,
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(DesignTokens.kCardRadius)),
-                    child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                        ? Image.network('$imageBaseUrl${product.imageUrl!}',
-                            fit: BoxFit.cover, width: double.infinity,
-                            errorBuilder: (_, __, ___) => _placeholder(isDark))
-                        : _placeholder(isDark),
-                  ),
-                  if (product.isLowStock)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: DesignTokens.neonRed.withAlpha(200),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text('محدود',
-                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                ],
+            boxShadow: [
+              BoxShadow(
+                color: _isHovered 
+                  ? (isDark ? DesignTokens.neonCyan.withAlpha(40) : AppTheme.primaryColor.withAlpha(30))
+                  : Colors.black.withAlpha(isDark ? 30 : 8),
+                blurRadius: _isHovered ? 16 : 12,
+                offset: Offset(0, _isHovered ? 8 : 4),
               ),
-            ),
-            // Details
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Image & Badge
+              Expanded(
+                flex: 3,
+                child: Stack(
                   children: [
-                    Text(product.name,
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12,
-                            color: isDark ? Colors.white : Colors.black87),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
-                    if (product.internalBarcode != null)
-                      Text(product.internalBarcode!,
-                          style: TextStyle(color: Colors.grey[500], fontSize: 10, fontFamily: 'monospace'),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        if (product.wholesalePrice > 0 && product.wholesalePrice != product.price)
-                          Text('${product.wholesalePrice.toStringAsFixed(0)} ',
-                              style: TextStyle(color: Colors.grey[500], fontSize: 10,
-                                  decoration: TextDecoration.lineThrough, decorationColor: Colors.grey[500])),
-                        Expanded(
-                          child: Text('${product.price.toStringAsFixed(2)} ج.م',
-                            style: TextStyle(fontWeight: FontWeight.bold,
-                                color: isDark ? DesignTokens.neonCyan : AppTheme.primaryColor, fontSize: 13),
-                            overflow: TextOverflow.ellipsis),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: DesignTokens.neonGreen.withAlpha(20),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.add_rounded, color: DesignTokens.neonGreen, size: 16),
-                        ),
-                      ],
+                    ClipRRect(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(DesignTokens.kCardRadius)),
+                      child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
+                          ? Image.network('$imageBaseUrl${widget.product.imageUrl!}',
+                              fit: BoxFit.cover, width: double.infinity,
+                              errorBuilder: (_, __, ___) => _placeholder(isDark, widget.product.name))
+                          : _placeholder(isDark, widget.product.name),
                     ),
+                    if (widget.product.isLowStock || widget.product.stockQuantity <= 0)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: widget.product.stockQuantity <= 0 
+                                ? Colors.grey.withAlpha(200) 
+                                : DesignTokens.neonRed.withAlpha(200),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            widget.product.stockQuantity <= 0 
+                                ? 'نفد المخزون' 
+                                : 'باقي ${widget.product.stockQuantity.toInt()}',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            ),
-          ],
+              // Details
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(widget.product.name,
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13,
+                                    color: isDark ? Colors.white : Colors.black87),
+                                maxLines: 2, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 2),
+                            if (widget.product.internalBarcode != null)
+                              Text(widget.product.internalBarcode!,
+                                  style: TextStyle(color: Colors.grey[500], fontSize: 11, fontFamily: 'monospace'),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          if (widget.product.wholesalePrice > 0 && widget.product.wholesalePrice != widget.product.price)
+                            Text('${widget.product.wholesalePrice.toStringAsFixed(0)} ',
+                                style: TextStyle(color: Colors.grey[500], fontSize: 10,
+                                    decoration: TextDecoration.lineThrough, decorationColor: Colors.grey[500])),
+                          Expanded(
+                            child: Text('${widget.product.price.toStringAsFixed(2)} ج.م',
+                              style: TextStyle(fontWeight: FontWeight.bold,
+                                  color: isDark ? DesignTokens.neonCyan : AppTheme.primaryColor, fontSize: 14),
+                              overflow: TextOverflow.ellipsis),
+                          ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: _isHovered 
+                                ? (isDark ? DesignTokens.neonCyan : AppTheme.primaryColor)
+                                : (isDark ? DesignTokens.neonCyan.withAlpha(20) : DesignTokens.neonGreen.withAlpha(20)),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.add_rounded, 
+                              color: _isHovered 
+                                ? Colors.white 
+                                : (isDark ? DesignTokens.neonCyan : DesignTokens.neonGreen), 
+                              size: 18
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _placeholder(bool isDark) {
+  Widget _placeholder(bool isDark, String name) {
+    if (name.isNotEmpty) {
+      final words = name.split(' ');
+      String initials = '';
+      if (words.length > 1) {
+        initials = '${words[0][0]}${words[1][0]}';
+      } else {
+        initials = words[0].substring(0, words[0].length >= 2 ? 2 : 1);
+      }
+      
+      return Container(
+        color: isDark ? Colors.white.withAlpha(5) : Colors.grey[100],
+        child: Center(
+          child: Text(
+            initials.toUpperCase(),
+            style: TextStyle(
+              fontSize: 28, 
+              fontWeight: FontWeight.w900, 
+              color: isDark ? Colors.grey[700] : Colors.grey[300]
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Container(
-      color: isDark ? Colors.white.withAlpha(5) : Colors.grey[50],
-      child: Center(child: Icon(Icons.image_outlined,
+      color: isDark ? Colors.white.withAlpha(5) : Colors.grey[100],
+      child: Center(child: Icon(Icons.inventory_2_outlined,
           color: isDark ? Colors.grey[700] : Colors.grey[300], size: 40)),
     );
   }
@@ -1436,6 +1571,72 @@ class _CheckoutButton extends StatelessWidget {
       ),
       icon: Icon(icon, size: 20),
       label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+class _ShortcutHint extends StatelessWidget {
+  final String label;
+  final String shortcut;
+
+  const _ShortcutHint({required this.label, required this.shortcut});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withAlpha(15) : Colors.grey[200],
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: isDark ? Colors.white.withAlpha(30) : Colors.grey[300]!),
+          ),
+          child: Text(shortcut, style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87, 
+            fontSize: 10, 
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+          )),
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const _MiniActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16, color: color),
+      label: Text(label, style: TextStyle(fontSize: 11, color: color)),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: color.withAlpha(80)),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ).copyWith(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered)) return color.withAlpha(15);
+          return Colors.transparent;
+        }),
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 using ALIkhlasPOS.Application.Interfaces;
+using ALIkhlasPOS.Application.Interfaces;
 using ALIkhlasPOS.Application.Interfaces.Accounting;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
@@ -16,13 +17,15 @@ public class ProductsController : ControllerBase
     private readonly IBarcodeService _barcodeService;
     private readonly IProductCacheService _productCacheService;
     private readonly IAccountingService _accountingService;
+    private readonly IProductService _productService;
 
-    public ProductsController(ApplicationDbContext dbContext, IBarcodeService barcodeService, IProductCacheService productCacheService, IAccountingService accountingService)
+    public ProductsController(ApplicationDbContext dbContext, IBarcodeService barcodeService, IProductCacheService productCacheService, IAccountingService accountingService, IProductService productService)
     {
         _dbContext = dbContext;
         _barcodeService = barcodeService;
         _productCacheService = productCacheService;
         _accountingService = accountingService;
+        _productService = productService;
     }
 
     // DTOs defined at the bottom of the file
@@ -71,6 +74,14 @@ public class ProductsController : ControllerBase
             .OrderBy(p => p.Category).ThenBy(p => p.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(p => new
+            {
+                p.Id, p.Name, p.Description, p.Category,
+                p.Price, p.PurchasePrice, p.WholesalePrice,
+                p.StockQuantity, p.MinStockAlert,
+                p.GlobalBarcode, p.InternalBarcode,
+                p.ImageUrl, p.IsActive, p.CreatedAt, p.UpdatedAt
+            })
             .ToListAsync(cancellationToken);
 
         return Ok(new { total, page, pageSize, data = products });
@@ -82,7 +93,14 @@ public class ProductsController : ControllerBase
     {
         var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
         if (product == null) return NotFound();
-        return Ok(product);
+        return Ok(new
+        {
+            product.Id, product.Name, product.Description, product.Category,
+            product.Price, product.PurchasePrice, product.WholesalePrice,
+            product.StockQuantity, product.MinStockAlert,
+            product.GlobalBarcode, product.InternalBarcode,
+            product.ImageUrl, product.IsActive, product.CreatedAt, product.UpdatedAt
+        });
     }
 
     // GET /api/products/barcode/{barcode} — Used by POS Scanner (hits Redis cache first)
@@ -111,155 +129,56 @@ public class ProductsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateProduct([FromBody] CreateProductRequest request, CancellationToken cancellationToken)
     {
-        var product = new Product
-        {
-            Name = request.Name,
-            Price = request.Price,
-            PurchasePrice = request.PurchasePrice,
-            WholesalePrice = request.WholesalePrice,
-            StockQuantity = request.StockQuantity,
-            MinStockAlert = request.MinStockLevel ?? 0,
-            Category = request.CategoryName,
-            Description = request.Description
-        };
-
-        if (!string.IsNullOrWhiteSpace(request.GlobalBarcode) && !_barcodeService.ValidateBarcodeFormat(request.GlobalBarcode))
-            return BadRequest(new { message = "صيغة الباركود غير صحيحة." });
-
-        if (string.IsNullOrWhiteSpace(request.GlobalBarcode))
-        {
-            product.GlobalBarcode = null;
-            product.InternalBarcode = await _barcodeService.GenerateInternalBarcodeAsync(cancellationToken);
-        }
-        else
-        {
-            product.GlobalBarcode = request.GlobalBarcode;
-            product.InternalBarcode = null;
-        }
-
-        // Check for duplicate barcodes securely before saving
-        var checkingBarcodes = new List<string>();
-        if (!string.IsNullOrWhiteSpace(product.GlobalBarcode)) checkingBarcodes.Add(product.GlobalBarcode);
-        if (!string.IsNullOrWhiteSpace(product.InternalBarcode)) checkingBarcodes.Add(product.InternalBarcode);
-
-        bool barcodeExists = checkingBarcodes.Any() && await _dbContext.Products.AnyAsync(p => 
-            (p.GlobalBarcode != null && checkingBarcodes.Contains(p.GlobalBarcode)) ||
-            (p.InternalBarcode != null && checkingBarcodes.Contains(p.InternalBarcode)), 
-            cancellationToken);
-
-        if (barcodeExists)
-        {
-            return BadRequest(new { message = "الباركود مستخدم بالفعل لمنتج آخر." });
-        }
-
-        _dbContext.Products.Add(product);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
-
-        return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
+        var dto = new CreateProductDto(request.Name, request.Description, request.CategoryName, request.Price, request.PurchasePrice, request.WholesalePrice, request.StockQuantity, request.MinStockLevel, request.GlobalBarcode, request.InternalBarcode, request.VatRate, request.GenerateBarcode);
+        var response = await _productService.CreateProductAsync(dto, cancellationToken);
+        
+        if (!response.Success) return BadRequest(new { message = response.Message });
+        
+        return CreatedAtAction(nameof(GetProduct), new { id = response.Product!.Id }, response.Product);
     }
 
     // PUT /api/products/{id} — Full update
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateProduct(Guid id, [FromBody] UpdateProductRequest request, CancellationToken cancellationToken)
     {
-        var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
-        if (product == null) return NotFound();
-
-        product.Name = request.Name;
-        product.Price = request.Price;
-        product.PurchasePrice = request.PurchasePrice;
-        product.WholesalePrice = request.WholesalePrice;
+        var dto = new UpdateProductDto(request.Name, request.Description, request.CategoryName, request.Price, request.PurchasePrice, request.WholesalePrice, request.StockQuantity, request.MinStockLevel, request.GlobalBarcode, request.InternalBarcode, request.VatRate);
+        var createdBy = User.Identity?.Name ?? User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "System";
         
-        StockAdjustment? stockAdj = null;
-        if (product.StockQuantity != request.StockQuantity)
+        var response = await _productService.UpdateProductAsync(id, dto, createdBy, cancellationToken);
+        
+        if (!response.Success) 
         {
-            var createdBy = User.Identity?.Name ?? User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "System";
-            var diff = request.StockQuantity - product.StockQuantity;
-            stockAdj = new StockAdjustment
-            {
-                ProductId = id,
-                Type = diff < 0 ? StockAdjustmentType.Damage : StockAdjustmentType.ManualCorrection,
-                QuantityAdjusted = (int)diff,
-                Cost = Math.Abs(diff) * product.PurchasePrice,
-                Reason = "تعديل عبر صفحة المنتج",
-                CreatedBy = createdBy
-            };
-            _dbContext.Set<StockAdjustment>().Add(stockAdj);
-            product.StockQuantity = request.StockQuantity;
+            if (response.Message == "Product not found") return NotFound();
+            return BadRequest(new { message = response.Message });
         }
-
-        product.MinStockAlert = request.MinStockLevel ?? 0;
-        product.Category = request.CategoryName;
-        product.Description = request.Description;
-        product.UpdatedAt = DateTime.UtcNow;
-
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
+        
+        var product = response.Product!;
+        return Ok(new
         {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            
-            if (stockAdj != null && stockAdj.Cost > 0)
-            {
-                await _accountingService.RecordStockAdjustmentAsync(stockAdj, stockAdj.CreatedBy);
-            }
-            
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return BadRequest(new { message = $"خطأ أثناء حفظ التعديل: {ex.Message}" });
-        }
-
-        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
-        return Ok(product);
+            product.Id, product.Name, product.Description, product.Category,
+            product.Price, product.PurchasePrice, product.WholesalePrice,
+            product.StockQuantity, product.MinStockAlert,
+            product.GlobalBarcode, product.InternalBarcode,
+            product.ImageUrl, product.IsActive, product.CreatedAt, product.UpdatedAt
+        });
     }
 
     // PATCH /api/products/{id}/stock — Stock adjustment for manual inventory count
     [HttpPatch("{id:guid}/stock")]
     public async Task<IActionResult> AdjustStock(Guid id, [FromBody] AdjustStockRequest request, CancellationToken cancellationToken)
     {
-        var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
-        if (product == null) return NotFound();
-
         var createdBy = User.Identity?.Name ?? User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "System";
-
-        var adjustment = new StockAdjustment
+        var dto = new AdjustStockDto(request.AdjustmentQuantity, request.Reason, request.CostPerUnit);
+        
+        var response = await _productService.AdjustStockAsync(id, dto, createdBy, cancellationToken);
+        
+        if (!response.Success)
         {
-            ProductId = id,
-            Type = request.AdjustmentQuantity < 0 ? StockAdjustmentType.Loss : StockAdjustmentType.ManualCorrection,
-            QuantityAdjusted = request.AdjustmentQuantity,
-            Cost = Math.Abs(request.AdjustmentQuantity) * (request.CostPerUnit ?? product.PurchasePrice),
-            Reason = request.Reason,
-            CreatedBy = createdBy
-        };
-
-        product.StockQuantity += request.AdjustmentQuantity;
-        if (product.StockQuantity < 0) product.StockQuantity = 0;
-        product.UpdatedAt = DateTime.UtcNow;
-
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            _dbContext.Set<StockAdjustment>().Add(adjustment);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            
-            if (adjustment.Cost > 0)
-            {
-                await _accountingService.RecordStockAdjustmentAsync(adjustment, createdBy);
-            }
-            
-            await transaction.CommitAsync(cancellationToken);
+            if (response.Message == "Product not found") return NotFound();
+            return BadRequest(new { message = response.Message });
         }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return BadRequest(new { message = $"خطأ أثناء حفظ التعديل: {ex.Message}" });
-        }
-
-        await _productCacheService.SetProductCacheAsync(product, cancellationToken);
-        return Ok(new { product.Id, product.Name, product.StockQuantity });
+        
+        return Ok(new { response.Product!.Id, response.Product.Name, response.Product.StockQuantity });
     }
 
     // GET /api/products/{id}/stock-adjustments — Get history of manual stock adjustments (Legacy)
@@ -269,6 +188,11 @@ public class ProductsController : ControllerBase
         var adjustments = await _dbContext.Set<StockAdjustment>()
             .Where(a => a.ProductId == id)
             .OrderByDescending(a => a.CreatedAt)
+            .Select(a => new
+            {
+                a.Id, a.ProductId, a.Type, a.QuantityAdjusted,
+                a.Cost, a.Reason, a.CreatedBy, a.CreatedAt
+            })
             .ToListAsync(cancellationToken);
             
         return Ok(adjustments);
@@ -307,16 +231,8 @@ public class ProductsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteProduct(Guid id, CancellationToken cancellationToken)
     {
-        var product = await _dbContext.Products.FindAsync(new object[] { id }, cancellationToken);
-        if (product == null) return NotFound();
-
-        product.IsActive = false;
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        if (!string.IsNullOrEmpty(product.GlobalBarcode))
-            await _productCacheService.RemoveProductCacheAsync(product.GlobalBarcode, cancellationToken);
-        if (!string.IsNullOrEmpty(product.InternalBarcode))
-            await _productCacheService.RemoveProductCacheAsync(product.InternalBarcode, cancellationToken);
-
+        var success = await _productService.DeleteProductAsync(id, cancellationToken);
+        if (!success) return NotFound();
         return NoContent();
     }
 
@@ -334,10 +250,32 @@ public class ProductsController : ControllerBase
         if (file.Length > 5 * 1024 * 1024)
             return BadRequest(new { message = "حجم الصورة يجب أن يكون أقل من 5 ميجابايت." });
 
-        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        // ── Magic Number Validation (binary signature check) ──
+        // Prevents uploading disguised malicious files with renamed extensions
+        var allowedSignatures = new Dictionary<string, byte[][]>
+        {
+            { ".jpg",  new[] { new byte[] { 0xFF, 0xD8, 0xFF } } },
+            { ".jpeg", new[] { new byte[] { 0xFF, 0xD8, 0xFF } } },
+            { ".png",  new[] { new byte[] { 0x89, 0x50, 0x4E, 0x47 } } },
+            { ".webp", new[] { new byte[] { 0x52, 0x49, 0x46, 0x46 } } }, // RIFF header
+        };
+
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!allowed.Contains(ext))
+        if (!allowedSignatures.ContainsKey(ext))
             return BadRequest(new { message = "صيغة الملف غير مدعومة. استخدم JPG أو PNG أو WebP." });
+
+        // Read first 8 bytes and compare with known magic numbers
+        using var headerStream = file.OpenReadStream();
+        var header = new byte[8];
+        await headerStream.ReadAsync(header, 0, 8, cancellationToken);
+        headerStream.Position = 0; // Reset for later copy
+
+        var validSigs = allowedSignatures[ext];
+        bool magicMatch = validSigs.Any(sig => 
+            header.Length >= sig.Length && header.Take(sig.Length).SequenceEqual(sig));
+
+        if (!magicMatch)
+            return BadRequest(new { message = "محتوى الملف لا يتطابق مع صيغة الصورة. تأكد من أن الملف صورة حقيقية." });
 
         var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "products");
         Directory.CreateDirectory(uploadsDir);

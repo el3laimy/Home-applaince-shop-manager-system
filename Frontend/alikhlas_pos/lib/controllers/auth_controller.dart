@@ -6,6 +6,7 @@ import '../models/user_model.dart';
 import '../core/widgets/main_shell.dart';
 import '../screens/login_screen.dart';
 import '../core/utils/toast_service.dart';
+import '../screens/force_change_password_screen.dart';
 
 class AuthController extends GetxController {
   final RxBool isLoading = false.obs;
@@ -21,13 +22,14 @@ class AuthController extends GetxController {
   }
 
   Future<void> checkAuthStatus() async {
-    final token = (await SharedPreferences.getInstance()).getString('auth_token');
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
     
     if (token != null && token.isNotEmpty) {
-      final username = (await SharedPreferences.getInstance()).getString('user_username') ?? '';
-      final fullName = (await SharedPreferences.getInstance()).getString('user_fullname') ?? '';
-      final role = (await SharedPreferences.getInstance()).getString('user_role') ?? 'Cashier';
-      final id = (await SharedPreferences.getInstance()).getString('user_id') ?? '';
+      final username = prefs.getString('user_username') ?? '';
+      final fullName = prefs.getString('user_fullname') ?? '';
+      final role = prefs.getString('user_role') ?? 'Cashier';
+      final id = prefs.getString('user_id') ?? '';
       
       currentUser.value = UserModel(id: id, username: username, fullName: fullName, role: role);
       isAuthenticated.value = true;
@@ -53,17 +55,25 @@ class AuthController extends GetxController {
       final refreshToken = response['refreshToken'] as String;
       final userMap = response['user'] as Map<String, dynamic>;
       
-      await (await SharedPreferences.getInstance()).setString('auth_token', token);
-      await (await SharedPreferences.getInstance()).setString('refresh_token', refreshToken);
-      await (await SharedPreferences.getInstance()).setString('user_id', userMap['id'] ?? '');
-      await (await SharedPreferences.getInstance()).setString('user_username', userMap['username'] ?? '');
-      await (await SharedPreferences.getInstance()).setString('user_fullname', userMap['fullName'] ?? '');
-      await (await SharedPreferences.getInstance()).setString('user_role', userMap['role'] ?? 'Cashier');
+      final requiresPasswordChange = response['requiresPasswordChange'] as bool? ?? false;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_token', token);
+      await prefs.setString('refresh_token', refreshToken);
+      await prefs.setString('user_id', userMap['id'] ?? '');
+      await prefs.setString('user_username', userMap['username'] ?? '');
+      await prefs.setString('user_fullname', userMap['fullName'] ?? '');
+      await prefs.setString('user_role', userMap['role'] ?? 'Cashier');
+      await prefs.setBool('requires_password_change', requiresPasswordChange);
 
       currentUser.value = UserModel.fromJson(userMap);
       isAuthenticated.value = true;
       
-      Get.offAll(() => const MainShell());
+      if (requiresPasswordChange) {
+        Get.offAll(() => const ForceChangePasswordScreen());
+      } else {
+        Get.offAll(() => const MainShell());
+      }
       return true;
     } on ApiException catch (e) {
       _snapError(context, e.message);

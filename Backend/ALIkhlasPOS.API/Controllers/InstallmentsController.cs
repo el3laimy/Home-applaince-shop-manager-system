@@ -1,6 +1,7 @@
 using System.Text;
 using System.Security.Claims;
 using ALIkhlasPOS.Application.Interfaces.Accounting;
+using ALIkhlasPOS.Application.Interfaces;
 using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using ALIkhlasPOS.Infrastructure.Sms;
@@ -18,12 +19,14 @@ public class InstallmentsController : ControllerBase
     private readonly ApplicationDbContext _dbContext;
     private readonly SmsServiceFactory _smsFactory;
     private readonly IAccountingService _accountingService;
+    private readonly IInstallmentService _installmentService;
 
-    public InstallmentsController(ApplicationDbContext dbContext, SmsServiceFactory smsFactory, IAccountingService accountingService)
+    public InstallmentsController(ApplicationDbContext dbContext, SmsServiceFactory smsFactory, IAccountingService accountingService, IInstallmentService installmentService)
     {
         _dbContext = dbContext;
         _smsFactory = smsFactory;
         _accountingService = accountingService;
+        _installmentService = installmentService;
     }
 
     // ── DTOs ────────────────────────────────────────────────────────────────
@@ -111,91 +114,44 @@ public class InstallmentsController : ControllerBase
         var installments = await _dbContext.Installments
             .Where(i => i.InvoiceId == invoiceId)
             .OrderBy(i => i.DueDate)
+            .Select(i => new
+            {
+                i.Id,
+                i.InvoiceId,
+                i.CustomerId,
+                i.Amount,
+                i.DueDate,
+                i.Status,
+                i.PaidAt,
+                i.ReminderSent
+            })
             .ToListAsync(cancellationToken);
         return Ok(installments);
     }
 
     // ── POST /api/installments/schedule ───────────────────────────────────────
     [HttpPost("schedule")]
-    public async Task<IActionResult> GenerateSchedule([FromBody] GenerateScheduleRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> GenerateSchedule([FromBody] GenerateScheduleDto request, CancellationToken cancellationToken)
     {
-        var invoice = await _dbContext.Invoices.FindAsync(new object[] { request.InvoiceId }, cancellationToken);
-        if (invoice == null) return NotFound("Invoice not found");
-        if (invoice.PaymentType != PaymentType.Installment) return BadRequest("Invoice is not marked for installments.");
-
-        var remainingAmount = invoice.TotalAmount - request.DownPayment;
-        if (remainingAmount <= 0) return BadRequest("Down payment covers the entire invoice amount.");
-
-        decimal monthlyAmount = Math.Round(remainingAmount / request.NumberOfMonths, 2);
-        var installments = new List<Installment>();
-        for (int i = 0; i < request.NumberOfMonths; i++)
-        {
-            decimal currentAmount = (i == request.NumberOfMonths - 1)
-                ? remainingAmount - (monthlyAmount * (request.NumberOfMonths - 1))
-                : monthlyAmount;
-            installments.Add(new Installment
-            {
-                InvoiceId = invoice.Id,
-                CustomerId = request.CustomerId,
-                Amount = currentAmount,
-                DueDate = request.FirstInstallmentDate.AddMonths(i).ToUniversalTime(),
-                Status = InstallmentStatus.Pending,
-                ReminderSent = false
-            });
-        }
-        _dbContext.Installments.AddRange(installments);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return Ok(new { message = "تم إنشاء جدول الأقساط.", installmentsCount = installments.Count });
+        var response = await _installmentService.GenerateScheduleAsync(request, cancellationToken);
+        if (!response.Success) return BadRequest(new { message = response.Message });
+        return Ok(new { message = response.Message, installmentsCount = response.InstallmentsCount });
     }
 
     // ── POST /api/installments/{id}/pay ───────────────────────────────────────
     [HttpPost("{id:guid}/pay")]
-    public async Task<IActionResult> Pay(Guid id, [FromBody] PayInstallmentRequest req, CancellationToken ct)
+    public async Task<IActionResult> Pay(Guid id, [FromBody] PayInstallmentDto req, CancellationToken ct)
     {
-        var installment = await _dbContext.Installments
-            .Include(i => i.Invoice)
-            .FirstOrDefaultAsync(i => i.Id == id, ct);
-
-        if (installment == null) return NotFound();
-        if (installment.Status == InstallmentStatus.Paid)
-            return BadRequest(new { message = "هذا القسط مدفوع بالفعل." });
-
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
-        try
+        var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
+        var response = await _installmentService.PayInstallmentAsync(id, req.AmountPaid, createdBy, ct);
+        
+        if (!response.Success)
         {
-            installment.Status = InstallmentStatus.Paid;
-            installment.PaidAt = DateTime.UtcNow;
-
-            if (installment.Invoice != null)
-            {
-                installment.Invoice.PaidAmount += req.AmountPaid;
-                installment.Invoice.RemainingAmount = Math.Max(0, installment.Invoice.TotalAmount - installment.Invoice.PaidAmount);
-                if (installment.Invoice.RemainingAmount == 0)
-                    installment.Invoice.Status = InvoiceStatus.Completed;
-            }
-
-            // FIX-D: Update Customer.TotalPaid
-            var customer = await _dbContext.Customers.FindAsync(new object[] { installment.CustomerId }, ct);
-            if (customer != null)
-            {
-                customer.TotalPaid += req.AmountPaid;
-            }
-
-            await _dbContext.SaveChangesAsync(ct);
-
-            // FIX-A: Record in treasury & accounting
-            var createdBy = User.FindFirstValue(ClaimTypes.Name) ?? "System";
-            var receiptNo = $"INST-{installment.Id.ToString()[..8]}";
-            await _accountingService.RecordInstallmentPaymentAsync(installment, req.AmountPaid, receiptNo, createdBy);
-
-            await transaction.CommitAsync(ct);
-            return Ok(new { message = "تم تسجيل الدفعة وتحديث الخزينة بنجاح.", installment.Status, installment.PaidAt });
+            if (response.Message == "Installment not found") return NotFound();
+            return BadRequest(new { message = response.Message });
         }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(ct);
-            return BadRequest(new { message = $"خطأ في تسجيل الدفعة: {ex.Message}" });
-        }
+        
+        return Ok(new { message = response.Message, status = response.Status, paidAt = response.PaidAt });
     }
 
     // ── GET /api/installments/export-csv ─────────────────────────────────────
@@ -226,90 +182,42 @@ public class InstallmentsController : ControllerBase
     }
 
     // ── POST /api/installments/{id}/send-reminder ─────────────────────────────
-    // BUG-07: Now sends a REAL SMS using the provider configured in ShopSettings
     [HttpPost("{id:guid}/send-reminder")]
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> SendReminder(Guid id, CancellationToken ct)
     {
-        var installment = await _dbContext.Installments
-            .Include(i => i.Invoice).ThenInclude(inv => inv!.Customer)
-            .FirstOrDefaultAsync(i => i.Id == id, ct);
-
-        if (installment == null) return NotFound();
-
-        var phone = installment.Invoice?.Customer?.Phone;
-        if (string.IsNullOrEmpty(phone))
-            return BadRequest(new { message = "العميل ليس له رقم هاتف مسجل." });
-
-        // 1. Load shop settings & resolve SMS provider
-        var settings = await _dbContext.Set<ShopSettings>().FirstOrDefaultAsync(ct);
-        var smsService = _smsFactory.Create(settings!);
-
-        if (smsService == null)
+        var response = await _installmentService.SendReminderAsync(id, ct);
+        
+        if (!response.Success)
         {
-            return BadRequest(new
-            {
-                message = "لم يتم تهيئة خدمة SMS. يرجى تعيين مزود الرسائل وبيانات الاعتماد في إعدادات المتجر.",
-                configRequired = true
-            });
+            if (response.Message == "Installment not found") return NotFound();
+            return BadRequest(new { message = response.Message });
         }
-
-        // 2. Build Arabic reminder message
-        var customerName = installment.Invoice?.Customer?.Name ?? "العميل الكريم";
-        var shopName = settings?.ShopName ?? "المتجر";
-        var message = $"عزيزي {customerName}،\n" +
-                      $"تذكير بموعد قسط بقيمة {installment.Amount:F2} ج.م" +
-                      $" المستحق بتاريخ {installment.DueDate:dd/MM/yyyy}.\n" +
-                      $"يرجى السداد في موعده. — {shopName}";
-
-        // 3. Send SMS
-        var (success, error) = await smsService.SendAsync(phone, message, ct);
-
-        if (!success)
-        {
-            return StatusCode(500, new { message = $"فشل إرسال الرسالة: {error}" });
-        }
-
-        // 4. Mark reminder as sent
-        installment.ReminderSent = true;
-        await _dbContext.SaveChangesAsync(ct);
-
+        
         return Ok(new
         {
-            message = $"✓ تم إرسال تذكير SMS للعميل {customerName} على الرقم {phone}",
-            phone,
-            dueDate = installment.DueDate,
-            amount = installment.Amount
+            message = response.Message,
+            phone = response.Phone,
+            dueDate = response.DueDate,
+            amount = response.Amount
         });
     }
 
     // ── POST /api/installments/test-sms ────────────────────────────────────────
-    // BUG-07: Sends a test SMS to verify API credentials — used from the settings screen
     [HttpPost("test-sms")]
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> TestSms(
-        [FromBody] TestSmsRequest req, CancellationToken ct)
+        [FromBody] TestSmsDto req, CancellationToken ct)
     {
-        // Build a temporary SMS service with the provided credentials (no DB write)
-        var tempSettings = new ShopSettings
-        {
-            SmsProvider = req.Provider,
-            SmsApiKey = req.ApiKey,
-            SmsSenderId = req.SenderId,
-            ShopName = "ALIkhlasPOS"
-        };
-
-        var smsService = _smsFactory.Create(tempSettings);
-        if (smsService == null)
-            return BadRequest(new { message = "بيانات المزود غير صحيحة أو ناقصة." });
-
-        var testMessage = $"هذه رسالة اختبار من نظام إخلاص كاشير. المزود: {req.Provider}. وقت الإرسال: {DateTime.Now:HH:mm}";
-        var (success, error) = await smsService.SendAsync(req.Phone, testMessage, ct);
-
-        return success
-            ? Ok(new { message = $"✓ تم إرسال رسالة الاختبار إلى {req.Phone} بنجاح" })
-            : StatusCode(500, new { message = $"فشل الإرسال: {error}" });
+        var response = await _installmentService.TestSmsAsync(req, ct);
+        
+        if (response.Success)
+            return Ok(new { message = response.Message });
+        else
+            return StatusCode(500, new { message = response.Message });
     }
 }
+
+public record PayInstallmentDto(decimal AmountPaid);
 
 public record TestSmsRequest(string Phone, string Provider, string ApiKey, string SenderId);

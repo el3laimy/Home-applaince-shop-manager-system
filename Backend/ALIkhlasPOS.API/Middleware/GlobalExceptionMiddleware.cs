@@ -23,6 +23,12 @@ public class GlobalExceptionMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // Client disconnected — log at debug level, not error
+            _logger.LogDebug("Request cancelled by client: {Path}", context.Request.Path);
+            context.Response.StatusCode = 499; // Client Closed Request
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An unhandled exception has occurred.");
@@ -61,7 +67,19 @@ public class GlobalExceptionMiddleware
         {
             statusCode = (int)HttpStatusCode.BadRequest;
             title = "عملية غير مسموحة";
-            message = invEx.Message; // e.g. from AccountingService
+            message = invEx.Message;
+        }
+        else if (ex is ArgumentException argEx)
+        {
+            statusCode = (int)HttpStatusCode.BadRequest;
+            title = "بيانات غير صالحة";
+            message = argEx.Message;
+        }
+        else if (ex is UnauthorizedAccessException)
+        {
+            statusCode = (int)HttpStatusCode.Forbidden;
+            title = "غير مصرح";
+            message = "ليس لديك صلاحية لتنفيذ هذه العملية.";
         }
 
         context.Response.StatusCode = statusCode;

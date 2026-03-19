@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ALIkhlasPOS.Domain.Entities;
 
 public enum PaymentType
@@ -68,4 +70,8 @@ public class Invoice
     // Audit fields
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string CreatedBy { get; set; } = string.Empty;
+
+    // Optimistic Concurrency Control
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = null!;
 }

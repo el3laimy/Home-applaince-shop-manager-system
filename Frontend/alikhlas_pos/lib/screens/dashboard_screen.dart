@@ -8,6 +8,7 @@ import '../controllers/auth_controller.dart';
 
 import '../core/theme/design_tokens.dart';
 import '../core/utils/formatters.dart';
+import '../services/api_service.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -19,140 +20,215 @@ class DashboardScreen extends StatelessWidget {
 
     return DesignTokens.neoPageBackgroundWidget(
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(DesignTokens.kPagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context, authCtrl),
-              const SizedBox(height: 24),
-              Expanded(
-                child: Column(
-                  children: [
-                    // 4 Stat Cards
-                    _buildStatCards(ctrl),
-                    const SizedBox(height: 24),
-                    // Chart + Transactions
-                    Expanded(
-                      child: Row(
-                        children: [
-                          // Sales Chart (2/3)
-                          Expanded(
-                            flex: 2,
-                            child: _buildSalesChart(context, ctrl),
-                          ),
-                          const SizedBox(width: 24),
-                          // Recent Transactions (1/3)
-                          Expanded(
-                            flex: 1,
-                            child: _buildRecentTransactions(ctrl),
-                          ),
-                        ],
-                      ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 900;
+            final isVeryNarrow = constraints.maxWidth < 700;
+            return Padding(
+              padding: EdgeInsets.all(isVeryNarrow ? 12 : DesignTokens.kPagePadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context, authCtrl, isNarrow),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // 4 Stat Cards — wrap on narrow
+                        _buildStatCards(ctrl, isNarrow),
+                        const SizedBox(height: 24),
+                        // Chart + Transactions
+                        Expanded(
+                          child: isNarrow
+                              ? Column(
+                                  children: [
+                                    Expanded(flex: 3, child: _buildSalesChart(context, ctrl)),
+                                    const SizedBox(height: 16),
+                                    Expanded(flex: 2, child: _buildRecentTransactions(ctrl)),
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    Expanded(flex: 2, child: _buildSalesChart(context, ctrl)),
+                                    const SizedBox(width: 24),
+                                    Expanded(flex: 1, child: _buildRecentTransactions(ctrl)),
+                                  ],
+                                ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
+  void _onDashboardSearch(BuildContext context, String query) async {
+    if (query.trim().isEmpty) return;
+    try {
+      final data = await ApiService.get('products?search=${Uri.encodeComponent(query)}&page=1&pageSize=10');
+      final items = (data['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      if (!context.mounted) return;
+      if (items.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('لا توجد نتائج لـ "$query"'), backgroundColor: Colors.orange),
+        );
+        return;
+      }
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1D2E),
+          title: Text('نتائج البحث: $query', style: const TextStyle(color: Colors.white, fontSize: 16)),
+          content: SizedBox(
+            width: 400,
+            height: 300,
+            child: ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (_, i) {
+                final p = items[i];
+                return ListTile(
+                  title: Text(p['name'] as String? ?? '', style: const TextStyle(color: Colors.white)),
+                  subtitle: Text('باركود: ${p['barcode'] ?? ''} | المخزون: ${p['stockQuantity'] ?? 0}', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  trailing: Text('${AppFormatters.currency((p['sellingPrice'] as num?)?.toDouble() ?? 0)}', style: const TextStyle(color: DesignTokens.neonCyan, fontSize: 13)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    // Navigate to inventory (index 2)
+                    final shellState = context.findAncestorStateOfType<State>();
+                    if (shellState != null && shellState.mounted) {
+                      // Use GetX navigation approach
+                      Get.snackbar('المنتج', p['name'] as String? ?? '', backgroundColor: DesignTokens.neonCyan.withAlpha(200), colorText: Colors.black);
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق', style: TextStyle(color: DesignTokens.neonCyan))),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في البحث: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  HEADER — Holographic greeting + search bar
   // ═══════════════════════════════════════════════════════════════════════════
-  Widget _buildHeader(BuildContext context, AuthController authCtrl) {
+  Widget _buildHeader(BuildContext context, AuthController authCtrl, bool isNarrow) {
+    final greeting = Obx(() {
+      final name = authCtrl.currentUser.value?.fullName ?? 'المستخدم';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          DesignTokens.holographicText(
+            text: 'أهلاً بك، $name',
+            style: TextStyle(fontSize: isNarrow ? 18 : 24),
+          ),
+          const SizedBox(height: 4),
+          Text('إليك نظرة سريعة على أداء المتجر اليوم.',
+              style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+        ],
+      );
+    }).animate().fade().slideX(begin: 0.05);
+
+    final searchContainer = Container(
+      width: isNarrow ? null : 280,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(13),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withAlpha(25)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 14),
+          Icon(Icons.search, color: Colors.grey[500], size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'بحث سريع...',
+                hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              onSubmitted: (query) => _onDashboardSearch(context, query),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final bellContainer = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withAlpha(13),
+        border: Border.all(color: Colors.white.withAlpha(25)),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+          Positioned(
+            top: 10, left: 10,
+            child: Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(
+                color: DesignTokens.neonPinkAlt,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: DesignTokens.neonPinkAlt.withAlpha(180), blurRadius: 10)],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (isNarrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          greeting,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: searchContainer),
+              const SizedBox(width: 12),
+              bellContainer,
+            ],
+          ).animate().fade().slideX(begin: -0.05),
+        ],
+      );
+    }
+
     return SizedBox(
       height: 64,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Obx(() {
-            final name = authCtrl.currentUser.value?.fullName ?? 'المستخدم';
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                DesignTokens.holographicText(
-                  text: 'أهلاً بك، $name',
-                  style: const TextStyle(fontSize: 24),
-                ),
-                const SizedBox(height: 4),
-                Text('إليك نظرة سريعة على أداء المتجر اليوم.',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-              ],
-            );
-          }).animate().fade().slideX(begin: 0.05),
-
-          // Search bar + Notification bell
+          Flexible(child: greeting),
+          const SizedBox(width: 16),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Search
-              Container(
-                width: 280,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(13),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withAlpha(25)),
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 14),
-                    Icon(Icons.search, color: Colors.grey[500], size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: 'بحث سريع...',
-                          hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
-                        ),
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Notification bell
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.white.withAlpha(13),
-                  border: Border.all(color: Colors.white.withAlpha(25)),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: DesignTokens.neonPinkAlt,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: DesignTokens.neonPinkAlt.withAlpha(180),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              searchContainer,
+              const SizedBox(width: 12),
+              bellContainer,
             ],
           ).animate().fade().slideX(begin: -0.05),
         ],
@@ -163,56 +239,71 @@ class DashboardScreen extends StatelessWidget {
   // ═══════════════════════════════════════════════════════════════════════════
   //  4 STAT CARDS — Liquid Border
   // ═══════════════════════════════════════════════════════════════════════════
-  Widget _buildStatCards(DashboardController ctrl) {
+  Widget _buildStatCards(DashboardController ctrl, bool isNarrow) {
+    final cards = [
+      Obx(() => _liquidStat(
+        label: 'إجمالي المبيعات',
+        value: AppFormatters.currency(ctrl.todaySales.value),
+        icon: Icons.payments_rounded,
+        iconBg: DesignTokens.neonCyan,
+        badge: ctrl.dailySalesGrowth.value >= 0
+            ? '+${ctrl.dailySalesGrowth.value.abs().toStringAsFixed(0)}٪'
+            : '-${ctrl.dailySalesGrowth.value.abs().toStringAsFixed(0)}٪',
+        badgeColor: ctrl.dailySalesGrowth.value >= 0
+            ? DesignTokens.neonGreen
+            : DesignTokens.neonRed,
+      )),
+      Obx(() => _liquidStat(
+        label: 'أقساط نشطة',
+        value: '${ctrl.dailyInvoicesCount.value} عقد',
+        icon: Icons.credit_score_rounded,
+        iconBg: DesignTokens.neonPurple,
+        badge: 'ثابت',
+        badgeColor: Colors.grey,
+      )),
+      Obx(() => _liquidStat(
+        label: 'طلبات جديدة',
+        value: '${ctrl.totalCustomers.value} طلب',
+        icon: Icons.shopping_bag_rounded,
+        iconBg: DesignTokens.neonPink,
+        badge: '-٥٪',
+        badgeColor: DesignTokens.neonRed,
+      )),
+      Obx(() => _liquidStat(
+        label: 'نقص المخزون',
+        value: '${ctrl.lowStockProducts.value} أصناف',
+        icon: Icons.inventory_rounded,
+        iconBg: DesignTokens.neonOrange,
+        badge: 'تنبيه',
+        badgeColor: DesignTokens.neonOrange,
+      )),
+    ];
+
+    if (isNarrow) {
+      // 2x2 grid on narrow screens
+      return Column(
+        children: [
+          Row(children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: DesignTokens.kCardGap),
+            Expanded(child: cards[1]),
+          ]),
+          const SizedBox(height: DesignTokens.kCardGap),
+          Row(children: [
+            Expanded(child: cards[2]),
+            const SizedBox(width: DesignTokens.kCardGap),
+            Expanded(child: cards[3]),
+          ]),
+        ],
+      );
+    }
+
     return Row(
       children: [
-        Expanded(
-          child: Obx(() => _liquidStat(
-            label: 'إجمالي المبيعات',
-            value: AppFormatters.currency(ctrl.todaySales.value),
-            icon: Icons.payments_rounded,
-            iconBg: DesignTokens.neonCyan,
-            badge: ctrl.dailySalesGrowth.value >= 0
-                ? '+${ctrl.dailySalesGrowth.value.abs().toStringAsFixed(0)}٪'
-                : '-${ctrl.dailySalesGrowth.value.abs().toStringAsFixed(0)}٪',
-            badgeColor: ctrl.dailySalesGrowth.value >= 0
-                ? DesignTokens.neonGreen
-                : DesignTokens.neonRed,
-          )),
-        ),
-        const SizedBox(width: DesignTokens.kCardGap),
-        Expanded(
-          child: Obx(() => _liquidStat(
-            label: 'أقساط نشطة',
-            value: '${ctrl.dailyInvoicesCount.value} عقد',
-            icon: Icons.credit_score_rounded,
-            iconBg: DesignTokens.neonPurple,
-            badge: 'ثابت',
-            badgeColor: Colors.grey,
-          )),
-        ),
-        const SizedBox(width: DesignTokens.kCardGap),
-        Expanded(
-          child: Obx(() => _liquidStat(
-            label: 'طلبات جديدة',
-            value: '${ctrl.totalCustomers.value} طلب',
-            icon: Icons.shopping_bag_rounded,
-            iconBg: DesignTokens.neonPink,
-            badge: '-٥٪',
-            badgeColor: DesignTokens.neonRed,
-          )),
-        ),
-        const SizedBox(width: DesignTokens.kCardGap),
-        Expanded(
-          child: Obx(() => _liquidStat(
-            label: 'نقص المخزون',
-            value: '${ctrl.lowStockProducts.value} أصناف',
-            icon: Icons.inventory_rounded,
-            iconBg: DesignTokens.neonOrange,
-            badge: 'تنبيه',
-            badgeColor: DesignTokens.neonOrange,
-          )),
-        ),
+        for (int i = 0; i < cards.length; i++) ...[
+          if (i > 0) const SizedBox(width: DesignTokens.kCardGap),
+          Expanded(child: cards[i]),
+        ],
       ],
     );
   }
@@ -476,8 +567,8 @@ class DashboardScreen extends StatelessWidget {
                         final item = items[i];
                         final c = txColors[i % txColors.length];
                         final ic = txIcons[i % txIcons.length];
-                        final total = (item['grandTotal'] as num?)?.toDouble() ?? 0.0;
-                        final invoiceNo = item['invoiceNumber'] ?? '#${i + 1}';
+                        final total = (item['totalAmount'] as num?)?.toDouble() ?? 0.0;
+                        final invoiceNo = item['invoiceNo'] ?? '#${i + 1}';
                         final customerName = item['customerName'] ?? 'عميل';
                         final createdAt = item['createdAt'] ?? '';
 
