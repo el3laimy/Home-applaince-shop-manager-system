@@ -103,18 +103,39 @@ class PosController extends GetxController {
     lastScannedProduct.value = product;
   }
 
+  // Debounce: prevent double-scan within 300ms
+  String? _lastScannedBarcode;
+  DateTime _lastScanTime = DateTime(2000);
+
+  // Visual feedback: true = success flash, false = error flash, null = idle
+  final Rxn<bool> scanSuccess = Rxn<bool>();
+
   /// Called when barcode is scanned or manually entered
   Future<void> onBarcodeScanned(String barcode) async {
-    if (barcode.trim().isEmpty) return;
+    // Sanitize input: trim whitespace + remove non-printable chars
+    final cleanBarcode = barcode.trim().replaceAll(RegExp(r'[^\w\-]'), '');
+    if (cleanBarcode.isEmpty) return;
+
+    // Debounce: ignore same barcode within 300ms
+    final now = DateTime.now();
+    if (cleanBarcode == _lastScannedBarcode &&
+        now.difference(_lastScanTime).inMilliseconds < 300) {
+      return;
+    }
+    _lastScannedBarcode = cleanBarcode;
+    _lastScanTime = now;
+
     isLoading.value = true;
     errorMessage.value = '';
 
     try {
-      final data = await ApiService.get('products/barcode/$barcode');
+      final data = await ApiService.get('products/barcode/$cleanBarcode');
       final product = ProductModel.fromJson(data);
 
       if (product.stockQuantity <= 0) {
         errorMessage.value = 'المنتج "${product.name}" نفد من المخزن!';
+        scanSuccess.value = false;
+        Future.delayed(const Duration(milliseconds: 500), () => scanSuccess.value = null);
         return;
       }
 
@@ -126,13 +147,21 @@ class PosController extends GetxController {
       _addToCart(product);
       lastScannedProduct.value = product;
       lastScannedProductInfo.value = '${product.name} — ${product.price.toStringAsFixed(2)} ج.م';
+
+      // Visual success feedback
+      scanSuccess.value = true;
+      Future.delayed(const Duration(milliseconds: 500), () => scanSuccess.value = null);
     } on ApiException catch (e) {
+      scanSuccess.value = false;
+      Future.delayed(const Duration(milliseconds: 500), () => scanSuccess.value = null);
       if (e.statusCode == 404) {
-        errorMessage.value = 'لم يُعثر على منتج بالباركود: $barcode';
+        errorMessage.value = 'لم يُعثر على منتج بالباركود: $cleanBarcode';
       } else {
         errorMessage.value = e.message;
       }
     } catch (e) {
+      scanSuccess.value = false;
+      Future.delayed(const Duration(milliseconds: 500), () => scanSuccess.value = null);
       errorMessage.value = 'خطأ في الاتصال بالخادم';
     } finally {
       isLoading.value = false;

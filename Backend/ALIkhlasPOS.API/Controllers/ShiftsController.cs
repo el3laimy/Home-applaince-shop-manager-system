@@ -45,9 +45,19 @@ namespace ALIkhlasPOS.API.Controllers
                     return Ok(new { hasActiveShift = false });
 
                 return Ok(new { hasActiveShift = true, shift = new {
-                    activeShift.Id, activeShift.StartTime, activeShift.OpeningCash,
-                    activeShift.ExpectedCash, activeShift.Status, activeShift.TotalSales,
-                    activeShift.TotalCashIn, activeShift.TotalCashOut
+                    activeShift.Id,
+                    activeShift.CashierId,
+                    activeShift.StartTime,
+                    activeShift.EndTime,
+                    activeShift.OpeningCash,
+                    activeShift.TotalSales,
+                    activeShift.TotalCashIn,
+                    activeShift.TotalCashOut,
+                    activeShift.ExpectedCash,
+                    activeShift.ActualCash,
+                    activeShift.Difference,
+                    activeShift.Status,
+                    activeShift.Notes
                 } });
             }
             catch (Exception ex)
@@ -95,7 +105,19 @@ namespace ALIkhlasPOS.API.Controllers
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
                 return Ok(new { message = "تم فتح الوردية بنجاح", shift = new {
-                    shift.Id, shift.StartTime, shift.OpeningCash, shift.Status
+                    shift.Id,
+                    shift.CashierId,
+                    shift.StartTime,
+                    shift.EndTime,
+                    shift.OpeningCash,
+                    shift.TotalSales,
+                    shift.TotalCashIn,
+                    shift.TotalCashOut,
+                    shift.ExpectedCash,
+                    shift.ActualCash,
+                    shift.Difference,
+                    shift.Status,
+                    shift.Notes
                 } });
             }
             catch (Exception ex)

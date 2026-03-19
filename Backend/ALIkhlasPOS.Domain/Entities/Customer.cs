@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ALIkhlasPOS.Domain.Entities;
 
 public class Customer
@@ -19,4 +21,8 @@ public class Customer
     // Audit
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Optimistic Concurrency Control
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = null!;
 }

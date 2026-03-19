@@ -68,10 +68,13 @@ builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.Accounting.IAccoun
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IInvoiceService, ALIkhlasPOS.Application.Services.InvoiceService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IPurchaseService, ALIkhlasPOS.Application.Services.PurchaseService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IReturnInvoiceService, ALIkhlasPOS.Application.Services.ReturnInvoiceService>();
+builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.ISystemAccountService, ALIkhlasPOS.Infrastructure.Services.SystemAccountService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IBarcodeService, BarcodeService>();
 builder.Services.AddScoped<IProductCacheService, ProductCacheService>();
 builder.Services.AddScoped<ALIkhlasPOS.Application.Services.InvoicePdfGenerator>();
+builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IInstallmentService, ALIkhlasPOS.Infrastructure.Services.InstallmentService>();
+builder.Services.AddScoped<ALIkhlasPOS.Application.Interfaces.IProductService, ALIkhlasPOS.Infrastructure.Services.ProductService>();
 
 // BUG-07: SMS factory and named HttpClient for VictoryLink / Twilio / Unifonic
 builder.Services.AddHttpClient("SmsClient")
@@ -82,30 +85,54 @@ builder.Services.AddSingleton<ALIkhlasPOS.Infrastructure.Sms.SmsServiceFactory>(
 // Register Background Workers
 builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.InstallmentReminderService>();
 builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.DatabaseBackupService>();
+builder.Services.AddHostedService<ALIkhlasPOS.API.Workers.AutoCloseShiftService>();
 
 // Learn more about configuring OpenAPI
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
+builder.Services.AddHealthChecks();
 
-// ── CORS Policy ──────────────────────────────────────────────────────────
+// ── CORS Policy (Restricted to local origins) ────────────────────────────
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                  "http://localhost:5291",
+                  "https://localhost:5291",
+                  "http://127.0.0.1:5291",
+                  "http://localhost:3000",   // Flutter web dev
+                  "http://localhost:8080"    // Flutter web alt
+              )
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
-// ── Rate Limiting (login brute-force protection) ─────────────────────────
+// ── Rate Limiting ─────────────────────────────────────────────────────────
 builder.Services.AddRateLimiter(options =>
 {
+    // Login: max 5 attempts per minute per IP
     options.AddFixedWindowLimiter("login", opt =>
     {
         opt.PermitLimit = 5;
         opt.Window = TimeSpan.FromMinutes(1);
         opt.QueueLimit = 0;
+    });
+    // Financial endpoints: max 30 requests per minute per IP
+    options.AddFixedWindowLimiter("financial", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 2;
+    });
+    // General API: max 120 requests per minute per IP
+    options.AddFixedWindowLimiter("general", opt =>
+    {
+        opt.PermitLimit = 120;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 5;
     });
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
@@ -115,6 +142,22 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseSerilogRequestLogging();
+
+// ── Security Headers ──────────────────────────────────────────────────────
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    // Prevent caching of API responses (JSON data)
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        context.Response.Headers["Cache-Control"] = "no-store, no-cache";
+        context.Response.Headers["Pragma"] = "no-cache";
+    }
+    await next();
+});
 
 if (app.Environment.IsDevelopment())
 {
@@ -165,6 +208,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<ALIkhlasPOS.API.Hubs.DashboardHub>("/hubs/dashboard");
+app.MapHealthChecks("/health");
 
 app.Run();
 

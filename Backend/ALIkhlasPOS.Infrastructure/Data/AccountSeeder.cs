@@ -42,48 +42,55 @@ namespace ALIkhlasPOS.Infrastructure.Data
             var retainedEarnings = CreateAccount("32", "الأرباح المحتجزة", AccountType.Equity, equity.Id);
             
             var operatingRevenues = CreateAccount("41", "إيرادات التشغيل", AccountType.Revenue, revenues.Id);
-            var otherRevenues = CreateAccount("42", "إيرادات أخرى", AccountType.Revenue, revenues.Id);
+            var otherRevenuesGroup = CreateAccount("42", "إيرادات أخرى", AccountType.Revenue, revenues.Id);
             
             var costOfGoodsSold = CreateAccount("51", "تكلفة البضاعة المباعة (COGS)", AccountType.Expense, expenses.Id);
             var operatingExpenses = CreateAccount("52", "المصروفات التشغيلية", AccountType.Expense, expenses.Id);
             
-            dbContext.Accounts.AddRange(capital, retainedEarnings, operatingRevenues, otherRevenues, costOfGoodsSold, operatingExpenses);
+            dbContext.Accounts.AddRange(capital, retainedEarnings, operatingRevenues, otherRevenuesGroup, costOfGoodsSold, operatingExpenses);
             await dbContext.SaveChangesAsync();
 
             // 5. Level 3: Detailed Ledger Accounts (Mapped to System Codes used by AccountingService)
-            var cash = CreateAccount("1101", "الخزينة الرئيسية", AccountType.Asset, currentAssets.Id, "CASH");
-            var bank = CreateAccount("1102", "الحسابات البنكية", AccountType.Asset, currentAssets.Id, "BANK");
-            var visa = CreateAccount("1103", "حساب الفيزا (POS)", AccountType.Asset, currentAssets.Id, "VISA");
-            var accountsReceivable = CreateAccount("1104", "ذمم العملاء (مدينون)", AccountType.Asset, currentAssets.Id, "ACCOUNTS_RECEIVABLE");
-            var inventory = CreateAccount("1105", "المخزون", AccountType.Asset, currentAssets.Id, "INVENTORY");
+            var cash               = CreateAccount("CASH",               "الخزينة الرئيسية",                       AccountType.Asset,     currentAssets.Id);
+            var bank               = CreateAccount("BANK",               "الحسابات البنكية",                       AccountType.Asset,     currentAssets.Id);
+            var visa               = CreateAccount("VISA",               "حساب الفيزا (POS)",                      AccountType.Asset,     currentAssets.Id);
+            var mainTreasury       = CreateAccount("MAIN_TREASURY",      "الخزينة الرئيسية (التحويل)",             AccountType.Asset,     currentAssets.Id);
+            var accountsReceivable = CreateAccount("ACCOUNTS_RECEIVABLE","ذمم العملاء (مدينون)",                   AccountType.Asset,     currentAssets.Id);
+            var inventory          = CreateAccount("INVENTORY",           "المخزون",                               AccountType.Asset,     currentAssets.Id);
 
-            var suppliersControl = CreateAccount("2101", "حساب المراقبة - الموردون (دائنون)", AccountType.Liability, currentLiabilities.Id, "SUPPLIERS_CONTROL");
-            var vatPayable = CreateAccount("2102", "الضرائب المستحقة (ضريبة القيمة المضافة)", AccountType.Liability, currentLiabilities.Id, "VAT_PAYABLE");
+            var suppliersControl   = CreateAccount("SUPPLIERS_CONTROL",  "حساب المراقبة - الموردون (دائنون)",     AccountType.Liability, currentLiabilities.Id);
+            var vatPayable         = CreateAccount("VAT_PAYABLE",         "الضرائب المستحقة (ضريبة القيمة المضافة)", AccountType.Liability, currentLiabilities.Id);
 
-            var sales = CreateAccount("4101", "إيرادات المبيعات", AccountType.Revenue, operatingRevenues.Id, "SALES");
-            
-            var cogsBasic = CreateAccount("5101", "تكلفة مبيعات البضاعة", AccountType.Expense, costOfGoodsSold.Id, "COGS");
-            var spoilage = CreateAccount("5102", "خسائر تالف أو عجز المخزون", AccountType.Expense, costOfGoodsSold.Id, "SPOILAGE_EXPENSES");
-            var generalExpenses = CreateAccount("5201", "مصروفات عمومية وإدارية", AccountType.Expense, operatingExpenses.Id, "OPERATING_EXPENSES");
+            var equityCapital      = CreateAccount("EQUITY_CAPITAL",     "رأس المال",                             AccountType.Equity,   capital.Id);
+
+            var sales              = CreateAccount("SALES",              "إيرادات المبيعات",                      AccountType.Revenue,  operatingRevenues.Id);
+            var otherRevenues      = CreateAccount("OTHER_REVENUES",     "إيرادات أخرى (فروق الورديات)",         AccountType.Revenue,  otherRevenuesGroup.Id);
+
+            var cogsBasic          = CreateAccount("COGS",               "تكلفة مبيعات البضاعة",                  AccountType.Expense,  costOfGoodsSold.Id);
+            var spoilage           = CreateAccount("SPOILAGE_EXPENSES",  "خسائر تالف أو عجز المخزون",            AccountType.Expense,  costOfGoodsSold.Id);
+            var generalExpenses    = CreateAccount("OPERATING_EXPENSES", "مصروفات عمومية وإدارية",              AccountType.Expense,  operatingExpenses.Id);
 
             dbContext.Accounts.AddRange(
-                cash, bank, visa, accountsReceivable, inventory,
+                cash, bank, visa, mainTreasury, accountsReceivable, inventory,
                 suppliersControl, vatPayable,
-                sales, cogsBasic, spoilage, generalExpenses
+                equityCapital,
+                sales, otherRevenues,
+                cogsBasic, spoilage, generalExpenses
             );
+
 
             await dbContext.SaveChangesAsync();
         }
 
-        private static Account CreateAccount(string code, string name, AccountType type, Guid? parentId, string systemCode = null!)
+        private static Account CreateAccount(string code, string name, AccountType type, Guid? parentId)
         {
             return new Account
             {
-                Code = systemCode ?? code, // Replace Code with SystemCode internally for existing compatibility
-                Name = $"{code} - {name}",
-                Type = type,
+                Code            = code,
+                Name            = name,
+                Type            = type,
                 ParentAccountId = parentId,
-                IsActive = true
+                IsActive        = true
             };
         }
     }

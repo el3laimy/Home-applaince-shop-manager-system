@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ALIkhlasPOS.Application.Interfaces;
 using ALIkhlasPOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,10 +10,12 @@ namespace ALIkhlasPOS.Application.Services.Accounting
     public class AccountingService : ALIkhlasPOS.Application.Interfaces.Accounting.IAccountingService
     {
         private readonly DbContext _dbContext;
+        private readonly ISystemAccountService _accounts;
 
-        public AccountingService(DbContext dbContext)
+        public AccountingService(DbContext dbContext, ISystemAccountService accounts)
         {
             _dbContext = dbContext;
+            _accounts  = accounts;
         }
 
         public async Task<JournalEntry> CreateJournalEntryAsync(
@@ -22,32 +25,34 @@ namespace ALIkhlasPOS.Application.Services.Accounting
             bool isClosed = false,
             params (Guid AccountId, decimal Debit, decimal Credit)[] lines)
         {
-            var totalDebit = lines.Sum(l => l.Debit);
+            var totalDebit  = lines.Sum(l => l.Debit);
             var totalCredit = lines.Sum(l => l.Credit);
 
-            if (Math.Abs(totalDebit - totalCredit) > 0.01m)
+            if (Math.Abs(totalDebit - totalCredit) > 0.0001m)
                 throw new InvalidOperationException($"القيد غير متوازن. مدين: {totalDebit}, دائن: {totalCredit}");
 
             if (totalDebit == 0)
                 throw new InvalidOperationException("لا يمكن إنشاء قيد بقيمة صفر.");
 
+            // توليد رقم قيد فريد بشكل آمن عبر PostgreSQL sequence
+            var nextVal = await GetNextVoucherSequenceAsync();
             var journalEntry = new JournalEntry
             {
-                VoucherNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
-                Reference = reference,
-                Description = description,
-                CreatedBy = createdBy,
-                IsClosed = isClosed,
-                Date = DateTime.UtcNow
+                VoucherNumber = $"JV-{DateTime.UtcNow:yyyyMM}-{nextVal:D6}",
+                Reference     = reference,
+                Description   = description,
+                CreatedBy     = createdBy,
+                IsClosed      = isClosed,
+                Date          = DateTime.UtcNow
             };
 
             foreach (var line in lines)
             {
                 journalEntry.Lines.Add(new JournalEntryLine
                 {
-                    AccountId = line.AccountId,
-                    Debit = line.Debit,
-                    Credit = line.Credit,
+                    AccountId   = line.AccountId,
+                    Debit       = line.Debit,
+                    Credit      = line.Credit,
                     Description = description
                 });
             }
@@ -60,134 +65,125 @@ namespace ALIkhlasPOS.Application.Services.Accounting
 
         public async Task RecordCashSaleAsync(Invoice invoice, string createdBy, decimal cashAmount = 0, decimal visaAmount = 0)
         {
-            var cashAccountId = await GetSystemAccountIdAsync("CASH");
-            var bankAccountId = await GetSystemAccountIdAsync("BANK");
-            var visaAccountId = await GetSystemAccountIdAsync("VISA");
-            var salesAccountId = await GetSystemAccountIdAsync("SALES");
-            var cogsAccountId = await GetSystemAccountIdAsync("COGS");
-            var inventoryAccountId = await GetSystemAccountIdAsync("INVENTORY");
+            var cashAccountId      = await _accounts.GetSystemAccountIdAsync("CASH");
+            var bankAccountId      = await _accounts.GetSystemAccountIdAsync("BANK");
+            var visaAccountId      = await _accounts.GetSystemAccountIdAsync("VISA");
+            var salesAccountId     = await _accounts.GetSystemAccountIdAsync("SALES");
+            var cogsAccountId      = await _accounts.GetSystemAccountIdAsync("COGS");
+            var inventoryAccountId = await _accounts.GetSystemAccountIdAsync("INVENTORY");
 
-            // Determine target account based on PaymentType
+            // تحديد حساب الدفع بحسب نوع الدفع
             var targetAccountId = cashAccountId;
-            string paymentDesc = "نقدية";
+            string paymentDesc  = "نقدية";
             if (invoice.PaymentType == PaymentType.BankTransfer)
             {
                 targetAccountId = bankAccountId;
-                paymentDesc = "تحويل بنكي";
+                paymentDesc     = "تحويل بنكي";
             }
             else if (invoice.PaymentType == PaymentType.Visa || invoice.PaymentType == PaymentType.Card)
             {
                 targetAccountId = visaAccountId;
-                paymentDesc = "فيزا";
+                paymentDesc     = "فيزا";
             }
 
-            // -- Split Payment Support --
             bool isSplitPayment = cashAmount > 0 && visaAmount > 0;
-            
+
             if (isSplitPayment)
             {
-                // Create Journal Entry for Split Payment
                 var journal = await CreateJournalEntryAsync(
-                    reference: invoice.InvoiceNo,
+                    reference:   invoice.InvoiceNo,
                     description: $"مبيعات مقسمة (نقدي وفيزا) - فاتورة {invoice.InvoiceNo}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
-                    (cashAccountId, Debit: cashAmount, Credit: 0),
-                    (visaAccountId, Debit: visaAmount, Credit: 0),
-                    (salesAccountId, Debit: 0, Credit: invoice.TotalAmount)
+                    (cashAccountId,  Debit: cashAmount,           Credit: 0),
+                    (visaAccountId,  Debit: visaAmount,           Credit: 0),
+                    (salesAccountId, Debit: 0,                    Credit: invoice.TotalAmount)
                 );
 
-                // Cash transaction for Cash part
                 _dbContext.Set<CashTransaction>().Add(new CashTransaction
                 {
-                    Amount = cashAmount,
-                    Type = TransactionType.CashIn,
+                    Amount        = cashAmount,
+                    Type          = TransactionType.CashIn,
                     ReceiptNumber = invoice.InvoiceNo,
-                    Description = $"مبيعات مقسمة (نقدي) - فاتورة {invoice.InvoiceNo}",
+                    Description   = $"مبيعات مقسمة (نقدي) - فاتورة {invoice.InvoiceNo}",
                     TargetAccountId = salesAccountId,
-                    JournalEntryId = journal.Id,
-                    CreatedBy = createdBy,
-                    Date = DateTime.UtcNow
+                    JournalEntryId  = journal.Id,
+                    CreatedBy       = createdBy,
+                    Date            = DateTime.UtcNow
                 });
 
-                // Cash transaction for Visa part
                 _dbContext.Set<CashTransaction>().Add(new CashTransaction
                 {
-                    Amount = visaAmount,
-                    Type = TransactionType.CashIn,
+                    Amount        = visaAmount,
+                    Type          = TransactionType.CashIn,
                     ReceiptNumber = invoice.InvoiceNo,
-                    Description = $"مبيعات مقسمة (فيزا) - فاتورة {invoice.InvoiceNo}",
+                    Description   = $"مبيعات مقسمة (فيزا) - فاتورة {invoice.InvoiceNo}",
                     TargetAccountId = salesAccountId,
-                    JournalEntryId = journal.Id,
-                    CreatedBy = createdBy,
-                    Date = DateTime.UtcNow
+                    JournalEntryId  = journal.Id,
+                    CreatedBy       = createdBy,
+                    Date            = DateTime.UtcNow
                 });
             }
             else if (invoice.PaymentType == PaymentType.Installment && invoice.RemainingAmount > 0)
             {
-                var arAccountId = await GetSystemAccountIdAsync("ACCOUNTS_RECEIVABLE");
-
-                // 1. Full revenue: Debit Target Account (paid in cash/visa) + Debit AR (remaining) / Credit Sales (total)
-                // If down payment is made, where did it go? Assuming cash by default unless specified by visaAmount
-                var downPaymentAccount = visaAmount > 0 ? visaAccountId : cashAccountId; 
+                var arAccountId          = await _accounts.GetSystemAccountIdAsync("ACCOUNTS_RECEIVABLE");
+                var downPaymentAccount   = visaAmount > 0 ? visaAccountId : cashAccountId;
 
                 var journal = await CreateJournalEntryAsync(
-                    reference: invoice.InvoiceNo,
+                    reference:   invoice.InvoiceNo,
                     description: $"مبيعات بالتقسيط - فاتورة {invoice.InvoiceNo}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
-                    (downPaymentAccount, Debit: invoice.PaidAmount, Credit: 0),
-                    (arAccountId, Debit: invoice.RemainingAmount, Credit: 0),
-                    (salesAccountId, Debit: 0, Credit: invoice.TotalAmount)
+                    (downPaymentAccount, Debit: invoice.PaidAmount,     Credit: 0),
+                    (arAccountId,        Debit: invoice.RemainingAmount, Credit: 0),
+                    (salesAccountId,     Debit: 0,                       Credit: invoice.TotalAmount)
                 );
 
-                // 2. Cash drawer entry for the down payment
                 if (invoice.PaidAmount > 0)
                 {
                     _dbContext.Set<CashTransaction>().Add(new CashTransaction
                     {
-                        Amount = invoice.PaidAmount,
-                        Type = TransactionType.CashIn,
+                        Amount        = invoice.PaidAmount,
+                        Type          = TransactionType.CashIn,
                         ReceiptNumber = invoice.InvoiceNo,
-                        Description = $"مقدم أقساط - فاتورة {invoice.InvoiceNo}",
+                        Description   = $"مقدم أقساط - فاتورة {invoice.InvoiceNo}",
                         TargetAccountId = salesAccountId,
-                        JournalEntryId = journal.Id,
-                        CreatedBy = createdBy,
-                        Date = DateTime.UtcNow
+                        JournalEntryId  = journal.Id,
+                        CreatedBy       = createdBy,
+                        Date            = DateTime.UtcNow
                     });
                 }
             }
             else
             {
-                // Fallback for single payment type if amounts not specifically provided as split
                 decimal actualPaidAmount = invoice.TotalAmount;
-                // Cash/Visa/Bank sale: full amount hits target account
+
                 var journal = await CreateJournalEntryAsync(
-                    reference: invoice.InvoiceNo,
+                    reference:   invoice.InvoiceNo,
                     description: $"مبيعات {paymentDesc} - فاتورة {invoice.InvoiceNo}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
                     (targetAccountId, Debit: actualPaidAmount, Credit: 0),
-                    (salesAccountId, Debit: 0, Credit: actualPaidAmount)
+                    (salesAccountId,  Debit: 0,                Credit: actualPaidAmount)
                 );
 
                 if (actualPaidAmount > 0)
                 {
                     _dbContext.Set<CashTransaction>().Add(new CashTransaction
                     {
-                        Amount = actualPaidAmount,
-                        Type = TransactionType.CashIn,
+                        Amount        = actualPaidAmount,
+                        Type          = TransactionType.CashIn,
                         ReceiptNumber = invoice.InvoiceNo,
-                        Description = $"مبيعات {paymentDesc} - فاتورة {invoice.InvoiceNo}",
+                        Description   = $"مبيعات {paymentDesc} - فاتورة {invoice.InvoiceNo}",
                         TargetAccountId = salesAccountId,
-                        JournalEntryId = journal.Id,
-                        CreatedBy = createdBy,
-                        Date = DateTime.UtcNow
+                        JournalEntryId  = journal.Id,
+                        CreatedBy       = createdBy,
+                        Date            = DateTime.UtcNow
                     });
                 }
             }
 
-            // 3. COGS entry (unchanged — always records actual cost)
+            // إثبات تكلفة البضاعة المباعة (COGS)
             decimal actualCost = 0;
             if (invoice.Items != null && invoice.Items.Any())
             {
@@ -202,65 +198,63 @@ namespace ALIkhlasPOS.Application.Services.Accounting
             if (actualCost > 0)
             {
                 await CreateJournalEntryAsync(
-                    reference: invoice.InvoiceNo,
+                    reference:   invoice.InvoiceNo,
                     description: $"إثبات تكلفة البضاعة المباعة لفاتورة {invoice.InvoiceNo}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
-                    (cogsAccountId, Debit: actualCost, Credit: 0),
-                    (inventoryAccountId, Debit: 0, Credit: actualCost)
+                    (cogsAccountId,      Debit: actualCost, Credit: 0),
+                    (inventoryAccountId, Debit: 0,          Credit: actualCost)
                 );
             }
         }
 
         public async Task RecordPurchaseInvoiceAsync(PurchaseInvoice invoice, string createdBy)
         {
-            var inventoryAccountId = await GetSystemAccountIdAsync("INVENTORY");
-            var supplierControlAccountId = await GetSystemAccountIdAsync("SUPPLIERS_CONTROL");
+            var inventoryAccountId      = await _accounts.GetSystemAccountIdAsync("INVENTORY");
+            var supplierControlAccountId = await _accounts.GetSystemAccountIdAsync("SUPPLIERS_CONTROL");
 
-            var supplier = await _dbContext.Set<Supplier>().FindAsync(invoice.SupplierId);
+            var supplier     = await _dbContext.Set<Supplier>().FindAsync(invoice.SupplierId);
             var supplierName = supplier?.Name ?? "مورد غير معروف";
 
-            // إثبات قيمة المشتريات (من ح/ المخزون إلى ح/ الموردين)
-            // Inventory increases (Debit), Supplier Debt increases (Credit)
             if (invoice.NetAmount > 0)
             {
                 await CreateJournalEntryAsync(
-                    reference: invoice.InvoiceNo ?? $"PI-{invoice.Id.ToString()[..8]}",
+                    reference:   invoice.InvoiceNo ?? $"PI-{invoice.Id.ToString()[..8]}",
                     description: $"فاتورة مشتريات من المورد: {supplierName}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
-                    (inventoryAccountId, Debit: invoice.NetAmount, Credit: 0),
-                    (supplierControlAccountId, Debit: 0, Credit: invoice.NetAmount)
+                    (inventoryAccountId,       Debit: invoice.NetAmount, Credit: 0),
+                    (supplierControlAccountId, Debit: 0,                 Credit: invoice.NetAmount)
                 );
             }
         }
 
         public async Task RecordSupplierPaymentAsync(Guid supplierId, decimal amount, string receiptNo, string createdBy)
         {
-            var cashAccountId = await GetSystemAccountIdAsync("CASH");
-            var supplierControlAccountId = await GetSystemAccountIdAsync("SUPPLIERS_CONTROL");
+            var cashAccountId            = await _accounts.GetSystemAccountIdAsync("CASH");
+            var supplierControlAccountId = await _accounts.GetSystemAccountIdAsync("SUPPLIERS_CONTROL");
 
             var supplier = await _dbContext.Set<Supplier>().FindAsync(supplierId);
             if (supplier == null) throw new Exception("المورد غير موجود.");
 
             var journal = await CreateJournalEntryAsync(
-                reference: receiptNo,
+                reference:   receiptNo,
                 description: $"دفعة نقدية للمورد {supplier.Name}",
-                createdBy: createdBy,
+                createdBy:   createdBy,
                 false,
                 (supplierControlAccountId, Debit: amount, Credit: 0),
-                (cashAccountId, Debit: 0, Credit: amount)
+                (cashAccountId,            Debit: 0,      Credit: amount)
             );
 
             _dbContext.Set<CashTransaction>().Add(new CashTransaction
             {
-                Amount = amount,
-                Type = TransactionType.CashOut,
-                ReceiptNumber = receiptNo,
-                Description = $"سداد للمورد {supplier.Name}",
+                Amount          = amount,
+                Type            = TransactionType.CashOut,
+                ReceiptNumber   = receiptNo,
+                Description     = $"سداد للمورد {supplier.Name}",
                 TargetAccountId = supplierControlAccountId,
-                JournalEntryId = journal.Id,
-                CreatedBy = createdBy
+                JournalEntryId  = journal.Id,
+                CreatedBy       = createdBy
             });
 
             await _dbContext.SaveChangesAsync();
@@ -268,16 +262,16 @@ namespace ALIkhlasPOS.Application.Services.Accounting
 
         public async Task RecordExpenseAsync(Expense expense, string createdBy)
         {
-            var cashAccountId = await GetSystemAccountIdAsync("CASH");
-            var expensesAccountId = await GetSystemAccountIdAsync("OPERATING_EXPENSES");
+            var cashAccountId     = await _accounts.GetSystemAccountIdAsync("CASH");
+            var expensesAccountId = await _accounts.GetSystemAccountIdAsync("OPERATING_EXPENSES");
 
             var journal = await CreateJournalEntryAsync(
-                reference: $"EXP-{DateTime.UtcNow:yyyyMMdd}-{expense.Id}",
+                reference:   $"EXP-{DateTime.UtcNow:yyyyMMdd}-{expense.Id}",
                 description: expense.Description ?? "مصروف",
-                createdBy: createdBy,
+                createdBy:   createdBy,
                 false,
                 (expensesAccountId, Debit: expense.Amount, Credit: 0),
-                (cashAccountId, Debit: 0, Credit: expense.Amount)
+                (cashAccountId,     Debit: 0,              Credit: expense.Amount)
             );
 
             expense.JournalEntryId = journal.Id;
@@ -285,13 +279,13 @@ namespace ALIkhlasPOS.Application.Services.Accounting
 
             _dbContext.Set<CashTransaction>().Add(new CashTransaction
             {
-                Amount = expense.Amount,
-                Type = TransactionType.CashOut,
-                ReceiptNumber = $"REC-{DateTime.UtcNow:yyyyMMdd}-{expense.Id}",
-                Description = expense.Description,
+                Amount          = expense.Amount,
+                Type            = TransactionType.CashOut,
+                ReceiptNumber   = $"REC-{DateTime.UtcNow:yyyyMMdd}-{expense.Id}",
+                Description     = expense.Description,
                 TargetAccountId = expensesAccountId,
-                JournalEntryId = journal.Id,
-                CreatedBy = createdBy
+                JournalEntryId  = journal.Id,
+                CreatedBy       = createdBy
             });
 
             await _dbContext.SaveChangesAsync();
@@ -299,56 +293,52 @@ namespace ALIkhlasPOS.Application.Services.Accounting
 
         public async Task RecordStockAdjustmentAsync(StockAdjustment adjustment, string createdBy)
         {
-            var inventoryAccountId = await GetSystemAccountIdAsync("INVENTORY");
-            var spoilageAccountId = await GetSystemAccountIdAsync("SPOILAGE_EXPENSES");
+            var inventoryAccountId = await _accounts.GetSystemAccountIdAsync("INVENTORY");
+            var spoilageAccountId  = await _accounts.GetSystemAccountIdAsync("SPOILAGE_EXPENSES");
 
             if (adjustment.Cost > 0)
             {
                 await CreateJournalEntryAsync(
-                    reference: $"ADJ-{adjustment.Id.ToString()[..8]}",
+                    reference:   $"ADJ-{adjustment.Id.ToString()[..8]}",
                     description: $"تسوية عجز/تلف مخزون: {adjustment.Reason}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
-                    (spoilageAccountId, Debit: adjustment.Cost, Credit: 0),
-                    (inventoryAccountId, Debit: 0, Credit: adjustment.Cost)
+                    (spoilageAccountId,  Debit: adjustment.Cost, Credit: 0),
+                    (inventoryAccountId, Debit: 0,               Credit: adjustment.Cost)
                 );
             }
         }
 
-        // BUG-03: عكس قيد المبيعات عند الإرجاع
         public async Task RecordSalesReturnAsync(ReturnInvoice returnInvoice, string createdBy)
         {
             if (returnInvoice.RefundAmount <= 0) return;
 
-            var cashAccountId = await GetSystemAccountIdAsync("CASH");
-            var salesAccountId = await GetSystemAccountIdAsync("SALES");
-            var inventoryAccountId = await GetSystemAccountIdAsync("INVENTORY");
-            var cogsAccountId = await GetSystemAccountIdAsync("COGS");
+            var cashAccountId      = await _accounts.GetSystemAccountIdAsync("CASH");
+            var salesAccountId     = await _accounts.GetSystemAccountIdAsync("SALES");
+            var inventoryAccountId = await _accounts.GetSystemAccountIdAsync("INVENTORY");
+            var cogsAccountId      = await _accounts.GetSystemAccountIdAsync("COGS");
 
-            // 1. عكس قيد المبيعات (من ح/ المبيعات إلى ح/ الخزينة — مبلغ مسترجع)
             var journal = await CreateJournalEntryAsync(
-                reference: returnInvoice.ReturnNo,
+                reference:   returnInvoice.ReturnNo,
                 description: $"مرتجع مبيعات - {returnInvoice.ReturnNo}",
-                createdBy: createdBy,
+                createdBy:   createdBy,
                 false,
                 (salesAccountId, Debit: returnInvoice.RefundAmount, Credit: 0),
-                (cashAccountId, Debit: 0, Credit: returnInvoice.RefundAmount)
+                (cashAccountId,  Debit: 0,                          Credit: returnInvoice.RefundAmount)
             );
 
-            // 2. تسجيل الحركة في الخزينة كـ CashOut
             _dbContext.Set<CashTransaction>().Add(new CashTransaction
             {
-                Amount = returnInvoice.RefundAmount,
-                Type = TransactionType.CashOut,
-                ReceiptNumber = returnInvoice.ReturnNo,
-                Description = $"استرجاع مبيعات - {returnInvoice.ReturnNo}",
+                Amount          = returnInvoice.RefundAmount,
+                Type            = TransactionType.CashOut,
+                ReceiptNumber   = returnInvoice.ReturnNo,
+                Description     = $"استرجاع مبيعات - {returnInvoice.ReturnNo}",
                 TargetAccountId = salesAccountId,
-                JournalEntryId = journal.Id,
-                CreatedBy = createdBy,
-                Date = DateTime.UtcNow
+                JournalEntryId  = journal.Id,
+                CreatedBy       = createdBy,
+                Date            = DateTime.UtcNow
             });
 
-            // 3. عكس قيد التكلفة (من ح/ المخزون إلى ح/ تكلفة البضاعة) — استعادة قيمة المخزون
             decimal returnedCost = 0;
             if (returnInvoice.Items != null && returnInvoice.Items.Any())
             {
@@ -363,127 +353,89 @@ namespace ALIkhlasPOS.Application.Services.Accounting
             if (returnedCost > 0)
             {
                 await CreateJournalEntryAsync(
-                    reference: returnInvoice.ReturnNo,
+                    reference:   returnInvoice.ReturnNo,
                     description: $"استعادة تكلفة مخزون مرتجع - {returnInvoice.ReturnNo}",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
                     (inventoryAccountId, Debit: returnedCost, Credit: 0),
-                    (cogsAccountId, Debit: 0, Credit: returnedCost)
+                    (cogsAccountId,      Debit: 0,            Credit: returnedCost)
                 );
             }
 
             await _dbContext.SaveChangesAsync();
         }
 
-        // ── FIX-A: Record installment payment in treasury & accounting ──────
         public async Task RecordInstallmentPaymentAsync(Installment installment, decimal amountPaid, string receiptNo, string createdBy)
         {
-            var cashAccountId = await GetSystemAccountIdAsync("CASH");
-            var arAccountId = await GetSystemAccountIdAsync("ACCOUNTS_RECEIVABLE");
+            var cashAccountId = await _accounts.GetSystemAccountIdAsync("CASH");
+            var arAccountId   = await _accounts.GetSystemAccountIdAsync("ACCOUNTS_RECEIVABLE");
 
-            // Journal: Debit Cash, Credit Accounts Receivable (reduce customer debt)
             var journal = await CreateJournalEntryAsync(
-                reference: receiptNo,
+                reference:   receiptNo,
                 description: $"تحصيل قسط - {receiptNo}",
-                createdBy: createdBy,
+                createdBy:   createdBy,
                 false,
                 (cashAccountId, Debit: amountPaid, Credit: 0),
-                (arAccountId, Debit: 0, Credit: amountPaid)
+                (arAccountId,   Debit: 0,          Credit: amountPaid)
             );
 
-            // Cash drawer entry
             _dbContext.Set<CashTransaction>().Add(new CashTransaction
             {
-                Amount = amountPaid,
-                Type = TransactionType.CashIn,
-                ReceiptNumber = receiptNo,
-                Description = $"تحصيل قسط - {receiptNo}",
+                Amount          = amountPaid,
+                Type            = TransactionType.CashIn,
+                ReceiptNumber   = receiptNo,
+                Description     = $"تحصيل قسط - {receiptNo}",
                 TargetAccountId = arAccountId,
-                JournalEntryId = journal.Id,
-                CreatedBy = createdBy,
-                Date = DateTime.UtcNow
+                JournalEntryId  = journal.Id,
+                CreatedBy       = createdBy,
+                Date            = DateTime.UtcNow
             });
 
             await _dbContext.SaveChangesAsync();
         }
 
-        // ── Record Shift Closing Difference ──────────────────────────────
         public async Task RecordShiftClosureAsync(Shift shift, string createdBy)
         {
             if (shift.Difference == 0) return;
 
-            var cashAccountId = await GetSystemAccountIdAsync("CASH");
-            
+            var cashAccountId = await _accounts.GetSystemAccountIdAsync("CASH");
+
             if (shift.Difference < 0)
             {
-                // Shortage (Deficit): Decrease Cash (Credit), Record Expense (Debit)
-                var shortageAccountId = await GetSystemAccountIdAsync("SPOILAGE_EXPENSES"); // Reusing for now or could create 'CASH_SHORTAGE'
-                
+                var shortageAccountId = await _accounts.GetSystemAccountIdAsync("SPOILAGE_EXPENSES");
                 decimal shortageAmount = Math.Abs(shift.Difference);
+
                 await CreateJournalEntryAsync(
-                    reference: $"SHIFT-{shift.Id.ToString()[..8]}",
+                    reference:   $"SHIFT-{shift.Id.ToString()[..8]}",
                     description: $"عجز في الوردية الدفترية ({shift.Id.ToString()[..8]})",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
                     (shortageAccountId, Debit: shortageAmount, Credit: 0),
-                    (cashAccountId, Debit: 0, Credit: shortageAmount)
+                    (cashAccountId,     Debit: 0,              Credit: shortageAmount)
                 );
             }
             else
             {
-                // Overage (Surplus): Increase Cash (Debit), Record Other Revenue (Credit)
-                var otherRevenueAccountId = await GetSystemAccountIdAsync("OTHER_REVENUES"); // Will auto-create if missing mapping
-                
+                var otherRevenueAccountId = await _accounts.GetSystemAccountIdAsync("OTHER_REVENUES");
+
                 await CreateJournalEntryAsync(
-                    reference: $"SHIFT-{shift.Id.ToString()[..8]}",
+                    reference:   $"SHIFT-{shift.Id.ToString()[..8]}",
                     description: $"زيادة في الوردية الدفترية ({shift.Id.ToString()[..8]})",
-                    createdBy: createdBy,
+                    createdBy:   createdBy,
                     false,
-                    (cashAccountId, Debit: shift.Difference, Credit: 0),
-                    (otherRevenueAccountId, Debit: 0, Credit: shift.Difference)
+                    (cashAccountId,        Debit: shift.Difference, Credit: 0),
+                    (otherRevenueAccountId, Debit: 0,               Credit: shift.Difference)
                 );
             }
         }
 
-        // ── Helper: get or auto-create system accounts ─────────────────────────
-        // NOTE: In production, these should be pre-seeded via a setup wizard.
-        //       This fallback is intentionally kept for development only.
-        private async Task<Guid> GetSystemAccountIdAsync(string systemCode)
+        // ── مساعد: الرقم التسلسلي لـ VoucherNumber من PostgreSQL sequence ──────
+        private async Task<long> GetNextVoucherSequenceAsync()
         {
-            var acc = await _dbContext.Set<Account>().FirstOrDefaultAsync(a => a.Code == systemCode);
-            if (acc == null)
-            {
-                acc = new Account
-                {
-                    Code = systemCode,
-                    Name = GetArabicAccountName(systemCode),
-                    Type = systemCode switch
-                    {
-                        "CASH" or "BANK" or "VISA" or "INVENTORY" => AccountType.Asset,
-                        "SALES" => AccountType.Revenue,
-                        "COGS" or "OPERATING_EXPENSES" or "SPOILAGE_EXPENSES" => AccountType.Expense,
-                        _ => AccountType.Liability
-                    }
-                };
-                _dbContext.Set<Account>().Add(acc);
-                await _dbContext.SaveChangesAsync();
-            }
-            return acc.Id;
+            var result = await _dbContext.Database
+                .SqlQueryRaw<long>("SELECT nextval('voucher_seq') AS \"Value\"")
+                .FirstAsync();
+            return result;
         }
-
-        private static string GetArabicAccountName(string code) => code switch
-        {
-            "CASH" => "الخزينة الرئيسية",
-            "BANK" => "الحساب البنكي",
-            "VISA" => "حساب ماكينة الفيزا",
-            "SALES" => "إيرادات المبيعات",
-            "COGS" => "تكلفة البضاعة المباعة",
-            "INVENTORY" => "المخزون",
-            "SUPPLIERS_CONTROL" => "حساب المراقبة - الموردون",
-            "ACCOUNTS_RECEIVABLE" => "ذمم العملاء المدينة",
-            "OPERATING_EXPENSES" => "المصروفات التشغيلية",
-            "SPOILAGE_EXPENSES" => "خسائر تأكل المخزون",
-            _ => $"حساب نظام - {code}"
-        };
     }
 }

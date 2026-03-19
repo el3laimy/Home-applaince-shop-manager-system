@@ -9,6 +9,9 @@ import 'package:alikhlas_pos/controllers/shift_controller.dart';
 import 'package:alikhlas_pos/models/shift_model.dart';
 import 'package:alikhlas_pos/models/product_model.dart';
 import 'package:alikhlas_pos/models/invoice_model.dart';
+import 'package:alikhlas_pos/models/user_model.dart';
+import 'package:alikhlas_pos/controllers/auth_controller.dart';
+import 'package:alikhlas_pos/controllers/notifications_controller.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class FakePosController extends PosController {
@@ -31,6 +34,18 @@ class FakePosController extends PosController {
   
   @override
   double get cartTotal => 100.0;
+  
+  @override
+  RxDouble get globalDiscount => 0.0.obs;
+  
+  @override
+  double get total => 100.0;
+  
+  @override
+  bool get hasLastReceipt => false;
+  
+  @override
+  Rx<PaymentType> get selectedPaymentType => PaymentType.cash.obs;
 }
 
 class FakeShiftController extends ShiftController {
@@ -49,6 +64,23 @@ class FakeShiftController extends ShiftController {
       ));
 }
 
+class FakeAuthController extends AuthController {
+  @override
+  void onInit() {}
+  
+  @override
+  Rxn<UserModel> get currentUser => Rxn<UserModel>(UserModel(
+        id: '1', username: 'testuser', fullName: 'Test Use', role: 'admin'));
+}
+
+class FakeNotificationsController extends NotificationsController {
+  @override
+  void onInit() {}
+  
+  @override
+  RxInt get unreadCount => 0.obs;
+}
+
 void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -58,14 +90,20 @@ void main() {
   group('POS Screen Widget Tests (Keyboard Shortcuts)', () {
     late FakePosController fakePosController;
     late FakeShiftController fakeShiftController;
+    late FakeAuthController fakeAuthController;
+    late FakeNotificationsController fakeNotificationsController;
     
     setUp(() {
       Get.testMode = true;
       fakePosController = FakePosController();
       fakeShiftController = FakeShiftController();
+      fakeAuthController = FakeAuthController();
+      fakeNotificationsController = FakeNotificationsController();
       
       Get.put<PosController>(fakePosController);
       Get.put<ShiftController>(fakeShiftController);
+      Get.put<AuthController>(fakeAuthController);
+      Get.put<NotificationsController>(fakeNotificationsController);
     });
 
     tearDown(() {

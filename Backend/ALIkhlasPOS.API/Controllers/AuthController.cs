@@ -52,11 +52,14 @@ public class AuthController : ControllerBase
         _dbContext.RefreshTokens.Add(refreshTokenEntity);
         await _dbContext.SaveChangesAsync();
 
+        bool requiresPasswordChange = user.Username.Equals("admin", StringComparison.OrdinalIgnoreCase) && request.Password == "admin123";
+
         return Ok(new
         {
             Token = token,
             RefreshToken = refreshToken,
-            User = new { user.Id, user.Username, user.FullName, user.Role }
+            User = new { user.Id, user.Username, user.FullName, user.Role },
+            RequiresPasswordChange = requiresPasswordChange
         });
     }
 

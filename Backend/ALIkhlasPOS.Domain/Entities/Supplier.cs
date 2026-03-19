@@ -38,5 +38,9 @@ namespace ALIkhlasPOS.Domain.Entities
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<PurchaseInvoice> PurchaseInvoices { get; set; } = new List<PurchaseInvoice>();
+
+        // Optimistic Concurrency Control
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = null!;
     }
 }

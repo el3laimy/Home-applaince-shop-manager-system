@@ -40,33 +40,13 @@ public class InvoiceService : IInvoiceService
         using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            // Invoice Number — retry loop for unique constraint safety
-            string invoiceNo = string.Empty;
+            // Atomic Sequence for Invoice Number
             var today = DateTime.UtcNow.ToString("yyyyMMdd");
-            for (int attempt = 0; attempt < 5; attempt++)
-            {
-                var lastNo = await _dbContext.Set<Invoice>()
-                    .Where(i => i.InvoiceNo.StartsWith($"INV-{today}-"))
-                    .OrderByDescending(i => i.InvoiceNo)
-                    .Select(i => i.InvoiceNo)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                int seq = 1;
-                if (lastNo != null)
-                {
-                    var parts = lastNo.Split('-');
-                    if (parts.Length == 3 && int.TryParse(parts[2], out var lastSeq))
-                        seq = lastSeq + 1;
-                }
-                invoiceNo = $"INV-{today}-{seq:D5}";
-
-                // Check if this number already exists (race guard)
-                if (!await _dbContext.Set<Invoice>().AnyAsync(i => i.InvoiceNo == invoiceNo, cancellationToken))
-                    break;
-
-                if (attempt == 4)
-                    throw new InvalidOperationException("فشل في توليد رقم فاتورة فريد. يرجى المحاولة مرة أخرى.");
-            }
+            var result = await _dbContext.Database
+                .SqlQueryRaw<long>("SELECT nextval('invoice_seq') AS \"Value\"")
+                .FirstAsync(cancellationToken);
+                
+            string invoiceNo = $"INV-{today}-{result:D5}";
 
             var invoice = new Invoice
             {

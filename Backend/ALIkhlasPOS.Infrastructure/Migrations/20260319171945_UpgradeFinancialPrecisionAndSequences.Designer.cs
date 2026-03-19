@@ -3,6 +3,7 @@ using System;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ALIkhlasPOS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260319171945_UpgradeFinancialPrecisionAndSequences")]
+    partial class UpgradeFinancialPrecisionAndSequences
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,12 +24,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.HasSequence("internal_barcode_seq");
-
-            modelBuilder.HasSequence("invoice_seq");
-
-            modelBuilder.HasSequence("voucher_seq");
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Account", b =>
                 {
@@ -198,12 +195,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
 
                     b.Property<string>("Phone")
                         .HasColumnType("text");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea");
 
                     b.Property<decimal>("TotalPaid")
                         .HasColumnType("numeric(18,4)");
@@ -398,12 +389,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<decimal>("RemainingAmount")
                         .HasColumnType("numeric(18,4)");
 
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -422,9 +407,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("InvoiceNo")
-                        .IsUnique();
 
                     b.ToTable("Invoices");
                 });
@@ -563,12 +545,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
 
                     b.Property<decimal>("PurchasePrice")
                         .HasColumnType("numeric(18,4)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea");
 
                     b.Property<decimal>("StockQuantity")
                         .HasColumnType("numeric");
@@ -1031,12 +1007,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");

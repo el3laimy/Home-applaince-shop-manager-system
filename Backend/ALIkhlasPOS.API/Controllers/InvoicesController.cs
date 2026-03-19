@@ -5,6 +5,7 @@ using ALIkhlasPOS.Domain.Entities;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 
@@ -13,6 +14,7 @@ namespace ALIkhlasPOS.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting("financial")]
 public class InvoicesController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;

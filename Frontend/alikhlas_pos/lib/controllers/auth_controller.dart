@@ -6,6 +6,7 @@ import '../models/user_model.dart';
 import '../core/widgets/main_shell.dart';
 import '../screens/login_screen.dart';
 import '../core/utils/toast_service.dart';
+import '../screens/force_change_password_screen.dart';
 
 class AuthController extends GetxController {
   final RxBool isLoading = false.obs;
@@ -54,6 +55,8 @@ class AuthController extends GetxController {
       final refreshToken = response['refreshToken'] as String;
       final userMap = response['user'] as Map<String, dynamic>;
       
+      final requiresPasswordChange = response['requiresPasswordChange'] as bool? ?? false;
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', token);
       await prefs.setString('refresh_token', refreshToken);
@@ -61,11 +64,16 @@ class AuthController extends GetxController {
       await prefs.setString('user_username', userMap['username'] ?? '');
       await prefs.setString('user_fullname', userMap['fullName'] ?? '');
       await prefs.setString('user_role', userMap['role'] ?? 'Cashier');
+      await prefs.setBool('requires_password_change', requiresPasswordChange);
 
       currentUser.value = UserModel.fromJson(userMap);
       isAuthenticated.value = true;
       
-      Get.offAll(() => const MainShell());
+      if (requiresPasswordChange) {
+        Get.offAll(() => const ForceChangePasswordScreen());
+      } else {
+        Get.offAll(() => const MainShell());
+      }
       return true;
     } on ApiException catch (e) {
       _snapError(context, e.message);

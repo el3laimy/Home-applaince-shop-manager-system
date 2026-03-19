@@ -3,6 +3,7 @@ using System;
 using ALIkhlasPOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ALIkhlasPOS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260319175724_AddRowVersionConcurrency")]
+    partial class AddRowVersionConcurrency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,12 +24,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.HasSequence("internal_barcode_seq");
-
-            modelBuilder.HasSequence("invoice_seq");
-
-            modelBuilder.HasSequence("voucher_seq");
 
             modelBuilder.Entity("ALIkhlasPOS.Domain.Entities.Account", b =>
                 {
@@ -422,9 +419,6 @@ namespace ALIkhlasPOS.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("InvoiceNo")
-                        .IsUnique();
 
                     b.ToTable("Invoices");
                 });
