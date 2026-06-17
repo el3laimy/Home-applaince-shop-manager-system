@@ -1,0 +1,13 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  ALIkhlasPOS.Domain -> /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.Domain/bin/Debug/net9.0/ALIkhlasPOS.Domain.dll
+  ALIkhlasPOS.Application -> /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.Application/bin/Debug/net9.0/ALIkhlasPOS.Application.dll
+  ALIkhlasPOS.Infrastructure -> /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.Infrastructure/bin/Debug/net9.0/ALIkhlasPOS.Infrastructure.dll
+  ALIkhlasPOS.API -> /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.API/bin/Debug/net9.0/ALIkhlasPOS.API.dll
+  ALIkhlasPOS.IntegrationTests -> /home/el3laimy/Desktop/Antigravity/Casher1/Backend/ALIkhlasPOS.IntegrationTests/bin/Debug/net9.0/ALIkhlasPOS.IntegrationTests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.02

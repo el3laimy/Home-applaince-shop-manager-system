@@ -1,0 +1,39 @@
+# Visual Studio / .NET
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+/build/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/.fvm/
+*.log
+
+# Environment files
+.env
+.env.*
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Local Logs and Artifacts
+Backend/ALIkhlasPOS.API/logs/
+artifacts/
+
+# Agent configs
+.agents/
