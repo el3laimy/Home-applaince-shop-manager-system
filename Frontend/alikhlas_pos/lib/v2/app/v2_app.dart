@@ -1841,18 +1841,19 @@ class _ReportsViewState extends ConsumerState<_ReportsView> {
       child: SingleChildScrollView(
         child: Column(
           children: [
-            FutureBuilder<PeriodReportSnapshot>(
-              future: ref
-                  .read(useCasesProvider)
-                  .periodReport(start: bounds.$1, end: bounds.$2),
+            FutureBuilder<
+              ({PeriodReportSnapshot report, List<Expense> expenses})
+            >(
+              future: _loadReport(bounds),
               builder: (context, asyncReport) {
-                final report = asyncReport.data;
-                if (report == null) {
+                final reportData = asyncReport.data;
+                if (reportData == null) {
                   return const SizedBox(
                     height: 260,
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
+                final report = reportData.report;
                 return Column(
                   children: [
                     _MetricsGrid(
@@ -1877,6 +1878,11 @@ class _ReportsViewState extends ConsumerState<_ReportsView> {
                     SizedBox(
                       height: 318,
                       child: _PeriodReportPanel(report: report),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 320,
+                      child: _ExpensesPanel(expenses: reportData.expenses),
                     ),
                   ],
                 );
@@ -1983,6 +1989,16 @@ class _ReportsViewState extends ConsumerState<_ReportsView> {
     };
   }
 
+  Future<({PeriodReportSnapshot report, List<Expense> expenses})> _loadReport(
+    (DateTime, DateTime) bounds,
+  ) async {
+    final useCases = ref.read(useCasesProvider);
+    return (
+      report: await useCases.periodReport(start: bounds.$1, end: bounds.$2),
+      expenses: await useCases.expensesReport(start: bounds.$1, end: bounds.$2),
+    );
+  }
+
   Future<void> _printCurrentReport((DateTime, DateTime) bounds) async {
     final report = await ref
         .read(useCasesProvider)
@@ -2000,6 +2016,7 @@ class _BackupView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final backupStatus = snapshot.backupStatus;
     return _Screen(
       title: 'النسخ الاحتياطي',
       subtitle: 'نسخة يدوية ويومية تلقائية عند اختيار مجلد',
@@ -2007,22 +2024,32 @@ class _BackupView extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _InfoLine('مجلد النسخ', backupStatus.directory ?? 'لم يتم اختياره'),
+            _InfoLine('آخر نسخة يومية', backupStatus.lastDate ?? 'لا يوجد'),
             _InfoLine(
-              'مجلد النسخ',
-              snapshot.backupStatus.directory ?? 'لم يتم اختياره',
+              'آخر ملف',
+              backupStatus.latestBackupPath == null
+                  ? 'لا يوجد'
+                  : _fileName(backupStatus.latestBackupPath!),
             ),
             _InfoLine(
-              'آخر نسخة يومية',
-              snapshot.backupStatus.lastDate ?? 'لا يوجد',
+              'الاحتفاظ',
+              '${backupStatus.backupCount}/${backupStatus.retentionCopies} نسخة',
             ),
             const SizedBox(height: 18),
             Wrap(
               spacing: 10,
+              runSpacing: 10,
               children: [
                 FilledButton.icon(
-                  onPressed: () => _backupNow(context, ref),
+                  onPressed: () => _manualBackup(context, ref),
                   icon: const Icon(Icons.backup),
-                  label: const Text('اختيار مجلد ونسخ الآن'),
+                  label: const Text('نسخ الآن'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _chooseBackupDirectory(context, ref),
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('اختيار المجلد'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => _restoreBackup(context, ref),
@@ -2037,17 +2064,34 @@ class _BackupView extends ConsumerWidget {
     );
   }
 
-  Future<void> _backupNow(BuildContext context, WidgetRef ref) async {
+  Future<void> _chooseBackupDirectory(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final directoryPath = await FilePicker.platform.getDirectoryPath(
       dialogTitle: 'اختر مجلد النسخ الاحتياطي',
     );
     if (!context.mounted || directoryPath == null) return;
+    await ref.read(useCasesProvider).setBackupDirectory(directoryPath);
+    if (!context.mounted) return;
+    _showSnack(context, 'تم اختيار مجلد النسخ الاحتياطي');
+    _refresh(ref);
+  }
+
+  Future<void> _manualBackup(BuildContext context, WidgetRef ref) async {
+    var directoryPath = snapshot.backupStatus.directory;
+    if (directoryPath == null || directoryPath.trim().isEmpty) {
+      directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'اختر مجلد النسخ الاحتياطي',
+      );
+      if (!context.mounted || directoryPath == null) return;
+      await ref.read(useCasesProvider).setBackupDirectory(directoryPath);
+    }
     try {
       final useCases = ref.read(useCasesProvider);
-      await useCases.setBackupDirectory(directoryPath);
       final backup = await useCases.backupToDirectory(Directory(directoryPath));
       if (!context.mounted) return;
-      _showSnack(context, 'تم إنشاء النسخة: ${backup.path}');
+      _showSnack(context, 'تم إنشاء النسخة: ${_fileName(backup.path)}');
       _refresh(ref);
     } catch (error) {
       if (!context.mounted) return;
@@ -2066,18 +2110,25 @@ class _BackupView extends ConsumerWidget {
         picked.files.single.path == null) {
       return;
     }
+    final backupPath = picked.files.single.path!;
     final confirmed = await _confirm(
       context,
       title: 'استرجاع نسخة احتياطية',
       message:
-          'سيتم استبدال قاعدة البيانات الحالية. تأكد أن لديك نسخة حديثة قبل المتابعة.',
+          'سيتم استبدال قاعدة البيانات الحالية بالملف ${_fileName(backupPath)}. تأكد أن لديك نسخة حديثة قبل المتابعة، ثم أعد تشغيل التطبيق بعد الاسترجاع.',
     );
     if (!confirmed || !context.mounted) return;
-    await ref
-        .read(useCasesProvider)
-        .restoreFromBackup(File(picked.files.single.path!));
-    if (!context.mounted) return;
-    _showSnack(context, 'تم الاسترجاع. أعد تشغيل التطبيق لفتح الملف المسترجع.');
+    try {
+      await ref.read(useCasesProvider).restoreFromBackup(File(backupPath));
+      if (!context.mounted) return;
+      _showSnack(
+        context,
+        'تم الاسترجاع. أعد تشغيل التطبيق لفتح الملف المسترجع.',
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      _showSnack(context, 'تعذر الاسترجاع: $error');
+    }
   }
 }
 
@@ -2190,6 +2241,18 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                 _InfoLine(
                   'آخر نسخة يومية',
                   widget.snapshot.backupStatus.lastDate ?? 'لا يوجد',
+                ),
+                _InfoLine(
+                  'آخر ملف',
+                  widget.snapshot.backupStatus.latestBackupPath == null
+                      ? 'لا يوجد'
+                      : _fileName(
+                          widget.snapshot.backupStatus.latestBackupPath!,
+                        ),
+                ),
+                _InfoLine(
+                  'الاحتفاظ',
+                  '${widget.snapshot.backupStatus.backupCount}/${widget.snapshot.backupStatus.retentionCopies} نسخة',
                 ),
               ],
             ),
@@ -2323,9 +2386,12 @@ class _GlassPane extends StatelessWidget {
               ),
             ],
           ),
-          child: Padding(
-            padding: padding ?? const EdgeInsets.all(16),
-            child: child,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Padding(
+              padding: padding ?? const EdgeInsets.all(16),
+              child: child,
+            ),
           ),
         ),
       ),
@@ -2837,6 +2903,66 @@ class _PeriodReportPanel extends StatelessWidget {
           _AmountRow('صافي حركة الكاش', report.cashNetMinor),
           _AmountRow('صافي حركة المحفظة', report.walletNetMinor),
           _AmountRow('مشتريات دخلت المخزون', report.purchaseMinor),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpensesPanel extends StatelessWidget {
+  const _ExpensesPanel({required this.expenses});
+  final List<Expense> expenses;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPane(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.money_off,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'مصروفات الفترة',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Text(
+                Money(
+                  expenses.fold<int>(
+                    0,
+                    (sum, expense) => sum + expense.amountMinor,
+                  ),
+                ).format(),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: expenses.isEmpty
+                ? const Center(child: Text('لا توجد مصروفات في هذه الفترة'))
+                : ListView.separated(
+                    itemCount: expenses.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final expense = expenses[index];
+                      return ListTile(
+                        dense: true,
+                        title: Text(expense.description),
+                        subtitle: Text(
+                          '${_dateTime(expense.createdAt)} · ${_paymentMethodText(PaymentMethod.values.byName(expense.method))}',
+                        ),
+                        trailing: Text(Money(expense.amountMinor).format()),
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );
@@ -4084,6 +4210,8 @@ String _dateTime(DateTime value) =>
 
 String _date(DateTime value) =>
     '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+String _fileName(String path) => File(path).uri.pathSegments.last;
 
 Future<void> _openSaleReceipt(
   BuildContext context,
