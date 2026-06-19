@@ -118,6 +118,14 @@ class Payments extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+class Expenses extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get description => text()();
+  IntColumn get amountMinor => integer()();
+  TextColumn get method => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 class InstallmentPlans extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get ownerType => text()();
@@ -211,6 +219,7 @@ LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
     PurchaseInvoices,
     PurchaseItems,
     Payments,
+    Expenses,
     InstallmentPlans,
     InstallmentPayments,
     SaleReturns,
@@ -225,7 +234,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? openAppConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -233,11 +242,51 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await migrator.addColumn(saleInvoices, saleInvoices.discountMinor);
       }
+      if (from < 3) {
+        await _createPerformanceIndexes();
+      }
+      if (from < 4) {
+        await migrator.createTable(expenses);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON;');
       await customStatement('PRAGMA journal_mode = WAL;');
       await customStatement('PRAGMA synchronous = NORMAL;');
+      await _createPerformanceIndexes();
     },
   );
+
+  Future<void> _createPerformanceIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_ledger_lines_entry_id ON ledger_lines(entry_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_ledger_lines_account_code ON ledger_lines(account_code);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_ledger_lines_party ON ledger_lines(party_type, party_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_ledger_entries_created_at ON ledger_entries(created_at);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_ledger_entries_reference ON ledger_entries(reference_type, reference_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_stock_movements_product_id ON stock_movements(product_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_stock_movements_reference ON stock_movements(reference_type, reference_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_payments_owner ON payments(owner_type, owner_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_installment_payments_plan_due ON installment_payments(plan_id, due_date);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);',
+    );
+  }
 }

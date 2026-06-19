@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
@@ -271,10 +272,19 @@ class ShopSettingsSnapshot {
 }
 
 class BackupStatus {
-  const BackupStatus({this.directory, this.lastDate});
+  const BackupStatus({
+    this.directory,
+    this.lastDate,
+    this.latestBackupPath,
+    this.backupCount = 0,
+    this.retentionCopies = 30,
+  });
 
   final String? directory;
   final String? lastDate;
+  final String? latestBackupPath;
+  final int backupCount;
+  final int retentionCopies;
 }
 
 class InstallmentDuePreview {
@@ -352,10 +362,29 @@ class WorkbenchSnapshot {
   final ShopSettingsSnapshot shopSettings;
 }
 
+class RestoreFileOperations {
+  const RestoreFileOperations();
+
+  Future<void> copyFile(File source, File target) async {
+    await source.copy(target.path);
+  }
+
+  Future<void> deleteFileIfExists(File file) async {
+    if (await file.exists()) await file.delete();
+  }
+}
+
 class V2UseCases {
-  V2UseCases(this.db);
+  V2UseCases(this.db, {RestoreFileOperations? restoreFileOperations})
+    : _restoreFiles = restoreFileOperations ?? const RestoreFileOperations();
+
+  static const _passwordHashPrefix = 'pbkdf2_sha256';
+  static const _passwordIterations = 120000;
+  static const _passwordSaltLength = 16;
+  static const _passwordKeyLength = 32;
 
   final AppDatabase db;
+  final RestoreFileOperations _restoreFiles;
 
   Future<void> bootstrap() async {
     final hasOwner = await db.select(db.users).getSingleOrNull();
@@ -383,10 +412,24 @@ class V2UseCases {
     final user = await (db.select(
       db.users,
     )..where((u) => u.username.equals(username.trim()))).getSingleOrNull();
-    if (user == null || user.passwordHash != _hashPassword(password)) {
+    if (user == null) {
       return const AppFailure('اسم المستخدم أو كلمة المرور غير صحيحة');
     }
-    return AppSuccess(user);
+    final verification = _verifyPassword(password, user.passwordHash);
+    if (!verification.isValid) {
+      return const AppFailure('اسم المستخدم أو كلمة المرور غير صحيحة');
+    }
+    if (!verification.needsRehash) return AppSuccess(user);
+
+    final upgradedHash = _hashPassword(password);
+    await (db.update(db.users)..where((u) => u.id.equals(user.id))).write(
+      UsersCompanion(passwordHash: Value(upgradedHash)),
+    );
+    return AppSuccess(
+      await (db.select(
+        db.users,
+      )..where((u) => u.id.equals(user.id))).getSingle(),
+    );
   }
 
   Future<AppResult<User>> changePassword(int userId, String newPassword) async {
@@ -991,9 +1034,18 @@ class V2UseCases {
     required int saleId,
     required Map<int, int> saleItemQuantities,
     required PaymentMethod refundMethod,
+    PaymentMethod? overflowRefundMethod,
   }) async {
     if (saleItemQuantities.isEmpty) {
       return const AppFailure('اختر صنفًا واحدًا على الأقل');
+    }
+    if (overflowRefundMethod == PaymentMethod.installment) {
+      return const AppFailure('فائض المرتجع يرد كاش أو محفظة فقط');
+    }
+
+    final shift = await currentShift();
+    if (refundMethod == PaymentMethod.cash && shift == null) {
+      return const AppFailure('افتح وردية قبل رد مرتجع كاش');
     }
 
     try {
@@ -1079,17 +1131,85 @@ class V2UseCases {
                 ),
               );
           refund += qty * refundUnitPrice;
+          // Sale returns reverse inventory at the historical sold cost; current WAC is not recalculated in v2.
           returnedCost += qty * saleItem.unitCostMinor;
         }
 
         await (db.update(db.saleReturns)..where((r) => r.id.equals(returnId)))
             .write(SaleReturnsCompanion(refundMinor: Value(refund)));
 
-        final refundAccount = refundMethod == PaymentMethod.wallet
-            ? AccountCodes.wallet
-            : refundMethod == PaymentMethod.cash
-            ? AccountCodes.cash
-            : AccountCodes.receivables;
+        var receivableSettlement = 0;
+        var overflowRefund = 0;
+        PaymentMethod? effectiveOverflowRefundMethod;
+
+        if (refundMethod == PaymentMethod.installment) {
+          final plan =
+              await (db.select(db.installmentPlans)..where(
+                    (plan) =>
+                        plan.ownerType.equals('sale') &
+                        plan.ownerId.equals(saleId) &
+                        plan.partyType.equals('customer') &
+                        plan.partyId.equals(sale.customerId!),
+                  ))
+                  .getSingleOrNull();
+          if (plan == null) {
+            throw _BusinessError('خطة التقسيط غير موجودة لهذه الفاتورة');
+          }
+
+          final remainingReceivable = plan.totalMinor - plan.paidMinor;
+          receivableSettlement = refund > remainingReceivable
+              ? remainingReceivable
+              : refund;
+          overflowRefund = refund - receivableSettlement;
+          if (overflowRefund > 0) {
+            effectiveOverflowRefundMethod = overflowRefundMethod;
+            if (effectiveOverflowRefundMethod == null) {
+              throw _BusinessError('اختر طريقة رد فائض المرتجع كاش أو محفظة');
+            }
+            if (effectiveOverflowRefundMethod == PaymentMethod.cash &&
+                shift == null) {
+              throw _BusinessError('افتح وردية قبل رد فائض المرتجع كاش');
+            }
+          }
+
+          await _reduceInstallmentPlanForReturn(
+            plan: plan,
+            settlementMinor: receivableSettlement,
+          );
+        }
+
+        final creditLines = <_LedgerLineDraft>[];
+        if (refundMethod == PaymentMethod.installment) {
+          if (receivableSettlement > 0) {
+            creditLines.add(
+              _LedgerLineDraft(
+                AccountCodes.receivables,
+                creditMinor: receivableSettlement,
+                partyType: 'customer',
+                partyId: sale.customerId,
+              ),
+            );
+          }
+          if (overflowRefund > 0) {
+            creditLines.add(
+              _LedgerLineDraft(
+                effectiveOverflowRefundMethod == PaymentMethod.wallet
+                    ? AccountCodes.wallet
+                    : AccountCodes.cash,
+                creditMinor: overflowRefund,
+              ),
+            );
+          }
+        } else {
+          creditLines.add(
+            _LedgerLineDraft(
+              refundMethod == PaymentMethod.wallet
+                  ? AccountCodes.wallet
+                  : AccountCodes.cash,
+              creditMinor: refund,
+            ),
+          );
+        }
 
         await _postLedger(
           referenceType: 'sale_return',
@@ -1097,16 +1217,7 @@ class V2UseCases {
           description: 'مرتجع بيع $returnNo',
           lines: [
             _LedgerLineDraft(AccountCodes.sales, debitMinor: refund),
-            _LedgerLineDraft(
-              refundAccount,
-              creditMinor: refund,
-              partyType: refundMethod == PaymentMethod.installment
-                  ? 'customer'
-                  : null,
-              partyId: refundMethod == PaymentMethod.installment
-                  ? sale.customerId
-                  : null,
-            ),
+            ...creditLines,
           ],
         );
 
@@ -1133,6 +1244,68 @@ class V2UseCases {
     }
   }
 
+  Future<void> _reduceInstallmentPlanForReturn({
+    required InstallmentPlan plan,
+    required int settlementMinor,
+  }) async {
+    if (settlementMinor <= 0) return;
+
+    final remaining = plan.totalMinor - plan.paidMinor;
+    if (settlementMinor > remaining) {
+      throw StateError('Installment return settlement exceeds remaining debt.');
+    }
+
+    final newTotal = plan.totalMinor - settlementMinor;
+    final newRemaining = newTotal - plan.paidMinor;
+    final installments =
+        await (db.select(db.installmentPayments)
+              ..where((payment) => payment.planId.equals(plan.id))
+              ..orderBy([(payment) => OrderingTerm.asc(payment.dueDate)]))
+            .get();
+    final paidScheduledMinor = installments
+        .where((payment) => payment.status == 'paid')
+        .fold<int>(0, (sum, payment) => sum + payment.amountMinor);
+    final adjustableInstallments = installments
+        .where((payment) => payment.status != 'paid')
+        .toList();
+    final adjustableTotal = newTotal - paidScheduledMinor;
+    if (adjustableTotal < 0) {
+      throw StateError(
+        'Adjusted installment total is less than paid schedule.',
+      );
+    }
+
+    await (db.update(
+      db.installmentPlans,
+    )..where((p) => p.id.equals(plan.id))).write(
+      InstallmentPlansCompanion(
+        totalMinor: Value(newTotal),
+        status: Value(newRemaining == 0 ? 'closed' : 'open'),
+      ),
+    );
+
+    if (adjustableInstallments.isEmpty) return;
+
+    for (var i = 0; i < adjustableInstallments.length; i++) {
+      final installment = adjustableInstallments[i];
+      await (db.update(
+        db.installmentPayments,
+      )..where((payment) => payment.id.equals(installment.id))).write(
+        InstallmentPaymentsCompanion(
+          amountMinor: Value(
+            allocateRemainderToLast(
+              adjustableTotal,
+              adjustableInstallments.length,
+              i,
+            ),
+          ),
+          status: Value(newRemaining == 0 ? 'paid' : 'pending'),
+          paidAt: Value(newRemaining == 0 ? DateTime.now() : null),
+        ),
+      );
+    }
+  }
+
   Future<AppResult<int>> recordExpense({
     required String description,
     required int amountMinor,
@@ -1154,10 +1327,18 @@ class V2UseCases {
     }
 
     final expenseId = await db.transaction(() async {
-      final id = DateTime.now().microsecondsSinceEpoch;
-      return _postLedger(
+      final expenseId = await db
+          .into(db.expenses)
+          .insert(
+            ExpensesCompanion.insert(
+              description: description.trim(),
+              amountMinor: amountMinor,
+              method: method.name,
+            ),
+          );
+      await _postLedger(
         referenceType: 'expense',
-        referenceId: id,
+        referenceId: expenseId,
         description: 'مصروف: ${description.trim()}',
         lines: [
           _LedgerLineDraft(AccountCodes.expenses, debitMinor: amountMinor),
@@ -1169,6 +1350,7 @@ class V2UseCases {
           ),
         ],
       );
+      return expenseId;
     });
 
     return AppSuccess(expenseId);
@@ -1313,10 +1495,7 @@ class V2UseCases {
         customers: customers,
         suppliers: suppliers,
       ),
-      backupStatus: BackupStatus(
-        directory: await _settingValue('backup.directory'),
-        lastDate: await _settingValue('backup.lastDate'),
-      ),
+      backupStatus: await _backupStatus(),
       shopSettings: await shopSettings(),
     );
   }
@@ -1354,6 +1533,27 @@ class V2UseCases {
       _dayStart(start),
       _dayStart(end).add(const Duration(days: 1)),
     );
+  }
+
+  Future<List<Expense>> expensesReport({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final from = _dayStart(start);
+    final to = _dayStart(end).add(const Duration(days: 1));
+    return (db.select(db.expenses)
+          ..where(
+            (expense) =>
+                expense.createdAt.isBiggerOrEqualValue(from) &
+                expense.createdAt.isSmallerThanValue(to),
+          )
+          ..orderBy([
+            (expense) => OrderingTerm(
+              expression: expense.createdAt,
+              mode: OrderingMode.desc,
+            ),
+          ]))
+        .get();
   }
 
   Future<List<PartyStatementLine>> partyStatement({
@@ -1525,7 +1725,7 @@ class V2UseCases {
 
   Future<File> backupToDirectory(Directory directory) async {
     await directory.create(recursive: true);
-    final keep = int.tryParse(await _settingValue('backup.keepCopies') ?? '');
+    final keep = await _backupRetentionCopies();
     final timestamp = DateTime.now().toIso8601String().replaceAll(
       RegExp(r'[:.]'),
       '-',
@@ -1533,7 +1733,7 @@ class V2UseCases {
     final target = File(p.join(directory.path, 'alikhlas-v2-$timestamp.db'));
     final escaped = target.path.replaceAll("'", "''");
     await db.customStatement("VACUUM INTO '$escaped';");
-    await _pruneBackups(directory, keep: keep ?? 30);
+    await _pruneBackups(directory, keep: keep);
     return target;
   }
 
@@ -1558,6 +1758,7 @@ class V2UseCases {
     if (!await backupFile.exists()) {
       throw ArgumentError('Backup file does not exist: ${backupFile.path}');
     }
+    await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE);');
     final currentDir = await db
         .customSelect('PRAGMA database_list;')
         .getSingle();
@@ -1565,8 +1766,39 @@ class V2UseCases {
     if (dbPath == null || dbPath.isEmpty) {
       throw StateError('Cannot resolve current SQLite file path.');
     }
+    final dbFile = File(dbPath);
+    final walFile = File('$dbPath-wal');
+    final shmFile = File('$dbPath-shm');
+    final rollbackFile = File(
+      '$dbPath.restore-${DateTime.now().microsecondsSinceEpoch}.bak',
+    );
+    if (await dbFile.exists()) {
+      await _restoreFiles.copyFile(dbFile, rollbackFile);
+    }
     await db.close();
-    await backupFile.copy(dbPath);
+    var restored = false;
+    try {
+      await _restoreFiles.deleteFileIfExists(walFile);
+      await _restoreFiles.deleteFileIfExists(shmFile);
+      await _restoreFiles.copyFile(backupFile, dbFile);
+      restored = true;
+    } catch (_) {
+      if (await rollbackFile.exists()) {
+        await _restoreFiles.deleteFileIfExists(walFile);
+        await _restoreFiles.deleteFileIfExists(shmFile);
+        await _restoreFiles.copyFile(rollbackFile, dbFile);
+        await _restoreFiles.deleteFileIfExists(rollbackFile);
+      }
+      rethrow;
+    } finally {
+      if (restored) {
+        try {
+          await _restoreFiles.deleteFileIfExists(rollbackFile);
+        } on FileSystemException {
+          // A leftover rollback copy is safer than failing a completed restore.
+        }
+      }
+    }
   }
 
   Future<void> _upsertSetting(String key, String value) async {
@@ -1842,31 +2074,11 @@ class V2UseCases {
   }
 
   Future<int> _accountBalance(String accountCode) async {
-    final rows = await (db.select(
-      db.ledgerLines,
-    )..where((l) => l.accountCode.equals(accountCode))).get();
-    return rows.fold<int>(
-      0,
-      (sum, line) => sum + line.debitMinor - line.creditMinor,
-    );
+    return _accountNet(accountCode: accountCode);
   }
 
   Future<int> _accountNetSince(String accountCode, DateTime since) async {
-    final query =
-        db.select(db.ledgerLines).join([
-          innerJoin(
-            db.ledgerEntries,
-            db.ledgerEntries.id.equalsExp(db.ledgerLines.entryId),
-          ),
-        ])..where(
-          db.ledgerLines.accountCode.equals(accountCode) &
-              db.ledgerEntries.createdAt.isBiggerOrEqualValue(since),
-        );
-    final rows = await query.get();
-    return rows.fold<int>(0, (sum, row) {
-      final line = row.readTable(db.ledgerLines);
-      return sum + line.debitMinor - line.creditMinor;
-    });
+    return _accountNet(accountCode: accountCode, start: since);
   }
 
   Future<int> _accountNetBetween(
@@ -1875,25 +2087,54 @@ class V2UseCases {
     DateTime end, {
     String? referenceType,
   }) async {
-    var predicate =
-        db.ledgerLines.accountCode.equals(accountCode) &
-        db.ledgerEntries.createdAt.isBiggerOrEqualValue(start) &
-        db.ledgerEntries.createdAt.isSmallerThanValue(end);
-    if (referenceType != null) {
-      predicate =
-          predicate & db.ledgerEntries.referenceType.equals(referenceType);
+    return _accountNet(
+      accountCode: accountCode,
+      start: start,
+      end: end,
+      referenceType: referenceType,
+    );
+  }
+
+  Future<int> _accountNet({
+    required String accountCode,
+    DateTime? start,
+    DateTime? end,
+    String? referenceType,
+  }) async {
+    final usesLedgerEntry =
+        start != null || end != null || referenceType != null;
+    final where = <String>['l.account_code = ?'];
+    final variables = <Variable>[Variable<String>(accountCode)];
+    if (start != null) {
+      where.add('e.created_at >= ?');
+      variables.add(Variable<DateTime>(start));
     }
-    final query = db.select(db.ledgerLines).join([
-      innerJoin(
-        db.ledgerEntries,
-        db.ledgerEntries.id.equalsExp(db.ledgerLines.entryId),
-      ),
-    ])..where(predicate);
-    final rows = await query.get();
-    return rows.fold<int>(0, (sum, row) {
-      final line = row.readTable(db.ledgerLines);
-      return sum + line.debitMinor - line.creditMinor;
-    });
+    if (end != null) {
+      where.add('e.created_at < ?');
+      variables.add(Variable<DateTime>(end));
+    }
+    if (referenceType != null) {
+      where.add('e.reference_type = ?');
+      variables.add(Variable<String>(referenceType));
+    }
+
+    final from = usesLedgerEntry
+        ? 'ledger_lines l INNER JOIN ledger_entries e ON e.id = l.entry_id'
+        : 'ledger_lines l';
+    final row = await db
+        .customSelect(
+          '''
+          SELECT COALESCE(SUM(l.debit_minor - l.credit_minor), 0) AS net
+          FROM $from
+          WHERE ${where.join(' AND ')}
+          ''',
+          variables: variables,
+          readsFrom: usesLedgerEntry
+              ? {db.ledgerLines, db.ledgerEntries}
+              : {db.ledgerLines},
+        )
+        .getSingle();
+    return row.data['net'] as int;
   }
 
   Future<DailySummarySnapshot> _dailySummary(DateTime date) async {
@@ -2118,18 +2359,24 @@ class V2UseCases {
     required Map<int, String> names,
     required Map<int, String?> phones,
   }) async {
-    final lines =
-        await (db.select(db.ledgerLines)..where(
-              (line) =>
-                  line.accountCode.equals(accountCode) &
-                  line.partyType.equals(partyType),
-            ))
-            .get();
     final balances = <int, int>{};
-    for (final line in lines) {
-      final id = line.partyId;
-      if (id == null) continue;
-      balances[id] = (balances[id] ?? 0) + line.debitMinor - line.creditMinor;
+    final rows = await db
+        .customSelect(
+          '''
+          SELECT party_id, COALESCE(SUM(debit_minor - credit_minor), 0) AS net
+          FROM ledger_lines
+          WHERE account_code = ? AND party_type = ? AND party_id IS NOT NULL
+          GROUP BY party_id
+          ''',
+          variables: [
+            Variable<String>(accountCode),
+            Variable<String>(partyType),
+          ],
+          readsFrom: {db.ledgerLines},
+        )
+        .get();
+    for (final row in rows) {
+      balances[row.data['party_id'] as int] = row.data['net'] as int;
     }
     return names.entries
         .map(
@@ -2179,6 +2426,35 @@ class V2UseCases {
   }
 
   Future<void> _pruneBackups(Directory directory, {required int keep}) async {
+    final backups = await _backupFiles(directory);
+    for (final backup in backups.skip(keep)) {
+      await backup.delete();
+    }
+  }
+
+  Future<BackupStatus> _backupStatus() async {
+    final directoryPath = await _settingValue('backup.directory');
+    final retentionCopies = await _backupRetentionCopies();
+    if (directoryPath == null || directoryPath.trim().isEmpty) {
+      return BackupStatus(
+        lastDate: await _settingValue('backup.lastDate'),
+        retentionCopies: retentionCopies,
+      );
+    }
+
+    final directory = Directory(directoryPath);
+    final backups = await _backupFiles(directory);
+    return BackupStatus(
+      directory: directoryPath,
+      lastDate: await _settingValue('backup.lastDate'),
+      latestBackupPath: backups.isEmpty ? null : backups.first.path,
+      backupCount: backups.length,
+      retentionCopies: retentionCopies,
+    );
+  }
+
+  Future<List<File>> _backupFiles(Directory directory) async {
+    if (!await directory.exists()) return [];
     final backups = await directory
         .list()
         .where(
@@ -2191,14 +2467,122 @@ class V2UseCases {
     backups.sort(
       (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
     );
-    for (final backup in backups.skip(keep)) {
-      await backup.delete();
-    }
+    return backups;
+  }
+
+  Future<int> _backupRetentionCopies() async {
+    final configuredCopies = int.tryParse(
+      await _settingValue('backup.keepCopies') ?? '',
+    );
+    return configuredCopies == null || configuredCopies < 1
+        ? 30
+        : configuredCopies;
   }
 
   String _hashPassword(String password) {
+    final salt = _randomBytes(_passwordSaltLength);
+    final hash = _pbkdf2Sha256(
+      password: password,
+      salt: salt,
+      iterations: _passwordIterations,
+      keyLength: _passwordKeyLength,
+    );
+    return [
+      _passwordHashPrefix,
+      _passwordIterations,
+      base64Encode(salt),
+      base64Encode(hash),
+    ].join(r'$');
+  }
+
+  String _legacyHashPassword(String password) {
     final bytes = utf8.encode('alikhlas-v2::$password');
     return sha256.convert(bytes).toString();
+  }
+
+  ({bool isValid, bool needsRehash}) _verifyPassword(
+    String password,
+    String storedHash,
+  ) {
+    final parts = storedHash.split(r'$');
+    if (parts.length == 4 && parts.first == _passwordHashPrefix) {
+      final iterations = int.tryParse(parts[1]);
+      if (iterations == null || iterations <= 0) {
+        return (isValid: false, needsRehash: false);
+      }
+      try {
+        final salt = base64Decode(parts[2]);
+        final expectedHash = base64Decode(parts[3]);
+        final actualHash = _pbkdf2Sha256(
+          password: password,
+          salt: salt,
+          iterations: iterations,
+          keyLength: expectedHash.length,
+        );
+        return (
+          isValid: _constantTimeEquals(actualHash, expectedHash),
+          needsRehash:
+              iterations != _passwordIterations ||
+              expectedHash.length != _passwordKeyLength,
+        );
+      } on FormatException {
+        return (isValid: false, needsRehash: false);
+      }
+    }
+
+    final isLegacyValid = storedHash == _legacyHashPassword(password);
+    return (isValid: isLegacyValid, needsRehash: isLegacyValid);
+  }
+
+  List<int> _randomBytes(int length) {
+    final random = math.Random.secure();
+    return List.generate(length, (_) => random.nextInt(256));
+  }
+
+  List<int> _pbkdf2Sha256({
+    required String password,
+    required List<int> salt,
+    required int iterations,
+    required int keyLength,
+  }) {
+    final hmac = Hmac(sha256, utf8.encode(password));
+    final derivedKey = <int>[];
+    var blockIndex = 1;
+
+    while (derivedKey.length < keyLength) {
+      var block = hmac.convert([...salt, ..._int32Bytes(blockIndex)]).bytes;
+      final mixedBlock = List<int>.from(block);
+
+      for (var i = 1; i < iterations; i++) {
+        block = hmac.convert(block).bytes;
+        for (var j = 0; j < mixedBlock.length; j++) {
+          mixedBlock[j] ^= block[j];
+        }
+      }
+
+      derivedKey.addAll(mixedBlock);
+      blockIndex++;
+    }
+
+    return derivedKey.take(keyLength).toList();
+  }
+
+  List<int> _int32Bytes(int value) {
+    return [
+      (value >> 24) & 0xff,
+      (value >> 16) & 0xff,
+      (value >> 8) & 0xff,
+      value & 0xff,
+    ];
+  }
+
+  bool _constantTimeEquals(List<int> left, List<int> right) {
+    if (left.length != right.length) return false;
+    var diff = 0;
+    for (var i = 0; i < left.length; i++) {
+      diff |= left[i] ^ right[i];
+    }
+    return diff == 0;
   }
 }
 
