@@ -12,6 +12,8 @@ import '../core/result.dart';
 import '../data/app_database.dart';
 import '../printing/report_summary_pdf.dart';
 import '../printing/sale_receipt_pdf.dart';
+import 'app_theme.dart';
+import 'design_tokens.dart';
 import 'v2_providers.dart';
 
 class ALIkhlasV2App extends ConsumerWidget {
@@ -26,7 +28,7 @@ class ALIkhlasV2App extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       title: 'ALIkhlasPOS v2',
       locale: const Locale('ar', 'EG'),
-      theme: _buildTheme(),
+      theme: buildV2Theme(),
       builder: (context, child) {
         return Directionality(
           textDirection: TextDirection.rtl,
@@ -41,51 +43,6 @@ class ALIkhlasV2App extends ConsumerWidget {
             : owner.mustChangePassword
             ? const _ChangePasswordScreen()
             : const _WorkbenchShell(),
-      ),
-    );
-  }
-
-  ThemeData _buildTheme() {
-    const ink = Color(0xFF13201F);
-    const glass = Color(0xFFF5F8F7);
-    const mint = Color(0xFF3DD6B4);
-    const peacock = Color(0xFF0D6C68);
-    const copper = Color(0xFFC27846);
-
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: peacock,
-        brightness: Brightness.light,
-        surface: glass,
-        primary: peacock,
-        secondary: copper,
-        tertiary: mint,
-      ),
-      scaffoldBackgroundColor: glass,
-      fontFamily: 'Roboto',
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.66),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.45)),
-        ),
-      ),
-      textTheme: const TextTheme(
-        headlineLarge: TextStyle(
-          color: ink,
-          fontWeight: FontWeight.w800,
-          fontSize: 30,
-        ),
-        headlineSmall: TextStyle(
-          color: ink,
-          fontWeight: FontWeight.w800,
-          fontSize: 21,
-        ),
-        titleMedium: TextStyle(color: ink, fontWeight: FontWeight.w800),
-        bodyMedium: TextStyle(color: ink),
       ),
     );
   }
@@ -441,27 +398,49 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final decoration = BoxDecoration(
+      color: selected
+          ? Colors.white.withValues(alpha: 0.68)
+          : Colors.white.withValues(alpha: 0.18),
+      borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: selected ? 0.8 : 0.08),
+      ),
+      boxShadow: selected ? [V2DesignTokens.softControlShadow] : null,
+    );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: selected
-            ? Colors.white.withValues(alpha: 0.56)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: [
-                Icon(icon, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ],
+      padding: const EdgeInsets.only(bottom: V2DesignTokens.space8),
+      child: DecoratedBox(
+        decoration: decoration,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 20,
+                    color: selected
+                        ? Theme.of(context).colorScheme.primary
+                        : V2DesignTokens.inkMuted,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? V2DesignTokens.ink
+                          : V2DesignTokens.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -2343,16 +2322,12 @@ class _GlassStage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [Color(0xFFE9F5F1), Color(0xFFF8F3EA), Color(0xFFE8EEF6)],
-          ),
-        ),
+        decoration: BoxDecoration(gradient: V2DesignTokens.stageGradient),
         child: Stack(
           children: [
-            Positioned.fill(child: CustomPaint(painter: _LiquidLinesPainter())),
+            Positioned.fill(
+              child: CustomPaint(painter: _LiquidBackdropPainter()),
+            ),
             child,
           ],
         ),
@@ -2362,65 +2337,87 @@ class _GlassStage extends StatelessWidget {
 }
 
 class _GlassPane extends StatelessWidget {
-  const _GlassPane({required this.child, this.width, this.padding});
+  const _GlassPane({
+    required this.child,
+    this.width,
+    this.padding,
+    this.enableBlur = true,
+  });
+
   final Widget child;
   final double? width;
   final EdgeInsetsGeometry? padding;
+  final bool enableBlur;
 
   @override
   Widget build(BuildContext context) {
-    final pane = ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.46),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.58)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.07),
-                blurRadius: 28,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Padding(
-              padding: padding ?? const EdgeInsets.all(16),
-              child: child,
-            ),
+    final radius = V2DesignTokens.radiusXlBorder;
+    final surface = DecoratedBox(
+      decoration: BoxDecoration(
+        color: V2DesignTokens.glassWhite,
+        borderRadius: radius,
+        border: Border.all(color: V2DesignTokens.glassStroke),
+        boxShadow: [V2DesignTokens.softPaneShadow],
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          gradient: V2DesignTokens.paneHighlight,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Padding(
+            padding: padding ?? const EdgeInsets.all(V2DesignTokens.space16),
+            child: child,
           ),
         ),
       ),
+    );
+    final pane = ClipRRect(
+      borderRadius: radius,
+      child: enableBlur
+          ? BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: surface,
+            )
+          : surface,
     );
     return width == null ? pane : SizedBox(width: width, child: pane);
   }
 }
 
-class _LiquidLinesPainter extends CustomPainter {
+class _LiquidBackdropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.33);
-    for (var i = 0; i < 8; i++) {
-      final y = size.height * (0.12 + i * 0.11);
-      final path = Path()
-        ..moveTo(0, y)
-        ..cubicTo(
-          size.width * .25,
-          y - 28,
-          size.width * .58,
-          y + 26,
-          size.width,
-          y - 8,
-        );
-      canvas.drawPath(path, paint);
-    }
+    final mintGlow = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              V2DesignTokens.mint.withValues(alpha: 0.18),
+              Colors.transparent,
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.18, size.height * 0.22),
+              radius: size.shortestSide * 0.45,
+            ),
+          );
+    final copperGlow = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              V2DesignTokens.copper.withValues(alpha: 0.12),
+              Colors.transparent,
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.82, size.height * 0.78),
+              radius: size.shortestSide * 0.5,
+            ),
+          );
+    canvas
+      ..drawRect(Offset.zero & size, mintGlow)
+      ..drawRect(Offset.zero & size, copperGlow);
   }
 
   @override
@@ -2446,6 +2443,7 @@ class _MetricsGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = metrics[index];
         return _GlassPane(
+          enableBlur: false,
           child: Row(
             children: [
               Icon(item.$3, color: Theme.of(context).colorScheme.primary),
@@ -2501,6 +2499,7 @@ class _TextMetricsGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = metrics[index];
         return _GlassPane(
+          enableBlur: false,
           child: Row(
             children: [
               Icon(item.$3, color: Theme.of(context).colorScheme.primary),
@@ -3409,7 +3408,7 @@ class _StatementAmount extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = TextStyle(
       color: strong ? Theme.of(context).colorScheme.primary : _mutedInk,
-      fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
+      fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
       fontSize: 12,
     );
     return SizedBox(
@@ -4162,7 +4161,7 @@ class _InfoLine extends StatelessWidget {
   }
 }
 
-const _mutedInk = Color(0xFF657371);
+const _mutedInk = V2DesignTokens.inkMuted;
 
 TextField _moneyField(
   TextEditingController controller,

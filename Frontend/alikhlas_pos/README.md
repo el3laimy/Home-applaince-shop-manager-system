@@ -7,6 +7,7 @@
 - Flutter SDK مهيأ لتشغيل Linux Desktop أو Windows Desktop.
 - لا توجد خدمة Backend مطلوبة.
 - لا توجد متطلبات Docker أو PostgreSQL أو Redis.
+- خط Cairo مدمج محليًا داخل `assets/fonts` ويعمل أوفلاين.
 
 ## أوامر التطوير
 
@@ -52,7 +53,23 @@ flutter build windows
 
 - `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، backup/restore، وترقية migration من v3 إلى v4.
 - `test/v2/v2_app_test.dart`: login، تغيير كلمة المرور، بيع POS، وشراء من الواجهة.
+- `test/v2/v2_theme_test.dart`: خط Cairo، التباين، ومنع رجوع Roboto أو w800.
+- `test/v2/v2_golden_test.dart`: لقطات Golden لشاشة الدخول والـ dashboard الزجاجي.
 - `test/v2/money_test.dart`: تنسيق المال.
+
+## الواجهة والخط
+
+- الثيم معرف في `lib/v2/app/app_theme.dart`.
+- توكنز اللون والمسافات والزجاج موجودة في `lib/v2/app/design_tokens.dart`.
+- الواجهة مستوحاة من Apple/iOS Liquid Glass بدون استخدام أصول أو شعارات Apple.
+- `BackdropFilter` مخصص للألواح الكبيرة فقط؛ العناصر الكثيفة تستخدم glass-like styling أخف.
+- ملفات Cairo المدمجة:
+  - `assets/fonts/Cairo-Regular.ttf`
+  - `assets/fonts/Cairo-Medium.ttf`
+  - `assets/fonts/Cairo-SemiBold.ttf`
+  - `assets/fonts/Cairo-Bold.ttf`
+  - `assets/fonts/OFL.txt`
+- لا يوجد اعتماد runtime على `google_fonts`.
 
 ## النسخ الاحتياطي والاسترجاع
 

@@ -10,6 +10,8 @@
 
 - Flutter Desktop + Riverpod.
 - SQLite عبر drift.
+- واجهة Apple/iOS-inspired Liquid Glass مبنية على Flutter Material مع أصول محلية.
+- خط الواجهة العربي هو Cairo bundled داخل التطبيق ويعمل أوفلاين.
 - قاعدة البيانات الافتراضية: `alikhlas_v2.db` داخل مسار بيانات التطبيق الذي يرجعه `path_provider`.
 - كل العمليات المالية تمر عبر use-cases في `Frontend/alikhlas_pos/lib/v2/application/v2_use_cases.dart`.
 - الدفتر `LedgerEntry` و`LedgerLine` هو مصدر الحقيقة للأرصدة والتقارير.
@@ -29,6 +31,14 @@ flutter run -d linux
 - كلمة المرور: `owner123`
 
 التطبيق يفرض تغيير كلمة المرور الافتراضية قبل فتح شاشة التشغيل اليومية.
+
+## الواجهة والخط
+
+- الواجهة تستخدم اتجاه Apple/iOS-inspired Liquid Glass: ألواح شفافة، حواف مضيئة، وخلفية هادئة غير مسطحة.
+- الخط العربي `Cairo` مدمج محليًا داخل `Frontend/alikhlas_pos/assets/fonts`.
+- الأوزان المدمجة: 400، 500، 600، 700 فقط.
+- ترخيص الخط مرفق في `Frontend/alikhlas_pos/assets/fonts/OFL.txt`.
+- التطبيق لا يعتمد على `google_fonts` في وقت التشغيل.
 
 ## الاختبار والبناء
 
