@@ -21,7 +21,9 @@
 - Expense records are stored in an `expenses` table and posted to the ledger.
 - Backup uses `VACUUM INTO`, keeps the latest 30 backup files, and restore clears WAL/SHM sidecar files.
 - Liquid Glass daily operations UI covers dashboard, POS, inventory, parties, purchases, installments, returns, reports, backup, and settings.
-- Apple/iOS-inspired Liquid Glass polish now uses bundled Cairo Arabic fonts, shared theme tokens, stronger glass contrast, and golden coverage for login/dashboard surfaces.
+- Apple/iOS-inspired Liquid Glass polish now uses bundled Cairo Arabic fonts, shared theme tokens, stronger glass contrast, opt-in real blur, and golden coverage for login/dashboard/POS/reports surfaces.
+- Money input parsing is centralized around integer minor units, accepts Arabic and English digits, and blocks invalid text before any workflow is posted.
+- A full owner operating-day test covers login/change password, shift, purchase, sale, installment collection, return, close shift, and backup.
 
 ## Verification
 
@@ -45,7 +47,7 @@ The v2 test suite covers:
 - expenses;
 - partial returns and installment return overflow;
 - backup/restore and v3 to v4 migration.
-- Cairo theme, glass contrast, and visual golden snapshots for login/dashboard.
+- Cairo theme, glass contrast, centralized blur, and visual golden snapshots for login/dashboard/POS/reports.
 
 ## Remaining
 

@@ -8,6 +8,17 @@ This plan covers the next focused phase only: upgrade the v2 interface to an App
 
 All implementation work for this phase must stay inside `Frontend/alikhlas_pos`. Do not change financial workflows, use-cases, ledger rules, migrations, or database schema.
 
+## Reliability And Glass Polish Addendum
+
+After the first Liquid Glass pass, the next improvement phase hardens the real owner workflow and makes the glass background more visible without adding heavy assets or reopening a broad UI rewrite.
+
+- Add a full owner operating-day acceptance test: login/change password, open shift, purchase, sale, installment collection, return, close shift, and backup.
+- Replace permissive money parsing with a single integer-minor-unit parser that accepts Arabic/English digits and `.` or `,` decimal separators.
+- Invalid money input must show a clear Arabic error and must not post a sale, purchase, installment payment, product price, or cash movement as zero.
+- Make real blur opt-in on `_GlassPane`; keep `BackdropFilter` centralized and avoid blur inside buttons, fields, lists, tables, and dense rows.
+- Strengthen `_GlassStage` with deterministic code-drawn light layers so the glass surfaces have visible depth while preserving readability.
+- Expand golden coverage to include Login, Dashboard, POS, and Reports after the background polish.
+
 ## Current UI Problems
 
 - `Frontend/alikhlas_pos/lib/v2/app/v2_app.dart` currently uses `fontFamily: 'Roboto'`, which is not the right controlled font choice for Arabic UI.

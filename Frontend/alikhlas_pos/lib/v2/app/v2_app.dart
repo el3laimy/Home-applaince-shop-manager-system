@@ -101,6 +101,7 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> {
         child: _GlassPane(
           width: 440,
           padding: const EdgeInsets.all(28),
+          enableBlur: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -186,6 +187,7 @@ class _ChangePasswordScreenState extends ConsumerState<_ChangePasswordScreen> {
         child: _GlassPane(
           width: 460,
           padding: const EdgeInsets.all(28),
+          enableBlur: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -350,6 +352,7 @@ class _SideNav extends ConsumerWidget {
     return _GlassPane(
       width: 210,
       padding: const EdgeInsets.all(14),
+      enableBlur: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -629,6 +632,12 @@ class _PosViewState extends ConsumerState<_PosView> {
     final paid = cash + wallet;
     final netTotal = (total - discount).clamp(0, total);
     final remaining = netTotal - paid;
+    final moneyError = _firstMoneyInputError({
+      'كاش': _cash,
+      'محفظة': _wallet,
+      'خصم الفاتورة': _discount,
+      'فائدة اختيارية': _interest,
+    });
 
     return _Screen(
       title: 'البيع',
@@ -749,7 +758,13 @@ class _PosViewState extends ConsumerState<_PosView> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Expanded(child: _moneyField(_interest, 'فائدة اختيارية')),
+                      Expanded(
+                        child: _moneyField(
+                          _interest,
+                          'فائدة اختيارية',
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -758,6 +773,15 @@ class _PosViewState extends ConsumerState<_PosView> {
                   _AmountRow('المطلوب', netTotal, strong: true),
                   _AmountRow('المدفوع', paid),
                   _AmountRow('المتبقي', remaining < 0 ? 0 : remaining),
+                  if (moneyError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      moneyError,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _cart.isEmpty ? null : () => _submitSale(total),
@@ -806,9 +830,16 @@ class _PosViewState extends ConsumerState<_PosView> {
   }
 
   Future<void> _submitSale(int total) async {
-    final cash = _parseMoney(_cash.text);
-    final wallet = _parseMoney(_wallet.text);
-    final discount = _parseMoney(_discount.text);
+    final cash = _requireMoney(context, _cash, 'كاش');
+    final wallet = _requireMoney(context, _wallet, 'محفظة');
+    final discount = _requireMoney(context, _discount, 'خصم الفاتورة');
+    final interest = _requireMoney(context, _interest, 'فائدة اختيارية');
+    if (cash == null ||
+        wallet == null ||
+        discount == null ||
+        interest == null) {
+      return;
+    }
     final paid = cash + wallet;
     if (discount < 0) {
       _showSnack(context, 'الخصم لا يمكن أن يكون سالبًا');
@@ -837,7 +868,7 @@ class _PosViewState extends ConsumerState<_PosView> {
             partyId: _customerId!,
             count: int.tryParse(_installmentCount.text) ?? 1,
             firstDueDate: DateTime.now().add(const Duration(days: 30)),
-            interestMinor: _parseMoney(_interest.text),
+            interestMinor: interest,
           )
         : null;
     final result = await ref
@@ -1326,6 +1357,8 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
     final wallet = _parseMoney(_wallet.text);
     final paid = cash + wallet;
     final remaining = total - paid;
+    final moneyError = _firstMoneyInputError({'كاش': _cash, 'محفظة': _wallet});
+    final costError = _firstPurchaseCostError(_cart);
     return _Screen(
       title: 'الشراء',
       subtitle: 'فاتورة مشتريات مع تحديث WAC ودفع كاش/محفظة/آجل',
@@ -1429,6 +1462,15 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
                   _AmountRow('الإجمالي', total, strong: true),
                   _AmountRow('المدفوع', paid),
                   _AmountRow('الآجل', remaining < 0 ? 0 : remaining),
+                  if (moneyError != null || costError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      moneyError ?? costError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
                   if (remaining > 0 && _supplierId == null) ...[
                     const SizedBox(height: 6),
                     Text(
@@ -1471,6 +1513,14 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
   }
 
   Future<void> _submitPurchase(int total) async {
+    final cash = _requireMoney(context, _cash, 'كاش');
+    final wallet = _requireMoney(context, _wallet, 'محفظة');
+    if (cash == null || wallet == null) return;
+    final invalidCost = _firstPurchaseCostError(_cart);
+    if (invalidCost != null) {
+      _showSnack(context, invalidCost);
+      return;
+    }
     final result = await ref
         .read(useCasesProvider)
         .createPurchase(
@@ -1484,8 +1534,8 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
               ),
           ],
           payments: [
-            PaymentInput(PaymentMethod.cash, _parseMoney(_cash.text)),
-            PaymentInput(PaymentMethod.wallet, _parseMoney(_wallet.text)),
+            PaymentInput(PaymentMethod.cash, cash),
+            PaymentInput(PaymentMethod.wallet, wallet),
           ],
         );
     if (!mounted) return;
@@ -2341,7 +2391,7 @@ class _GlassPane extends StatelessWidget {
     required this.child,
     this.width,
     this.padding,
-    this.enableBlur = true,
+    this.enableBlur = false,
   });
 
   final Widget child;
@@ -2389,35 +2439,75 @@ class _GlassPane extends StatelessWidget {
 class _LiquidBackdropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final mintGlow = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              V2DesignTokens.mint.withValues(alpha: 0.18),
-              Colors.transparent,
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.18, size.height * 0.22),
-              radius: size.shortestSide * 0.45,
-            ),
-          );
-    final copperGlow = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              V2DesignTokens.copper.withValues(alpha: 0.12),
-              Colors.transparent,
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.82, size.height * 0.78),
-              radius: size.shortestSide * 0.5,
-            ),
-          );
+    final wash = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          V2DesignTokens.mint.withValues(alpha: 0.22),
+          Colors.white.withValues(alpha: 0.02),
+          V2DesignTokens.iris.withValues(alpha: 0.20),
+        ],
+        stops: const [0, 0.48, 1],
+      ).createShader(Offset.zero & size);
+
+    final coolRibbon = Path()
+      ..moveTo(-size.width * 0.10, size.height * 0.12)
+      ..cubicTo(
+        size.width * 0.24,
+        -size.height * 0.02,
+        size.width * 0.58,
+        size.height * 0.16,
+        size.width * 1.10,
+        size.height * 0.03,
+      )
+      ..lineTo(size.width * 1.10, size.height * 0.34)
+      ..cubicTo(
+        size.width * 0.68,
+        size.height * 0.45,
+        size.width * 0.24,
+        size.height * 0.27,
+        -size.width * 0.10,
+        size.height * 0.42,
+      )
+      ..close();
+    final coolPaint = Paint()
+      ..color = V2DesignTokens.iris.withValues(alpha: 0.22)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 36);
+
+    final warmRibbon = Path()
+      ..moveTo(-size.width * 0.08, size.height * 0.78)
+      ..cubicTo(
+        size.width * 0.28,
+        size.height * 0.60,
+        size.width * 0.68,
+        size.height * 0.96,
+        size.width * 1.08,
+        size.height * 0.72,
+      )
+      ..lineTo(size.width * 1.08, size.height * 1.12)
+      ..lineTo(-size.width * 0.08, size.height * 1.12)
+      ..close();
+    final warmPaint = Paint()
+      ..color = V2DesignTokens.rose.withValues(alpha: 0.18)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 42);
+
+    final glassSheen = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withValues(alpha: 0.28),
+          Colors.white.withValues(alpha: 0.03),
+          V2DesignTokens.peacock.withValues(alpha: 0.07),
+        ],
+      ).createShader(Offset.zero & size);
+
     canvas
-      ..drawRect(Offset.zero & size, mintGlow)
-      ..drawRect(Offset.zero & size, copperGlow);
+      ..drawRect(Offset.zero & size, wash)
+      ..drawPath(coolRibbon, coolPaint)
+      ..drawPath(warmRibbon, warmPaint)
+      ..drawRect(Offset.zero & size, glassSheen);
   }
 
   @override
@@ -2543,13 +2633,17 @@ class _CartLine {
 }
 
 class _PurchaseCartLine {
-  _PurchaseCartLine(this.product)
-    : costMinor = product.avgCostMinor == 0
-          ? product.salePriceMinor
-          : product.avgCostMinor;
+  _PurchaseCartLine(this.product) {
+    costMinor = product.avgCostMinor == 0
+        ? product.salePriceMinor
+        : product.avgCostMinor;
+    costInput = _minorToInputText(costMinor);
+  }
+
   final Product product;
   int qty = 1;
-  int costMinor;
+  late int costMinor;
+  late String costInput;
 }
 
 class _CartList extends StatelessWidget {
@@ -2604,11 +2698,16 @@ class _PurchaseCart extends StatelessWidget {
           subtitle: SizedBox(
             width: 150,
             child: TextFormField(
-              initialValue: _minorToInputText(line.costMinor),
+              initialValue: line.costInput,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'تكلفة الوحدة'),
+              decoration: InputDecoration(
+                labelText: 'تكلفة الوحدة',
+                errorText: _moneyInputError('تكلفة الوحدة', line.costInput),
+              ),
               onChanged: (value) {
-                line.costMinor = _parseMoney(value);
+                line.costInput = value;
+                final parsed = parseMoneyInput(value);
+                if (parsed.isValid) line.costMinor = parsed.minorUnits;
                 onChanged();
               },
             ),
@@ -3506,11 +3605,15 @@ class _QuickInstallmentDialogState extends State<_QuickInstallmentDialog> {
           child: const Text('إلغاء'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, (
-            plan: _plan,
-            amount: _parseMoney(_amount.text),
-            method: _method,
-          )),
+          onPressed: () {
+            final amount = _requireMoney(context, _amount, 'القيمة');
+            if (amount == null) return;
+            Navigator.pop(context, (
+              plan: _plan,
+              amount: amount,
+              method: _method,
+            ));
+          },
           child: Text(widget.party.type == 'customer' ? 'تحصيل' : 'سداد'),
         ),
       ],
@@ -3818,18 +3921,23 @@ class _ProductDialogState extends State<_ProductDialog> {
           child: const Text('إلغاء'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _ProductFormData(
-              name: _name.text,
-              barcode: _barcode.text,
-              category: _category.text,
-              salePriceMinor: _parseMoney(_price.text),
-              openingQty: int.tryParse(_qty.text) ?? 0,
-              openingCostMinor: _parseMoney(_cost.text),
-              minStockQty: int.tryParse(_min.text) ?? 1,
-            ),
-          ),
+          onPressed: () {
+            final price = _requireMoney(context, _price, 'سعر البيع');
+            final cost = _requireMoney(context, _cost, 'تكلفة افتتاحية');
+            if (price == null || cost == null) return;
+            Navigator.pop(
+              context,
+              _ProductFormData(
+                name: _name.text,
+                barcode: _barcode.text,
+                category: _category.text,
+                salePriceMinor: price,
+                openingQty: int.tryParse(_qty.text) ?? 0,
+                openingCostMinor: cost,
+                minStockQty: int.tryParse(_min.text) ?? 1,
+              ),
+            );
+          },
           child: const Text('حفظ'),
         ),
       ],
@@ -3979,10 +4087,11 @@ class _InstallmentPaymentDialogState extends State<_InstallmentPaymentDialog> {
           child: const Text('إلغاء'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, (
-            amount: _parseMoney(_amount.text),
-            method: _method,
-          )),
+          onPressed: () {
+            final amount = _requireMoney(context, _amount, 'القيمة');
+            if (amount == null) return;
+            Navigator.pop(context, (amount: amount, method: _method));
+          },
           child: const Text('تسجيل'),
         ),
       ],
@@ -4177,20 +4286,44 @@ TextField _moneyField(
 }
 
 int _parseMoney(String value) {
-  final normalized = value.trim().replaceAll(',', '.');
-  if (normalized.isEmpty) return 0;
-  final negative = normalized.startsWith('-');
-  final unsigned = negative ? normalized.substring(1) : normalized;
-  final parts = unsigned.split('.');
-  final pounds =
-      int.tryParse(parts.first.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-  final fraction = parts.length > 1
-      ? parts[1].replaceAll(RegExp(r'[^0-9]'), '')
-      : '';
-  final centsText = fraction.padRight(2, '0').substring(0, 2);
-  final cents = int.tryParse(centsText) ?? 0;
-  final minor = (pounds * 100) + cents;
-  return negative ? -minor : minor;
+  return parseMoneyInput(value).minorUnits;
+}
+
+int? _requireMoney(
+  BuildContext context,
+  TextEditingController controller,
+  String label, {
+  bool allowNegative = false,
+}) {
+  final parsed = parseMoneyInput(controller.text, allowNegative: allowNegative);
+  if (parsed.isValid) return parsed.minorUnits;
+  _showSnack(context, '$label: ${parsed.errorMessage}');
+  return null;
+}
+
+String? _moneyInputError(String label, String value) {
+  final parsed = parseMoneyInput(value);
+  if (parsed.isValid) return null;
+  return '$label: ${parsed.errorMessage}';
+}
+
+String? _firstMoneyInputError(Map<String, TextEditingController> inputs) {
+  for (final entry in inputs.entries) {
+    final error = _moneyInputError(entry.key, entry.value.text);
+    if (error != null) return error;
+  }
+  return null;
+}
+
+String? _firstPurchaseCostError(List<_PurchaseCartLine> cart) {
+  for (final line in cart) {
+    final error = _moneyInputError(
+      'تكلفة ${line.product.name}',
+      line.costInput,
+    );
+    if (error != null) return error;
+  }
+  return null;
 }
 
 String _minorToInputText(int minorUnits) {
@@ -4274,7 +4407,11 @@ Future<int?> _askMoney(
           child: const Text('إلغاء'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _parseMoney(controller.text)),
+          onPressed: () {
+            final amount = _requireMoney(context, controller, 'القيمة');
+            if (amount == null) return;
+            Navigator.pop(context, amount);
+          },
           child: const Text('تأكيد'),
         ),
       ],

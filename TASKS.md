@@ -170,3 +170,37 @@ Acceptance:
 - [x] Login, Dashboard, and POS pass visual review.
 - [x] Documentation matches the implemented UI and font assets.
 - [x] The final tree is clean after commit.
+
+## Phase 7: Reliability And Liquid Glass Polish
+
+Review skills:
+
+- `frontend-design`
+- `test-guard`
+- `clean-code-guard`
+
+Tasks:
+
+- [x] Add full owner operating-day acceptance coverage with backup.
+- [x] Replace permissive money parsing with one integer-minor-unit parser.
+- [x] Accept Arabic and English digits plus `.` or `,` decimal separators.
+- [x] Reject invalid money input with Arabic errors before posting workflows.
+- [x] Add widget coverage that invalid POS money input does not create an invoice.
+- [x] Make `_GlassPane` real blur opt-in by default.
+- [x] Keep `BackdropFilter` centralized and out of dense controls.
+- [x] Improve `_GlassStage` with deterministic soft light layers.
+- [x] Add Reports golden coverage.
+- [x] Regenerate affected golden snapshots after the background polish.
+- [x] Run `dart analyze lib/v2 lib/main.dart test/v2`.
+- [x] Run `flutter test`.
+- [x] Run `HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter/bin/flutter build linux`.
+- [x] Commit and push the reliability/glass polish changes.
+
+Acceptance:
+
+- [x] Money input never turns invalid text into posted zero.
+- [x] Full-day owner workflow remains ledger-balanced.
+- [x] Real blur is opt-in and limited to large surfaces.
+- [x] Golden tests cover Login, Dashboard, POS, and Reports.
+- [x] Analyze, tests, and Linux build pass.
+- [x] The final tree is clean after commit.

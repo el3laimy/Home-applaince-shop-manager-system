@@ -889,113 +889,126 @@ void main() {
       },
     );
 
-    test(
-      'full day flow keeps stock, shifts, installments, and returns aligned',
-      () async {
-        final customerId = await db
-            .into(db.customers)
-            .insert(CustomersCompanion.insert(name: 'عميل يوم كامل'));
-        final supplierId = await db
-            .into(db.suppliers)
-            .insert(SuppliersCompanion.insert(name: 'مورد يوم كامل'));
-        final product = await successOf(
-          useCases.createProduct(
-            name: 'غلاية كهرباء',
-            salePriceMinor: 10000,
-            openingQty: 0,
-            openingCostMinor: 0,
-            minStockQty: 1,
-          ),
-        );
+    test('full owner operating day stays balanced and backs up', () async {
+      await db.close();
+      final tempDir = await Directory.systemTemp.createTemp(
+        'alikhlas-v2-owner-day-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
 
-        await successOf(useCases.openShift(10000));
-        await successOf(
-          useCases.createPurchase(
-            supplierId: supplierId,
-            items: [
-              PurchaseLineInput(
-                productId: product.id,
-                qty: 3,
-                unitCostMinor: 7000,
-              ),
-            ],
-            payments: const [
-              PaymentInput(PaymentMethod.cash, 5000),
-              PaymentInput(PaymentMethod.wallet, 6000),
-            ],
-          ),
-        );
-        final saleId = await successOf(
-          useCases.createSale(
-            customerId: customerId,
-            items: [
-              SaleLineInput(
-                productId: product.id,
-                qty: 2,
-                unitPriceMinor: 10000,
-              ),
-            ],
-            payments: const [
-              PaymentInput(PaymentMethod.cash, 5000),
-              PaymentInput(PaymentMethod.wallet, 3000),
-            ],
-            installmentTerms: InstallmentTerms(
-              partyId: customerId,
-              count: 2,
-              firstDueDate: DateTime(2026, 7),
-              interestMinor: 1000,
+      db = AppDatabase(NativeDatabase(File('${tempDir.path}/app.db')));
+      useCases = V2UseCases(db);
+      await useCases.bootstrap();
+      final owner = await successOf(useCases.login('owner', 'owner123'));
+      await successOf(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+      final customerId = await db
+          .into(db.customers)
+          .insert(CustomersCompanion.insert(name: 'عميل يوم كامل'));
+      final supplierId = await db
+          .into(db.suppliers)
+          .insert(SuppliersCompanion.insert(name: 'مورد يوم كامل'));
+      final product = await successOf(
+        useCases.createProduct(
+          name: 'غلاية كهرباء',
+          salePriceMinor: 10000,
+          openingQty: 0,
+          openingCostMinor: 0,
+          minStockQty: 1,
+        ),
+      );
+
+      await successOf(useCases.openShift(10000));
+      await successOf(
+        useCases.createPurchase(
+          supplierId: supplierId,
+          items: [
+            PurchaseLineInput(
+              productId: product.id,
+              qty: 3,
+              unitCostMinor: 7000,
             ),
-            discountMinor: 2000,
+          ],
+          payments: const [
+            PaymentInput(PaymentMethod.cash, 5000),
+            PaymentInput(PaymentMethod.wallet, 6000),
+          ],
+        ),
+      );
+      final saleId = await successOf(
+        useCases.createSale(
+          customerId: customerId,
+          items: [
+            SaleLineInput(productId: product.id, qty: 2, unitPriceMinor: 10000),
+          ],
+          payments: const [
+            PaymentInput(PaymentMethod.cash, 5000),
+            PaymentInput(PaymentMethod.wallet, 3000),
+          ],
+          installmentTerms: InstallmentTerms(
+            partyId: customerId,
+            count: 2,
+            firstDueDate: DateTime(2026, 7),
+            interestMinor: 1000,
           ),
-        );
-        final plan = await (db.select(
-          db.installmentPlans,
-        )..where((plan) => plan.ownerType.equals('sale'))).getSingle();
-        await successOf(
-          useCases.collectInstallment(
-            planId: plan.id,
-            amountMinor: 1000,
-            method: PaymentMethod.cash,
-          ),
-        );
-        final saleItem = await (db.select(
-          db.saleItems,
-        )..where((line) => line.saleId.equals(saleId))).getSingle();
-        await successOf(
-          useCases.createSaleReturn(
-            saleId: saleId,
-            saleItemQuantities: {saleItem.id: 1},
-            refundMethod: PaymentMethod.installment,
-          ),
-        );
-        final closedShift = await successOf(useCases.closeShift(11000));
+          discountMinor: 2000,
+        ),
+      );
+      final plan = await (db.select(
+        db.installmentPlans,
+      )..where((plan) => plan.ownerType.equals('sale'))).getSingle();
+      await successOf(
+        useCases.collectInstallment(
+          planId: plan.id,
+          amountMinor: 1000,
+          method: PaymentMethod.cash,
+        ),
+      );
+      final saleItem = await (db.select(
+        db.saleItems,
+      )..where((line) => line.saleId.equals(saleId))).getSingle();
+      await successOf(
+        useCases.createSaleReturn(
+          saleId: saleId,
+          saleItemQuantities: {saleItem.id: 1},
+          refundMethod: PaymentMethod.installment,
+        ),
+      );
+      final closedShift = await successOf(useCases.closeShift(11000));
 
-        final storedProduct = await productById(db, product.id);
-        final dashboard = await useCases.dashboardSnapshot();
-        final today = DateTime.now();
-        final period = await useCases.periodReport(start: today, end: today);
-        final returnItem = await db.select(db.saleReturnItems).getSingle();
-        final updatedPlan = await (db.select(
-          db.installmentPlans,
-        )..where((plan) => plan.ownerType.equals('sale'))).getSingle();
+      final storedProduct = await productById(db, product.id);
+      final dashboard = await useCases.dashboardSnapshot();
+      final today = DateTime.now();
+      final period = await useCases.periodReport(start: today, end: today);
+      final returnItem = await db.select(db.saleReturnItems).getSingle();
+      final updatedPlan = await (db.select(
+        db.installmentPlans,
+      )..where((plan) => plan.ownerType.equals('sale'))).getSingle();
 
-        expect(storedProduct.stockQty, 2);
-        expect(storedProduct.avgCostMinor, 7000);
-        expect(returnItem.unitPriceMinor, 9000);
-        expect(updatedPlan.paidMinor, 1000);
-        expect(dashboard.salesMinor, 9000);
-        expect(dashboard.cogsMinor, 7000);
-        expect(period.interestMinor, 1000);
-        expect(dashboard.receivablesMinor, 1000);
-        expect(dashboard.payablesMinor, -10000);
-        expect(dashboard.cashMinor, 1000);
-        expect(dashboard.walletMinor, -3000);
-        expect(dashboard.inventoryMinor, 14000);
-        expect(closedShift.expectedCashMinor, 11000);
-        expect(closedShift.differenceMinor, 0);
-        await expectAllLedgerEntriesBalanced(db);
-      },
-    );
+      expect(storedProduct.stockQty, 2);
+      expect(storedProduct.avgCostMinor, 7000);
+      expect(returnItem.unitPriceMinor, 9000);
+      expect(updatedPlan.paidMinor, 1000);
+      expect(dashboard.salesMinor, 9000);
+      expect(dashboard.cogsMinor, 7000);
+      expect(period.interestMinor, 1000);
+      expect(dashboard.receivablesMinor, 1000);
+      expect(dashboard.payablesMinor, -10000);
+      expect(dashboard.cashMinor, 1000);
+      expect(dashboard.walletMinor, -3000);
+      expect(dashboard.inventoryMinor, 14000);
+      expect(closedShift.expectedCashMinor, 11000);
+      expect(closedShift.differenceMinor, 0);
+      final backup = await useCases.backupToDirectory(
+        Directory('${tempDir.path}/backups'),
+      );
+      expect(await backup.exists(), isTrue);
+      await expectAllLedgerEntriesBalanced(db);
+    });
 
     test(
       'rejects invoice discount that consumes the full sale subtotal',

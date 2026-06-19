@@ -96,6 +96,57 @@ void main() {
     expect((await db.select(db.saleInvoices).get()).length, 1);
   });
 
+  testWidgets('desktop sale blocks invalid money input before posting', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+    await _success(
+      useCases.createProduct(
+        name: 'بوتاجاز اختبار',
+        salePriceMinor: 10000,
+        openingQty: 1,
+        openingCostMinor: 7000,
+      ),
+    );
+    await _success(useCases.openShift(0));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const ALIkhlasV2App(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+      'new-owner-pass',
+    );
+    await tester.tap(find.text('دخول'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('البيع').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('بوتاجاز اختبار'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'كاش'), '100x');
+    await tester.tap(find.text('تسجيل البيع'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('كاش: استخدم أرقامًا وفاصلًا عشريًا فقط'), findsWidgets);
+    expect(await db.select(db.saleInvoices).get(), isEmpty);
+  });
+
   testWidgets('desktop purchase flow records stock intake from purchases', (
     tester,
   ) async {

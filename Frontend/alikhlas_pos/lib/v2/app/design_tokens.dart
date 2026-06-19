@@ -9,8 +9,10 @@ class V2DesignTokens {
   static const peacockDeep = Color(0xFF084C4A);
   static const mint = Color(0xFF3DD6B4);
   static const copper = Color(0xFFC27846);
+  static const iris = Color(0xFF7E8EE8);
+  static const rose = Color(0xFFE9A7A0);
   static const pearl = Color(0xFFF7FAF8);
-  static const glassWhite = Color(0xB8FFFFFF);
+  static const glassWhite = Color(0xB3FFFFFF);
   static const glassStroke = Color(0xD9FFFFFF);
 
   static const space8 = 8.0;
@@ -37,9 +39,9 @@ class V2DesignTokens {
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
     colors: [
-      Color(0xFFE4F4F0),
-      Color(0xFFF7F4EE),
-      Color(0xFFE5ECF6),
+      Color(0xFFD5ECE7),
+      Color(0xFFF4ECE3),
+      Color(0xFFD7E0F4),
       Color(0xFFF8FBFA),
     ],
     stops: [0, 0.36, 0.72, 1],

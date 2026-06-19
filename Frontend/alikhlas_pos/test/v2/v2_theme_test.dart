@@ -37,6 +37,13 @@ void main() {
       expect(v2Source, isNot(contains('CupertinoIcons')));
     }
   });
+
+  test('liquid glass keeps real blur centralized and opt-in', () {
+    final appSource = File('lib/v2/app/v2_app.dart').readAsStringSync();
+
+    expect(RegExp(r'BackdropFilter\(').allMatches(appSource), hasLength(1));
+    expect(appSource, contains('this.enableBlur = false'));
+  });
 }
 
 String _readTree(Directory directory) {
