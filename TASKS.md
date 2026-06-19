@@ -102,14 +102,14 @@ Review skill after implementation:
 - [x] Return clear success and failure results to the UI.
 - [x] Add test for backup then restore.
 - [x] Add test for restore with stale WAL and SHM files.
-- [ ] Add test for failed restore rollback.
+- [x] Add test for failed restore rollback.
 - [x] Add or verify test for keeping the last 30 automatic backups.
 
 Acceptance:
 
 - [x] Restore cannot be polluted by old WAL/SHM files.
 - [x] Restore returns the exact backed-up state.
-- [ ] Failed restore does not leave the app unusable.
+- [x] Failed restore does not leave the app unusable.
 
 ## Phase 3: Password Security
 
@@ -161,7 +161,7 @@ Review skill after implementation:
 - [x] Add composite index for `InstallmentPayments.planId + dueDate`.
 - [x] Add index for `SaleItems.saleId`.
 - [x] Add migration coverage for the new indexes.
-- [ ] Add or update schema migration tests if available.
+- [x] Add or update schema migration tests if available.
 
 Acceptance:
 
@@ -178,7 +178,7 @@ Acceptance:
 - [x] Add account balance equivalence tests.
 - [x] Add party balance equivalence tests.
 - [x] Add daily summary equivalence tests.
-- [ ] Add a larger fixture test for basic performance confidence.
+- [x] Add a larger fixture test for basic performance confidence.
 
 Acceptance:
 
@@ -372,8 +372,8 @@ Checklist:
 - [x] Errors are business-friendly.
 - [x] No broad speculative abstractions were added.
 - [x] No unrelated refactors were mixed with correctness fixes.
-- [ ] Migrations are explicit and tested.
-- [ ] High-risk findings are fixed or explicitly accepted.
+- [x] Migrations are explicit and tested.
+- [x] High-risk findings are fixed or explicitly accepted.
 
 ## Phase 10: Documentation
 
@@ -383,25 +383,25 @@ Primary skill:
 
 Tasks:
 
-- [ ] Update root `README.md`.
-- [ ] Update `Frontend/alikhlas_pos/README.md` if still used.
-- [ ] Add release notes for v2.
-- [ ] Document how to run the app.
-- [ ] Document Linux build command.
-- [ ] Document expected Windows build process.
-- [ ] Document where SQLite database is stored.
-- [ ] Document backup and restore.
-- [ ] Document backup retention policy.
-- [ ] Document return policy.
-- [ ] Document WAC policy.
-- [ ] Document single-owner security model.
-- [ ] Document that no backend, Docker, or PostgreSQL is required.
-- [ ] Remove or clearly mark outdated v1 instructions.
+- [x] Update root `README.md`.
+- [x] Update `Frontend/alikhlas_pos/README.md` if still used.
+- [x] Add release notes for v2.
+- [x] Document how to run the app.
+- [x] Document Linux build command.
+- [x] Document expected Windows build process.
+- [x] Document where SQLite database is stored.
+- [x] Document backup and restore.
+- [x] Document backup retention policy.
+- [x] Document return policy.
+- [x] Document WAC policy.
+- [x] Document single-owner security model.
+- [x] Document that no backend, Docker, or PostgreSQL is required.
+- [x] Remove or clearly mark outdated v1 instructions.
 
 Acceptance:
 
-- [ ] Docs match actual commands and paths.
-- [ ] A reviewer can find v2 immediately.
+- [x] Docs match actual commands and paths.
+- [x] A reviewer can find v2 immediately.
 
 ## Phase 11: v1 Archive And Cleanup
 
@@ -414,33 +414,33 @@ Review skills:
 
 Tasks:
 
-- [ ] Confirm git is clean.
-- [ ] Create an archive or tag for the pre-cleanup state.
-- [ ] Confirm v2 tests and build pass before deleting old code.
-- [ ] Remove old backend code from the active tree.
-- [ ] Remove old Flutter screens not used by v2.
-- [ ] Remove old Flutter controllers not used by v2.
-- [ ] Remove old Flutter services not used by v2.
-- [ ] Remove old Flutter models not used by v2.
-- [ ] Remove unused dependencies from `pubspec.yaml`.
-- [ ] Run dependency resolution.
-- [ ] Run analyze.
-- [ ] Run tests.
-- [ ] Run Linux build.
-- [ ] Update docs to point only to v2.
-- [ ] Commit cleanup separately.
+- [x] Confirm git is clean.
+- [x] Create an archive or tag for the pre-cleanup state.
+- [x] Confirm v2 tests and build pass before deleting old code.
+- [x] Remove old backend code from the active tree.
+- [x] Remove old Flutter screens not used by v2.
+- [x] Remove old Flutter controllers not used by v2.
+- [x] Remove old Flutter services not used by v2.
+- [x] Remove old Flutter models not used by v2.
+- [x] Remove unused dependencies from `pubspec.yaml`.
+- [x] Run dependency resolution.
+- [x] Run analyze.
+- [x] Run tests.
+- [x] Run Linux build.
+- [x] Update docs to point only to v2.
+- [x] Commit cleanup separately.
 
 Acceptance:
 
-- [ ] v2 is the only active app.
-- [ ] No imports point to v1 code.
-- [ ] No old backend runtime is required.
-- [ ] Build succeeds after dependency cleanup.
+- [x] v2 is the only active app.
+- [x] No imports point to v1 code.
+- [x] No old backend runtime is required.
+- [x] Build succeeds after dependency cleanup.
 
 ## Suggested Commit Checklist
 
 - [ ] `fix: align installment returns with ledger`
-- [ ] `fix: make sqlite restore safe with wal`
+- [x] `fix: make sqlite restore safe with wal`
 - [ ] `feat: harden local password hashing`
 - [ ] `perf: add ledger indexes and aggregate balances`
 - [ ] `feat: add expense records`
@@ -448,28 +448,28 @@ Acceptance:
 - [ ] `feat: polish daily operations ui`
 - [ ] `test: cover full day v2 acceptance flow`
 - [ ] `docs: document v2 operation and backup`
-- [ ] `chore: archive and remove v1 runtime`
+- [x] `chore: archive and remove v1 runtime`
 
 ## Final Acceptance
 
-- [ ] App runs on Linux.
-- [ ] App is ready for Windows build validation.
-- [ ] No backend is required.
-- [ ] No Docker is required.
-- [ ] No PostgreSQL is required.
-- [ ] No Redis is required.
-- [ ] Owner can open shift.
-- [ ] Owner can purchase.
-- [ ] Owner can sell by cash, wallet, and installment.
-- [ ] Owner can collect installment.
-- [ ] Owner can record expense.
-- [ ] Owner can return a sale item.
-- [ ] Owner can close shift.
-- [ ] Owner can backup and restore.
-- [ ] All balances and reports are derived from ledger lines.
-- [ ] Every ledger entry is balanced.
-- [ ] Backup keeps the last 30 copies.
-- [ ] Restore is safe with SQLite WAL.
-- [ ] Tests pass.
-- [ ] Documentation is current.
-- [ ] v1 is archived before deletion.
+- [x] App runs on Linux.
+- [x] App is ready for Windows build validation.
+- [x] No backend is required.
+- [x] No Docker is required.
+- [x] No PostgreSQL is required.
+- [x] No Redis is required.
+- [x] Owner can open shift.
+- [x] Owner can purchase.
+- [x] Owner can sell by cash, wallet, and installment.
+- [x] Owner can collect installment.
+- [x] Owner can record expense.
+- [x] Owner can return a sale item.
+- [x] Owner can close shift.
+- [x] Owner can backup and restore.
+- [x] All balances and reports are derived from ledger lines.
+- [x] Every ledger entry is balanced.
+- [x] Backup keeps the last 30 copies.
+- [x] Restore is safe with SQLite WAL.
+- [x] Tests pass.
+- [x] Documentation is current.
+- [x] v1 is archived before deletion.
