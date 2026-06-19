@@ -439,15 +439,15 @@ Acceptance:
 
 ## Suggested Commit Checklist
 
-- [ ] `fix: align installment returns with ledger`
+- [x] `fix: align installment returns with ledger`
 - [x] `fix: make sqlite restore safe with wal`
-- [ ] `feat: harden local password hashing`
-- [ ] `perf: add ledger indexes and aggregate balances`
-- [ ] `feat: add expense records`
-- [ ] `fix: stabilize liquid glass list tiles`
-- [ ] `feat: polish daily operations ui`
-- [ ] `test: cover full day v2 acceptance flow`
-- [ ] `docs: document v2 operation and backup`
+- [x] `feat: harden local password hashing`
+- [x] `perf: add ledger indexes and aggregate balances`
+- [x] `feat: add expense records`
+- [x] `fix: stabilize liquid glass list tiles`
+- [x] `feat: polish daily operations ui`
+- [x] `test: cover full day v2 acceptance flow`
+- [x] `docs: document v2 operation and backup`
 - [x] `chore: archive and remove v1 runtime`
 
 ## Final Acceptance
