@@ -6,8 +6,10 @@ import 'package:alikhlas_pos/v2/application/v2_use_cases.dart';
 import 'package:alikhlas_pos/v2/core/result.dart';
 import 'package:alikhlas_pos/v2/data/app_database.dart';
 import 'package:crypto/crypto.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
   group('ALIkhlasPOS v2 use-cases', () {
@@ -127,6 +129,54 @@ void main() {
           'idx_sale_items_sale_id',
         ]),
       );
+    });
+
+    test('database migrates a v3 file to v4 expenses and indexes', () async {
+      await db.close();
+
+      final tempDir = await Directory.systemTemp.createTemp(
+        'alikhlas-v2-migration-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final dbFile = File('${tempDir.path}/app-v3.db');
+      await createMinimalV3Database(dbFile);
+
+      db = AppDatabase(NativeDatabase(dbFile));
+
+      final userVersion = await db
+          .customSelect('PRAGMA user_version;')
+          .getSingle();
+      final tables = await db.customSelect('''
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'expenses'
+            ''').get();
+      final indexes = await db.customSelect('''
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'index'
+              AND name IN (
+                'idx_ledger_lines_entry_id',
+                'idx_ledger_lines_account_code',
+                'idx_ledger_lines_party',
+                'idx_ledger_entries_created_at',
+                'idx_ledger_entries_reference',
+                'idx_stock_movements_product_id',
+                'idx_stock_movements_reference',
+                'idx_payments_owner',
+                'idx_installment_payments_plan_due',
+                'idx_sale_items_sale_id'
+              )
+            ''').get();
+
+      expect(userVersion.data['user_version'], 4);
+      expect(tables.map((row) => row.data['name']), ['expenses']);
+      expect(indexes, hasLength(10));
     });
 
     test(
@@ -280,6 +330,49 @@ void main() {
       );
       await expectAllLedgerEntriesBalanced(db);
     });
+
+    test(
+      'dashboard aggregates stay correct with a larger ledger fixture',
+      () async {
+        for (var index = 0; index < 120; index++) {
+          await insertBalancedLedgerEntry(
+            db,
+            referenceId: index + 1,
+            description: 'قيد مبيعات مجمع ${index + 1}',
+            lines: [
+              LedgerLinesCompanion.insert(
+                entryId: 0,
+                accountCode: AccountCodes.cash,
+                debitMinor: const Value(1000),
+              ),
+              LedgerLinesCompanion.insert(
+                entryId: 0,
+                accountCode: AccountCodes.sales,
+                creditMinor: const Value(1000),
+              ),
+              LedgerLinesCompanion.insert(
+                entryId: 0,
+                accountCode: AccountCodes.cogs,
+                debitMinor: const Value(600),
+              ),
+              LedgerLinesCompanion.insert(
+                entryId: 0,
+                accountCode: AccountCodes.inventory,
+                creditMinor: const Value(600),
+              ),
+            ],
+          );
+        }
+
+        final dashboard = await useCases.dashboardSnapshot();
+
+        expect(dashboard.cashMinor, 120000);
+        expect(dashboard.salesMinor, 120000);
+        expect(dashboard.cogsMinor, 72000);
+        expect(dashboard.inventoryMinor, -72000);
+        await expectAllLedgerEntriesBalanced(db);
+      },
+    );
 
     test(
       'installment sale allocates flat interest and rounding remainder',
@@ -1040,6 +1133,73 @@ void main() {
       expect(secondDailyBackup, isNull);
     });
 
+    test('failed restore rolls back to the current usable database', () async {
+      await db.close();
+
+      final tempDir = await Directory.systemTemp.createTemp(
+        'alikhlas-v2-restore-failure-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final dbFile = File('${tempDir.path}/app.db');
+      db = AppDatabase(NativeDatabase(dbFile));
+      useCases = V2UseCases(db);
+      await useCases.bootstrap();
+      await successOf(
+        useCases.createProduct(
+          name: 'منتج قبل النسخة',
+          salePriceMinor: 1000,
+          openingQty: 1,
+          openingCostMinor: 700,
+        ),
+      );
+      final backup = await useCases.backupToDirectory(
+        Directory('${tempDir.path}/backups'),
+      );
+      await successOf(
+        useCases.createProduct(
+          name: 'منتج الحالة الحالية',
+          salePriceMinor: 2000,
+          openingQty: 1,
+          openingCostMinor: 1200,
+        ),
+      );
+
+      useCases = V2UseCases(
+        db,
+        restoreFileOperations: _FailingRestoreFileOperations(
+          backupPath: backup.path,
+          targetDbPath: dbFile.path,
+        ),
+      );
+
+      await expectLater(
+        useCases.restoreFromBackup(backup),
+        throwsA(isA<FileSystemException>()),
+      );
+
+      db = AppDatabase(NativeDatabase(dbFile));
+      useCases = V2UseCases(db);
+      final products = await db.select(db.products).get();
+
+      expect(
+        products.map((product) => product.name),
+        unorderedEquals(['منتج قبل النسخة', 'منتج الحالة الحالية']),
+      );
+      await successOf(
+        useCases.createProduct(
+          name: 'منتج بعد فشل الاسترجاع',
+          salePriceMinor: 3000,
+          openingQty: 1,
+          openingCostMinor: 1500,
+        ),
+      );
+    });
+
     test('backup pruning keeps the latest 30 copies', () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'alikhlas-v2-backups-',
@@ -1152,4 +1312,119 @@ Future<int> partyBalance(
   return lines
       .where((line) => line.partyType == partyType && line.partyId == partyId)
       .fold<int>(0, (sum, line) => sum + line.debitMinor - line.creditMinor);
+}
+
+Future<void> insertBalancedLedgerEntry(
+  AppDatabase db, {
+  required int referenceId,
+  required String description,
+  required List<LedgerLinesCompanion> lines,
+}) async {
+  final entryId = await db
+      .into(db.ledgerEntries)
+      .insert(
+        LedgerEntriesCompanion.insert(
+          referenceType: 'large_fixture',
+          referenceId: referenceId,
+          description: description,
+        ),
+      );
+  for (final ledgerLine in lines) {
+    await db
+        .into(db.ledgerLines)
+        .insert(ledgerLine.copyWith(entryId: Value(entryId)));
+  }
+}
+
+Future<void> createMinimalV3Database(File file) async {
+  final rawDb = sqlite.sqlite3.open(file.path);
+  try {
+    rawDb
+      ..execute('''
+        CREATE TABLE ledger_lines (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          entry_id INTEGER NOT NULL,
+          account_code TEXT NOT NULL,
+          debit_minor INTEGER NOT NULL DEFAULT 0,
+          credit_minor INTEGER NOT NULL DEFAULT 0,
+          party_type TEXT NULL,
+          party_id INTEGER NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE ledger_entries (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          reference_type TEXT NOT NULL,
+          reference_id INTEGER NOT NULL,
+          description TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE stock_movements (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          qty_delta INTEGER NOT NULL,
+          balance_after INTEGER NOT NULL,
+          reference_type TEXT NOT NULL,
+          reference_id INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE payments (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          owner_type TEXT NOT NULL,
+          owner_id INTEGER NOT NULL,
+          method TEXT NOT NULL,
+          amount_minor INTEGER NOT NULL,
+          note TEXT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE installment_payments (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          plan_id INTEGER NOT NULL,
+          amount_minor INTEGER NOT NULL,
+          due_date INTEGER NOT NULL,
+          paid_at INTEGER NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE sale_items (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          sale_id INTEGER NOT NULL,
+          product_id INTEGER NOT NULL,
+          qty INTEGER NOT NULL,
+          unit_price_minor INTEGER NOT NULL,
+          unit_cost_minor INTEGER NOT NULL,
+          line_total_minor INTEGER NOT NULL
+        );
+      ''')
+      ..execute('PRAGMA user_version = 3;');
+  } finally {
+    rawDb.close();
+  }
+}
+
+class _FailingRestoreFileOperations extends RestoreFileOperations {
+  const _FailingRestoreFileOperations({
+    required this.backupPath,
+    required this.targetDbPath,
+  });
+
+  final String backupPath;
+  final String targetDbPath;
+
+  @override
+  Future<void> copyFile(File source, File target) async {
+    if (source.path == backupPath && target.path == targetDbPath) {
+      await target.writeAsString('partial restore write');
+      throw FileSystemException('Simulated restore copy failure', target.path);
+    }
+    await super.copyFile(source, target);
+  }
 }

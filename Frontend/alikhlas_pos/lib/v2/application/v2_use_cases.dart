@@ -362,8 +362,21 @@ class WorkbenchSnapshot {
   final ShopSettingsSnapshot shopSettings;
 }
 
+class RestoreFileOperations {
+  const RestoreFileOperations();
+
+  Future<void> copyFile(File source, File target) async {
+    await source.copy(target.path);
+  }
+
+  Future<void> deleteFileIfExists(File file) async {
+    if (await file.exists()) await file.delete();
+  }
+}
+
 class V2UseCases {
-  V2UseCases(this.db);
+  V2UseCases(this.db, {RestoreFileOperations? restoreFileOperations})
+    : _restoreFiles = restoreFileOperations ?? const RestoreFileOperations();
 
   static const _passwordHashPrefix = 'pbkdf2_sha256';
   static const _passwordIterations = 120000;
@@ -371,6 +384,7 @@ class V2UseCases {
   static const _passwordKeyLength = 32;
 
   final AppDatabase db;
+  final RestoreFileOperations _restoreFiles;
 
   Future<void> bootstrap() async {
     final hasOwner = await db.select(db.users).getSingleOrNull();
@@ -1759,36 +1773,32 @@ class V2UseCases {
       '$dbPath.restore-${DateTime.now().microsecondsSinceEpoch}.bak',
     );
     if (await dbFile.exists()) {
-      await dbFile.copy(rollbackFile.path);
+      await _restoreFiles.copyFile(dbFile, rollbackFile);
     }
     await db.close();
     var restored = false;
     try {
-      await _deleteFileIfExists(walFile);
-      await _deleteFileIfExists(shmFile);
-      await backupFile.copy(dbPath);
+      await _restoreFiles.deleteFileIfExists(walFile);
+      await _restoreFiles.deleteFileIfExists(shmFile);
+      await _restoreFiles.copyFile(backupFile, dbFile);
       restored = true;
     } catch (_) {
       if (await rollbackFile.exists()) {
-        await _deleteFileIfExists(walFile);
-        await _deleteFileIfExists(shmFile);
-        await rollbackFile.copy(dbPath);
-        await rollbackFile.delete();
+        await _restoreFiles.deleteFileIfExists(walFile);
+        await _restoreFiles.deleteFileIfExists(shmFile);
+        await _restoreFiles.copyFile(rollbackFile, dbFile);
+        await _restoreFiles.deleteFileIfExists(rollbackFile);
       }
       rethrow;
     } finally {
       if (restored) {
         try {
-          await _deleteFileIfExists(rollbackFile);
+          await _restoreFiles.deleteFileIfExists(rollbackFile);
         } on FileSystemException {
           // A leftover rollback copy is safer than failing a completed restore.
         }
       }
     }
-  }
-
-  Future<void> _deleteFileIfExists(File file) async {
-    if (await file.exists()) await file.delete();
   }
 
   Future<void> _upsertSetting(String key, String value) async {
