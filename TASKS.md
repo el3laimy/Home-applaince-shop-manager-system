@@ -154,7 +154,7 @@ Tasks:
 - [x] Run `HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter/bin/flutter build linux`.
 - [x] Run the app and visually review Login.
 - [x] Run the app and visually review Dashboard.
-- [!] Run the app and visually review POS.
+- [x] Run the app and visually review POS.
 - [x] Update root `README.md` with Cairo, OFL, and Liquid Glass notes.
 - [x] Update `Frontend/alikhlas_pos/README.md` with Cairo, OFL, and Liquid Glass notes.
 - [x] Update `RELEASE_NOTES_V2.md` with the UI phase summary.
@@ -167,6 +167,6 @@ Acceptance:
 - [x] Analyze passes.
 - [x] Tests pass.
 - [x] Linux build passes.
-- [!] Login, Dashboard, and POS pass visual review.
+- [x] Login, Dashboard, and POS pass visual review.
 - [x] Documentation matches the implemented UI and font assets.
 - [x] The final tree is clean after commit.
