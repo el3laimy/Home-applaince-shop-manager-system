@@ -88,6 +88,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('غسالة اختبار'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('أول قسط'), findsWidgets);
+    expect(find.text('الفترة'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, 'كاش'), '100');
     await tester.tap(find.text('تسجيل البيع'));
     await tester.pumpAndSettle();
@@ -194,7 +196,19 @@ void main() {
     await tester.tap(find.text('تسجيل الشراء'));
     await tester.pumpAndSettle();
 
-    expect(find.text('تم تسجيل الشراء'), findsOneWidget);
+    expect(find.text('الرصيد سيصبح سالبًا'), findsOneWidget);
+    await tester.tap(find.text('إلغاء'));
+    await tester.pumpAndSettle();
+    expect(await db.select(db.purchaseInvoices).get(), isEmpty);
+
+    await tester.tap(find.text('تسجيل الشراء'));
+    await tester.pumpAndSettle();
+    expect(find.text('الرصيد سيصبح سالبًا'), findsOneWidget);
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'أوافق على الرصيد السالب'),
+    );
+    await tester.pumpAndSettle();
+
     expect((await db.select(db.purchaseInvoices).get()).length, 1);
     final storedProduct = await (db.select(
       db.products,

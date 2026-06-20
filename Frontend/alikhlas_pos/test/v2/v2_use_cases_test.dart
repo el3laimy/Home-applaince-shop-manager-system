@@ -131,32 +131,37 @@ void main() {
       );
     });
 
-    test('database migrates a v3 file to v4 expenses and indexes', () async {
-      await db.close();
+    test(
+      'database migrates a v3 file to v5 expenses, product images, and indexes',
+      () async {
+        await db.close();
 
-      final tempDir = await Directory.systemTemp.createTemp(
-        'alikhlas-v2-migration-',
-      );
-      addTearDown(() async {
-        if (await tempDir.exists()) {
-          await tempDir.delete(recursive: true);
-        }
-      });
-      final dbFile = File('${tempDir.path}/app-v3.db');
-      await createMinimalV3Database(dbFile);
+        final tempDir = await Directory.systemTemp.createTemp(
+          'alikhlas-v2-migration-',
+        );
+        addTearDown(() async {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
+        });
+        final dbFile = File('${tempDir.path}/app-v3.db');
+        await createMinimalV3Database(dbFile);
 
-      db = AppDatabase(NativeDatabase(dbFile));
+        db = AppDatabase(NativeDatabase(dbFile));
 
-      final userVersion = await db
-          .customSelect('PRAGMA user_version;')
-          .getSingle();
-      final tables = await db.customSelect('''
+        final userVersion = await db
+            .customSelect('PRAGMA user_version;')
+            .getSingle();
+        final tables = await db.customSelect('''
             SELECT name
             FROM sqlite_master
             WHERE type = 'table'
               AND name = 'expenses'
             ''').get();
-      final indexes = await db.customSelect('''
+        final productColumns = await db.customSelect('''
+            PRAGMA table_info(products);
+            ''').get();
+        final indexes = await db.customSelect('''
             SELECT name
             FROM sqlite_master
             WHERE type = 'index'
@@ -174,10 +179,43 @@ void main() {
               )
             ''').get();
 
-      expect(userVersion.data['user_version'], 4);
-      expect(tables.map((row) => row.data['name']), ['expenses']);
-      expect(indexes, hasLength(10));
-    });
+        expect(userVersion.data['user_version'], 5);
+        expect(tables.map((row) => row.data['name']), ['expenses']);
+        expect(
+          productColumns.map((row) => row.data['name']),
+          contains('image_path'),
+        );
+        expect(indexes, hasLength(10));
+      },
+    );
+
+    test(
+      'creates products with generated barcode and optional image path',
+      () async {
+        final first = await successOf(
+          useCases.createProduct(
+            name: 'غسالة بصورة',
+            imagePath: '/tmp/washer.png',
+            salePriceMinor: 10000,
+            openingQty: 1,
+            openingCostMinor: 7000,
+          ),
+        );
+        final second = await successOf(
+          useCases.createProduct(
+            name: 'ثلاجة بباركود تلقائي',
+            salePriceMinor: 20000,
+            openingQty: 1,
+            openingCostMinor: 15000,
+          ),
+        );
+
+        expect(first.barcode, startsWith('AK-${DateTime.now().year}-'));
+        expect(second.barcode, startsWith('AK-${DateTime.now().year}-'));
+        expect(first.barcode, isNot(second.barcode));
+        expect(first.imagePath, '/tmp/washer.png');
+      },
+    );
 
     test(
       'cash and wallet sale posts balanced ledger and historical COGS',
@@ -271,6 +309,7 @@ void main() {
             ),
           ],
           payments: const [PaymentInput(PaymentMethod.wallet, 40000)],
+          allowNegativeBalance: true,
         ),
       );
 
@@ -280,6 +319,62 @@ void main() {
       expect(storedProduct.avgCostMinor, 15000);
       await expectAllLedgerEntriesBalanced(db);
     });
+
+    test(
+      'purchase that overdrafts wallet requires approval before writing data',
+      () async {
+        final product = await successOf(
+          useCases.createProduct(
+            name: 'خلاط',
+            salePriceMinor: 15000,
+            openingQty: 0,
+            openingCostMinor: 0,
+          ),
+        );
+
+        final warning = await confirmationOf(
+          useCases.createPurchase(
+            items: [
+              PurchaseLineInput(
+                productId: product.id,
+                qty: 1,
+                unitCostMinor: 9000,
+              ),
+            ],
+            payments: const [PaymentInput(PaymentMethod.wallet, 9000)],
+          ),
+        );
+        final payload = warning.payload as NegativeBalanceConfirmation;
+
+        expect(warning.code, 'negative_liquid_balance');
+        expect(payload.impacts, hasLength(1));
+        expect(payload.impacts.single.accountCode, AccountCodes.wallet);
+        expect(payload.impacts.single.currentMinor, 0);
+        expect(payload.impacts.single.deltaMinor, -9000);
+        expect(payload.impacts.single.newMinor, -9000);
+        expect(await db.select(db.purchaseInvoices).get(), isEmpty);
+        expect(await db.select(db.ledgerEntries).get(), isEmpty);
+
+        await successOf(
+          useCases.createPurchase(
+            items: [
+              PurchaseLineInput(
+                productId: product.id,
+                qty: 1,
+                unitCostMinor: 9000,
+              ),
+            ],
+            payments: const [PaymentInput(PaymentMethod.wallet, 9000)],
+            allowNegativeBalance: true,
+          ),
+        );
+
+        final snapshot = await useCases.dashboardSnapshot();
+        expect(snapshot.walletMinor, -9000);
+        expect((await productById(db, product.id)).stockQty, 1);
+        await expectAllLedgerEntriesBalanced(db);
+      },
+    );
 
     test('dashboard and party balances match ledger fold totals', () async {
       final customerId = await db
@@ -424,10 +519,71 @@ void main() {
           3000,
           3001,
         ]);
+        expect(payments.map((payment) => payment.dueDate), [
+          DateTime(2026, 7),
+          DateTime(2026, 7, 31),
+          DateTime(2026, 8, 30),
+        ]);
         expect(snapshot.receivablesMinor, 9001);
         await expectAllLedgerEntriesBalanced(db);
       },
     );
+
+    test('installment sale respects custom schedule period days', () async {
+      final customerId = await db
+          .into(db.customers)
+          .insert(CustomersCompanion.insert(name: 'عميل مواعيد'));
+      final product = await successOf(
+        useCases.createProduct(
+          name: 'تكييف',
+          salePriceMinor: 12000,
+          openingQty: 1,
+          openingCostMinor: 7000,
+        ),
+      );
+
+      final invalid = await useCases.createSale(
+        customerId: customerId,
+        items: [
+          SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 12000),
+        ],
+        payments: const [],
+        installmentTerms: InstallmentTerms(
+          partyId: customerId,
+          count: 2,
+          firstDueDate: DateTime(2026, 8, 5),
+          periodDays: 0,
+        ),
+      );
+
+      expect(invalid, isA<AppFailure<int>>());
+      expect(await db.select(db.installmentPlans).get(), isEmpty);
+      expect((await productById(db, product.id)).stockQty, 1);
+
+      await successOf(
+        useCases.createSale(
+          customerId: customerId,
+          items: [
+            SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 12000),
+          ],
+          payments: const [],
+          installmentTerms: InstallmentTerms(
+            partyId: customerId,
+            count: 2,
+            firstDueDate: DateTime(2026, 8, 5),
+            periodDays: 15,
+          ),
+        ),
+      );
+      final payments = await db.select(db.installmentPayments).get();
+
+      expect(payments.map((payment) => payment.dueDate), [
+        DateTime(2026, 8, 5),
+        DateTime(2026, 8, 20),
+      ]);
+      expect(payments.map((payment) => payment.amountMinor), [6000, 6000]);
+      await expectAllLedgerEntriesBalanced(db);
+    });
 
     test('collects customer installment and reduces receivables', () async {
       final customerId = await db
@@ -531,6 +687,7 @@ void main() {
               ),
             ],
             payments: const [PaymentInput(PaymentMethod.wallet, 7000)],
+            allowNegativeBalance: true,
           ),
         );
 
@@ -600,11 +757,26 @@ void main() {
       );
       final plan = await db.select(db.installmentPlans).getSingle();
 
+      final supplierPaymentWarning = await confirmationOf(
+        useCases.paySupplierInstallment(
+          planId: plan.id,
+          amountMinor: 20000,
+          method: PaymentMethod.wallet,
+        ),
+      );
+      expect(
+        (supplierPaymentWarning.payload as NegativeBalanceConfirmation)
+            .impacts
+            .single
+            .accountCode,
+        AccountCodes.wallet,
+      );
       await successOf(
         useCases.paySupplierInstallment(
           planId: plan.id,
           amountMinor: 20000,
           method: PaymentMethod.wallet,
+          allowNegativeBalance: true,
         ),
       );
       final rejectedCashExpense = await useCases.recordExpense(
@@ -613,11 +785,26 @@ void main() {
         method: PaymentMethod.cash,
       );
       await successOf(useCases.openShift(0));
+      final cashExpenseWarning = await confirmationOf(
+        useCases.recordExpense(
+          description: 'نقل بضاعة',
+          amountMinor: 1500,
+          method: PaymentMethod.cash,
+        ),
+      );
+      expect(
+        (cashExpenseWarning.payload as NegativeBalanceConfirmation)
+            .impacts
+            .single
+            .accountCode,
+        AccountCodes.cash,
+      );
       final expenseId = await successOf(
         useCases.recordExpense(
           description: 'نقل بضاعة',
           amountMinor: 1500,
           method: PaymentMethod.cash,
+          allowNegativeBalance: true,
         ),
       );
 
@@ -647,11 +834,28 @@ void main() {
     test(
       'wallet expense records an expense row without requiring a shift',
       () async {
+        final warning = await confirmationOf(
+          useCases.recordExpense(
+            description: 'اشتراك محفظة',
+            amountMinor: 700,
+            method: PaymentMethod.wallet,
+          ),
+        );
+        expect(
+          (warning.payload as NegativeBalanceConfirmation)
+              .impacts
+              .single
+              .newMinor,
+          -700,
+        );
+        expect(await db.select(db.expenses).get(), isEmpty);
+
         final expenseId = await successOf(
           useCases.recordExpense(
             description: 'اشتراك محفظة',
             amountMinor: 700,
             method: PaymentMethod.wallet,
+            allowNegativeBalance: true,
           ),
         );
 
@@ -675,6 +879,7 @@ void main() {
             description: 'مصروف تقرير',
             amountMinor: 900,
             method: PaymentMethod.wallet,
+            allowNegativeBalance: true,
           ),
         );
 
@@ -937,6 +1142,7 @@ void main() {
             PaymentInput(PaymentMethod.cash, 5000),
             PaymentInput(PaymentMethod.wallet, 6000),
           ],
+          allowNegativeBalance: true,
         ),
       );
       final saleId = await successOf(
@@ -1274,6 +1480,16 @@ Future<T> successOf<T>(Future<AppResult<T>> future) async {
   fail('Unexpected result type: $result');
 }
 
+Future<AppConfirmationRequired<T>> confirmationOf<T>(
+  Future<AppResult<T>> future,
+) async {
+  final result = await future;
+  if (result is AppConfirmationRequired<T>) {
+    return result;
+  }
+  fail('Expected confirmation result, got $result');
+}
+
 Future<Product> productById(AppDatabase db, int productId) {
   return (db.select(
     db.products,
@@ -1353,6 +1569,21 @@ Future<void> createMinimalV3Database(File file) async {
   final rawDb = sqlite.sqlite3.open(file.path);
   try {
     rawDb
+      ..execute('''
+        CREATE TABLE products (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          barcode TEXT NULL UNIQUE,
+          category TEXT NULL,
+          stock_qty INTEGER NOT NULL DEFAULT 0,
+          min_stock_qty INTEGER NOT NULL DEFAULT 1,
+          sale_price_minor INTEGER NOT NULL,
+          avg_cost_minor INTEGER NOT NULL DEFAULT 0,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NULL
+        );
+      ''')
       ..execute('''
         CREATE TABLE ledger_lines (
           id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

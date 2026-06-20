@@ -10,6 +10,7 @@ import '../application/v2_use_cases.dart';
 import '../core/money.dart';
 import '../core/result.dart';
 import '../data/app_database.dart';
+import '../printing/party_statement_pdf.dart';
 import '../printing/report_summary_pdf.dart';
 import '../printing/sale_receipt_pdf.dart';
 import 'app_theme.dart';
@@ -294,6 +295,7 @@ class _WorkbenchShellState extends ConsumerState<_WorkbenchShell> {
     final workbench = ref.watch(workbenchProvider);
 
     return _GlassStage(
+      background: workbench.asData?.value.uiBackground,
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(18),
@@ -529,6 +531,8 @@ class _DailyView extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 14),
+            _DailyAlertsPanel(snapshot: snapshot),
+            const SizedBox(height: 14),
             _DailySummaryPanel(summary: summary),
             const SizedBox(height: 14),
             SizedBox(
@@ -596,8 +600,11 @@ class _PosViewState extends ConsumerState<_PosView> {
   final _wallet = TextEditingController();
   final _discount = TextEditingController();
   final _installmentCount = TextEditingController(text: '3');
+  final _customPeriodDays = TextEditingController(text: '30');
   final _interest = TextEditingController();
   final _cart = <_CartLine>[];
+  DateTime _firstDueDate = DateTime.now().add(const Duration(days: 30));
+  int _periodDays = 30;
   int? _customerId;
 
   @override
@@ -607,6 +614,7 @@ class _PosViewState extends ConsumerState<_PosView> {
     _wallet.dispose();
     _discount.dispose();
     _installmentCount.dispose();
+    _customPeriodDays.dispose();
     _interest.dispose();
     super.dispose();
   }
@@ -632,6 +640,12 @@ class _PosViewState extends ConsumerState<_PosView> {
     final paid = cash + wallet;
     final netTotal = (total - discount).clamp(0, total);
     final remaining = netTotal - paid;
+    final installmentCount = int.tryParse(_installmentCount.text) ?? 0;
+    final installmentTotal = remaining + _parseMoney(_interest.text);
+    final previewInstallment =
+        remaining > 0 && installmentCount > 0 && installmentTotal > 0
+        ? allocateRemainderToLast(installmentTotal, installmentCount, 0)
+        : 0;
     final moneyError = _firstMoneyInputError({
       'كاش': _cash,
       'محفظة': _wallet,
@@ -665,7 +679,7 @@ class _PosViewState extends ConsumerState<_PosView> {
                       itemBuilder: (context, index) {
                         final product = products[index];
                         return ListTile(
-                          leading: const Icon(Icons.inventory_2),
+                          leading: _ProductAvatar(product: product),
                           title: Text(product.name),
                           subtitle: Text('الرصيد ${product.stockQty}'),
                           trailing: Text(
@@ -767,6 +781,20 @@ class _PosViewState extends ConsumerState<_PosView> {
                       ),
                     ],
                   ),
+                  if (remaining > 0) ...[
+                    const SizedBox(height: 8),
+                    _InstallmentScheduleEditor(
+                      firstDueDate: _firstDueDate,
+                      periodDays: _periodDays,
+                      customPeriodController: _customPeriodDays,
+                      installmentCount: installmentCount,
+                      previewInstallmentMinor: previewInstallment,
+                      onPickDate: _pickFirstDueDate,
+                      onPeriodChanged: (value) =>
+                          setState(() => _periodDays = value),
+                      onCustomPeriodChanged: (_) => setState(() {}),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _AmountRow('الإجمالي قبل الخصم', total),
                   _AmountRow('الخصم', discount),
@@ -863,12 +891,23 @@ class _PosViewState extends ConsumerState<_PosView> {
       _showSnack(context, 'اختر عميلًا للبيع بالتقسيط');
       return;
     }
+    final installmentCount = int.tryParse(_installmentCount.text) ?? 0;
+    final periodDays = _effectiveInstallmentPeriodDays();
+    if (remaining > 0 && installmentCount <= 0) {
+      _showSnack(context, 'عدد الأقساط يجب أن يكون أكبر من صفر');
+      return;
+    }
+    if (remaining > 0 && periodDays <= 0) {
+      _showSnack(context, 'فترة الأقساط يجب أن تكون أكبر من صفر يوم');
+      return;
+    }
     final terms = remaining > 0 && _customerId != null
         ? InstallmentTerms(
             partyId: _customerId!,
-            count: int.tryParse(_installmentCount.text) ?? 1,
-            firstDueDate: DateTime.now().add(const Duration(days: 30)),
+            count: installmentCount,
+            firstDueDate: _firstDueDate,
             interestMinor: interest,
+            periodDays: periodDays,
           )
         : null;
     final result = await ref
@@ -910,6 +949,109 @@ class _PosViewState extends ConsumerState<_PosView> {
         builder: (_) => _SaleReceiptDialog(receipt: receipt),
       );
     }
+  }
+
+  int _effectiveInstallmentPeriodDays() {
+    if (_periodDays > 0) return _periodDays;
+    return int.tryParse(_customPeriodDays.text) ?? 0;
+  }
+
+  Future<void> _pickFirstDueDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _firstDueDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _firstDueDate = picked);
+  }
+}
+
+class _InstallmentScheduleEditor extends StatelessWidget {
+  const _InstallmentScheduleEditor({
+    required this.firstDueDate,
+    required this.periodDays,
+    required this.customPeriodController,
+    required this.installmentCount,
+    required this.previewInstallmentMinor,
+    required this.onPickDate,
+    required this.onPeriodChanged,
+    required this.onCustomPeriodChanged,
+  });
+
+  final DateTime firstDueDate;
+  final int periodDays;
+  final TextEditingController customPeriodController;
+  final int installmentCount;
+  final int previewInstallmentMinor;
+  final VoidCallback onPickDate;
+  final ValueChanged<int> onPeriodChanged;
+  final ValueChanged<String> onCustomPeriodChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.58)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPickDate,
+                    icon: const Icon(Icons.event),
+                    label: Text('أول قسط ${_date(firstDueDate)}'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: periodDays,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'الفترة'),
+                    items: const [
+                      DropdownMenuItem(value: 30, child: Text('شهري')),
+                      DropdownMenuItem(value: 15, child: Text('نصف شهري')),
+                      DropdownMenuItem(value: 7, child: Text('أسبوعي')),
+                      DropdownMenuItem(value: -1, child: Text('مخصص')),
+                    ],
+                    onChanged: (value) => onPeriodChanged(value ?? 30),
+                  ),
+                ),
+              ],
+            ),
+            if (periodDays == -1) ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: customPeriodController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'عدد الأيام بين كل قسط',
+                ),
+                onChanged: onCustomPeriodChanged,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              installmentCount <= 0
+                  ? 'أدخل عدد الأقساط لعرض المعاينة'
+                  : 'معاينة: $installmentCount أقساط · أول قسط ${Money(previewInstallmentMinor).format()}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: V2DesignTokens.inkMuted),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1052,13 +1194,11 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                       itemBuilder: (context, index) {
                         final product = products[index];
                         return ListTile(
-                          leading: Icon(
-                            product.isActive ? Icons.inventory_2 : Icons.block,
-                            color:
+                          leading: _ProductAvatar(
+                            product: product,
+                            warning:
                                 product.stockQty <= product.minStockQty &&
-                                    product.isActive
-                                ? Theme.of(context).colorScheme.error
-                                : null,
+                                product.isActive,
                           ),
                           title: Text(product.name),
                           subtitle: Text(
@@ -1156,6 +1296,7 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                 name: data.name,
                 barcode: data.barcode,
                 category: data.category,
+                imagePath: data.imagePath,
                 salePriceMinor: data.salePriceMinor,
                 openingQty: data.openingQty,
                 openingCostMinor: data.openingCostMinor,
@@ -1168,6 +1309,7 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                 name: data.name,
                 barcode: data.barcode,
                 category: data.category,
+                imagePath: data.imagePath,
                 salePriceMinor: data.salePriceMinor,
                 minStockQty: data.minStockQty,
               );
@@ -1265,6 +1407,7 @@ class _PartiesView extends ConsumerWidget {
       context: context,
       builder: (_) => _PartyStatementDialog(
         party: party,
+        settings: snapshot.shopSettings,
         statementFuture: ref
             .read(useCasesProvider)
             .partyStatement(partyType: party.type, partyId: party.id),
@@ -1296,21 +1439,25 @@ class _PartiesView extends ConsumerWidget {
           builder: (_) => _QuickInstallmentDialog(party: party, plans: plans),
         );
     if (payment == null || !context.mounted) return;
-    final result = party.type == 'customer'
-        ? await ref
-              .read(useCasesProvider)
-              .collectInstallment(
-                planId: payment.plan.plan.id,
-                amountMinor: payment.amount,
-                method: payment.method,
-              )
-        : await ref
-              .read(useCasesProvider)
-              .paySupplierInstallment(
-                planId: payment.plan.plan.id,
-                amountMinor: payment.amount,
-                method: payment.method,
-              );
+    final result = await _runWithNegativeBalanceApproval(
+      context,
+      action: (allowNegativeBalance) => party.type == 'customer'
+          ? ref
+                .read(useCasesProvider)
+                .collectInstallment(
+                  planId: payment.plan.plan.id,
+                  amountMinor: payment.amount,
+                  method: payment.method,
+                )
+          : ref
+                .read(useCasesProvider)
+                .paySupplierInstallment(
+                  planId: payment.plan.plan.id,
+                  amountMinor: payment.amount,
+                  method: payment.method,
+                  allowNegativeBalance: allowNegativeBalance,
+                ),
+    );
     if (!context.mounted) return;
     _showResult(context, result, success: 'تم تسجيل الحركة');
     _refresh(ref);
@@ -1387,7 +1534,7 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
                             itemBuilder: (context, index) {
                               final product = products[index];
                               return ListTile(
-                                leading: const Icon(Icons.inventory_2),
+                                leading: _ProductAvatar(product: product),
                                 title: Text(product.name),
                                 subtitle: Text(
                                   'رصيد ${product.stockQty} · تكلفة ${Money(product.avgCostMinor).format()}',
@@ -1521,23 +1668,27 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
       _showSnack(context, invalidCost);
       return;
     }
-    final result = await ref
-        .read(useCasesProvider)
-        .createPurchase(
-          supplierId: _supplierId,
-          items: [
-            for (final line in _cart)
-              PurchaseLineInput(
-                productId: line.product.id,
-                qty: line.qty,
-                unitCostMinor: line.costMinor,
-              ),
-          ],
-          payments: [
-            PaymentInput(PaymentMethod.cash, cash),
-            PaymentInput(PaymentMethod.wallet, wallet),
-          ],
-        );
+    final result = await _runWithNegativeBalanceApproval(
+      context,
+      action: (allowNegativeBalance) => ref
+          .read(useCasesProvider)
+          .createPurchase(
+            supplierId: _supplierId,
+            items: [
+              for (final line in _cart)
+                PurchaseLineInput(
+                  productId: line.product.id,
+                  qty: line.qty,
+                  unitCostMinor: line.costMinor,
+                ),
+            ],
+            payments: [
+              PaymentInput(PaymentMethod.cash, cash),
+              PaymentInput(PaymentMethod.wallet, wallet),
+            ],
+            allowNegativeBalance: allowNegativeBalance,
+          ),
+    );
     if (!mounted) return;
     _showResult(context, result, success: 'تم تسجيل الشراء');
     if (result is AppSuccess<int>) {
@@ -1650,21 +1801,25 @@ class _InstallmentsViewState extends ConsumerState<_InstallmentsView> {
       ),
     );
     if (payment == null || !context.mounted) return;
-    final result = plan.partyType == 'customer'
-        ? await ref
-              .read(useCasesProvider)
-              .collectInstallment(
-                planId: plan.id,
-                amountMinor: payment.amount,
-                method: payment.method,
-              )
-        : await ref
-              .read(useCasesProvider)
-              .paySupplierInstallment(
-                planId: plan.id,
-                amountMinor: payment.amount,
-                method: payment.method,
-              );
+    final result = await _runWithNegativeBalanceApproval(
+      context,
+      action: (allowNegativeBalance) => plan.partyType == 'customer'
+          ? ref
+                .read(useCasesProvider)
+                .collectInstallment(
+                  planId: plan.id,
+                  amountMinor: payment.amount,
+                  method: payment.method,
+                )
+          : ref
+                .read(useCasesProvider)
+                .paySupplierInstallment(
+                  planId: plan.id,
+                  amountMinor: payment.amount,
+                  method: payment.method,
+                  allowNegativeBalance: allowNegativeBalance,
+                ),
+    );
     if (!context.mounted) return;
     _showResult(context, result, success: 'تم تسجيل الحركة');
     _refresh(ref);
@@ -1822,13 +1977,17 @@ class _ReturnsView extends ConsumerWidget {
           builder: (_) => _ReturnDialog(preview: preview),
         );
     if (result == null || !context.mounted) return;
-    final appResult = await ref
-        .read(useCasesProvider)
-        .createSaleReturn(
-          saleId: sale.id,
-          saleItemQuantities: result.quantities,
-          refundMethod: result.method,
-        );
+    final appResult = await _runWithNegativeBalanceApproval(
+      context,
+      action: (allowNegativeBalance) => ref
+          .read(useCasesProvider)
+          .createSaleReturn(
+            saleId: sale.id,
+            saleItemQuantities: result.quantities,
+            refundMethod: result.method,
+            allowNegativeBalance: allowNegativeBalance,
+          ),
+    );
     if (!context.mounted) return;
     _showResult(context, appResult, success: 'تم تسجيل المرتجع');
     _refresh(ref);
@@ -2182,6 +2341,8 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
   late final _footer = TextEditingController(
     text: widget.snapshot.shopSettings.receiptFooter ?? '',
   );
+  late String _backgroundPreset = widget.snapshot.uiBackground.preset;
+  late String? _backgroundImagePath = widget.snapshot.uiBackground.imagePath;
   bool _saving = false;
 
   @override
@@ -2231,6 +2392,39 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                       labelText: 'تذييل الفاتورة',
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'خلفية التطبيق',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _backgroundPreset,
+                    decoration: const InputDecoration(labelText: 'النمط'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'aurora',
+                        child: Text('Aurora زجاجي'),
+                      ),
+                      DropdownMenuItem(value: 'sky', child: Text('سماء هادئة')),
+                      DropdownMenuItem(
+                        value: 'blush',
+                        child: Text('وردي ناعم'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'graphite',
+                        child: Text('رمادي احترافي'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _backgroundPreset = value ?? 'aurora'),
+                  ),
+                  const SizedBox(height: 10),
+                  _BackgroundImagePicker(
+                    imagePath: _backgroundImagePath,
+                    onPick: _pickBackgroundImage,
+                    onClear: () => setState(() => _backgroundImagePath = null),
+                  ),
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
@@ -2261,6 +2455,16 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                 _InfoLine(
                   'العنوان',
                   widget.snapshot.shopSettings.address ?? 'غير مسجل',
+                ),
+                _InfoLine(
+                  'الخلفية',
+                  _backgroundLabel(widget.snapshot.uiBackground.preset),
+                ),
+                _InfoLine(
+                  'صورة الخلفية',
+                  widget.snapshot.uiBackground.imagePath == null
+                      ? 'لا توجد'
+                      : _fileName(widget.snapshot.uiBackground.imagePath!),
                 ),
                 const Divider(height: 24),
                 _InfoLine(
@@ -2318,10 +2522,27 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
           address: _address.text,
           receiptFooter: _footer.text,
         );
+    if (result is AppSuccess<ShopSettingsSnapshot>) {
+      await ref
+          .read(useCasesProvider)
+          .updateUiBackground(
+            preset: _backgroundPreset,
+            imagePath: _backgroundImagePath,
+          );
+    }
     if (!mounted) return;
     _showResult(context, result, success: 'تم حفظ الإعدادات');
     setState(() => _saving = false);
     _refresh(ref);
+  }
+
+  Future<void> _pickBackgroundImage() async {
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'اختر صورة خلفية التطبيق',
+      type: FileType.image,
+    );
+    if (!mounted || picked == null || picked.files.single.path == null) return;
+    setState(() => _backgroundImagePath = picked.files.single.path);
   }
 }
 
@@ -2365,22 +2586,46 @@ class _Screen extends StatelessWidget {
 }
 
 class _GlassStage extends StatelessWidget {
-  const _GlassStage({required this.child});
+  const _GlassStage({required this.child, this.background});
+
   final Widget child;
+  final UiBackgroundSnapshot? background;
 
   @override
   Widget build(BuildContext context) {
+    final imagePath = background?.imagePath;
+    final imageFile = imagePath == null ? null : File(imagePath);
+    final hasImage = imageFile != null && imageFile.existsSync();
     return Scaffold(
-      body: DecoratedBox(
-        decoration: BoxDecoration(gradient: V2DesignTokens.stageGradient),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(painter: _LiquidBackdropPainter()),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: _backgroundGradient(background?.preset ?? 'aurora'),
             ),
-            child,
-          ],
-        ),
+          ),
+          if (hasImage)
+            Image.file(
+              imageFile,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          if (hasImage)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+              ),
+            ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _LiquidBackdropPainter(
+                preset: background?.preset ?? 'aurora',
+              ),
+            ),
+          ),
+          child,
+        ],
       ),
     );
   }
@@ -2437,16 +2682,21 @@ class _GlassPane extends StatelessWidget {
 }
 
 class _LiquidBackdropPainter extends CustomPainter {
+  const _LiquidBackdropPainter({required this.preset});
+
+  final String preset;
+
   @override
   void paint(Canvas canvas, Size size) {
+    final palette = _backgroundPalette(preset);
     final wash = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          V2DesignTokens.mint.withValues(alpha: 0.22),
+          palette.$1.withValues(alpha: 0.22),
           Colors.white.withValues(alpha: 0.02),
-          V2DesignTokens.iris.withValues(alpha: 0.20),
+          palette.$2.withValues(alpha: 0.20),
         ],
         stops: const [0, 0.48, 1],
       ).createShader(Offset.zero & size);
@@ -2472,7 +2722,7 @@ class _LiquidBackdropPainter extends CustomPainter {
       )
       ..close();
     final coolPaint = Paint()
-      ..color = V2DesignTokens.iris.withValues(alpha: 0.22)
+      ..color = palette.$2.withValues(alpha: 0.22)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 36);
 
     final warmRibbon = Path()
@@ -2489,7 +2739,7 @@ class _LiquidBackdropPainter extends CustomPainter {
       ..lineTo(-size.width * 0.08, size.height * 1.12)
       ..close();
     final warmPaint = Paint()
-      ..color = V2DesignTokens.rose.withValues(alpha: 0.18)
+      ..color = palette.$3.withValues(alpha: 0.18)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 42);
 
     final glassSheen = Paint()
@@ -2511,7 +2761,45 @@ class _LiquidBackdropPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _LiquidBackdropPainter oldDelegate) {
+    return oldDelegate.preset != preset;
+  }
+}
+
+LinearGradient _backgroundGradient(String preset) {
+  final palette = _backgroundPalette(preset);
+  return LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [
+      palette.$1.withValues(alpha: 0.38),
+      palette.$3.withValues(alpha: 0.20),
+      palette.$2.withValues(alpha: 0.30),
+      V2DesignTokens.pearl,
+    ],
+    stops: const [0, 0.36, 0.74, 1],
+  );
+}
+
+(Color, Color, Color) _backgroundPalette(String preset) {
+  return switch (preset) {
+    'sky' => (
+      const Color(0xFF78D6F4),
+      const Color(0xFF7E8EE8),
+      const Color(0xFFEAF7FF),
+    ),
+    'blush' => (
+      const Color(0xFFE9A7A0),
+      const Color(0xFFB7A6F4),
+      const Color(0xFFFFE8D9),
+    ),
+    'graphite' => (
+      const Color(0xFF90A4AE),
+      const Color(0xFF607D8B),
+      const Color(0xFFECEFF1),
+    ),
+    _ => (V2DesignTokens.mint, V2DesignTokens.iris, V2DesignTokens.rose),
+  };
 }
 
 class _MetricsGrid extends StatelessWidget {
@@ -2630,6 +2918,34 @@ class _CartLine {
   _CartLine(this.product);
   final Product product;
   int qty = 1;
+}
+
+class _ProductAvatar extends StatelessWidget {
+  const _ProductAvatar({required this.product, this.warning = false});
+
+  final Product product;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = product.imagePath;
+    final file = imagePath == null ? null : File(imagePath);
+    final hasImage = file != null && file.existsSync();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 42,
+        height: 42,
+        color: Colors.white.withValues(alpha: 0.58),
+        child: hasImage
+            ? Image.file(file, fit: BoxFit.cover)
+            : Icon(
+                product.isActive ? Icons.inventory_2 : Icons.block,
+                color: warning ? Theme.of(context).colorScheme.error : null,
+              ),
+      ),
+    );
+  }
 }
 
 class _PurchaseCartLine {
@@ -2945,6 +3261,129 @@ class _DailySummaryPanel extends StatelessWidget {
           _AmountRow('صافي حركة المحفظة', summary.walletNetMinor),
           _AmountRow('مشتريات دخلت المخزون', summary.purchaseMinor),
         ],
+      ),
+    );
+  }
+}
+
+class _DailyAlertsPanel extends StatelessWidget {
+  const _DailyAlertsPanel({required this.snapshot});
+
+  final WorkbenchSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final overdue = snapshot.dueInstallments.where((item) {
+      return item.payment.dueDate.isBefore(todayStart);
+    }).length;
+    final dueToday = snapshot.dueInstallments.where((item) {
+      final due = item.payment.dueDate;
+      return due.year == todayStart.year &&
+          due.month == todayStart.month &&
+          due.day == todayStart.day;
+    }).length;
+    final lowStock = snapshot.products
+        .where(
+          (product) =>
+              product.isActive && product.stockQty <= product.minStockQty,
+        )
+        .length;
+    final latestBackup = snapshot.backupStatus.latestBackupPath == null
+        ? 'لا توجد نسخة بعد'
+        : _fileName(snapshot.backupStatus.latestBackupPath!);
+
+    return _GlassPane(
+      child: Row(
+        children: [
+          Expanded(
+            child: _AlertChip(
+              icon: Icons.warning_amber,
+              label: 'أقساط متأخرة',
+              value: overdue.toString(),
+              urgent: overdue > 0,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _AlertChip(
+              icon: Icons.event_available,
+              label: 'مستحق اليوم',
+              value: dueToday.toString(),
+              urgent: dueToday > 0,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _AlertChip(
+              icon: Icons.inventory_2,
+              label: 'أصناف ناقصة',
+              value: lowStock.toString(),
+              urgent: lowStock > 0,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _AlertChip(
+              icon: Icons.backup,
+              label: 'آخر نسخة',
+              value: latestBackup,
+              urgent: snapshot.backupStatus.latestBackupPath == null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlertChip extends StatelessWidget {
+  const _AlertChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.urgent,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool urgent;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = urgent
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(color: _mutedInk)),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3393,10 +3832,12 @@ class _CountBadge extends StatelessWidget {
 class _PartyStatementDialog extends StatelessWidget {
   const _PartyStatementDialog({
     required this.party,
+    required this.settings,
     required this.statementFuture,
   });
 
   final PartyBalance party;
+  final ShopSettingsSnapshot settings;
   final Future<List<PartyStatementLine>> statementFuture;
 
   @override
@@ -3424,15 +3865,19 @@ class _PartyStatementDialog extends StatelessWidget {
               0,
               (sum, line) => sum + line.creditMinor,
             );
+            final balanceLabel = party.type == 'supplier'
+                ? 'رصيد المورد'
+                : 'رصيد العميل';
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _TextMetricsGrid(
                   metrics: [
+                    ('الحركات', lines.length.toString(), Icons.receipt_long),
                     ('مدين', Money(debit).format(), Icons.arrow_downward),
                     ('دائن', Money(credit).format(), Icons.arrow_upward),
                     (
-                      'الرصيد',
+                      balanceLabel,
                       Money(party.balanceMinor).format(),
                       Icons.account_balance,
                     ),
@@ -3442,19 +3887,50 @@ class _PartyStatementDialog extends StatelessWidget {
                 Expanded(
                   child: ListView.separated(
                     itemCount: lines.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final line = lines[index];
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(line.entry.description),
-                        subtitle: Text(_dateTime(line.entry.createdAt)),
-                        trailing: SizedBox(
-                          width: 310,
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.46),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.56),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
+                              Icon(
+                                _statementIcon(line.entry.referenceType),
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _statementReferenceLabel(
+                                        line.entry.referenceType,
+                                      ),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(line.entry.description),
+                                    Text(
+                                      _dateTime(line.entry.createdAt),
+                                      style: const TextStyle(color: _mutedInk),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               _StatementAmount(
                                 label: 'مدين',
                                 amountMinor: line.debitMinor,
@@ -3483,6 +3959,23 @@ class _PartyStatementDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        FutureBuilder<List<PartyStatementLine>>(
+          future: statementFuture,
+          builder: (context, snapshot) {
+            final lines = snapshot.data;
+            return FilledButton.icon(
+              onPressed: lines == null
+                  ? null
+                  : () => PartyStatementPdf.printStatement(
+                      party: party,
+                      statement: lines,
+                      settings: settings,
+                    ),
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('تصدير PDF'),
+            );
+          },
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('إغلاق'),
@@ -3490,6 +3983,30 @@ class _PartyStatementDialog extends StatelessWidget {
       ],
     );
   }
+}
+
+String _statementReferenceLabel(String referenceType) {
+  return switch (referenceType) {
+    'sale' => 'فاتورة بيع',
+    'purchase' => 'فاتورة شراء',
+    'installment_collection' => 'تحصيل قسط',
+    'supplier_installment_payment' => 'سداد مورد',
+    'sale_return' => 'مرتجع بيع',
+    'expense' => 'مصروف',
+    _ => 'حركة دفتر',
+  };
+}
+
+IconData _statementIcon(String referenceType) {
+  return switch (referenceType) {
+    'sale' => Icons.point_of_sale,
+    'purchase' => Icons.local_shipping,
+    'installment_collection' => Icons.payments,
+    'supplier_installment_payment' => Icons.payments,
+    'sale_return' => Icons.keyboard_return,
+    'expense' => Icons.money_off,
+    _ => Icons.receipt_long,
+  };
 }
 
 class _StatementAmount extends StatelessWidget {
@@ -3836,6 +4353,7 @@ class _ProductDialogState extends State<_ProductDialog> {
   late final _min = TextEditingController(
     text: widget.product?.minStockQty.toString() ?? '1',
   );
+  late String? _imagePath = widget.product?.imagePath;
 
   @override
   void dispose() {
@@ -3868,7 +4386,10 @@ class _ProductDialogState extends State<_ProductDialog> {
                 Expanded(
                   child: TextField(
                     controller: _barcode,
-                    decoration: const InputDecoration(labelText: 'باركود'),
+                    decoration: const InputDecoration(
+                      labelText: 'باركود',
+                      helperText: 'اتركه فارغًا للتوليد التلقائي',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -3912,6 +4433,23 @@ class _ProductDialogState extends State<_ProductDialog> {
                 ],
               ),
             ],
+            const SizedBox(height: 10),
+            _ProductImagePicker(
+              imagePath: _imagePath,
+              onPick: () async {
+                final picked = await FilePicker.platform.pickFiles(
+                  dialogTitle: 'اختر صورة المنتج',
+                  type: FileType.image,
+                );
+                if (!mounted ||
+                    picked == null ||
+                    picked.files.single.path == null) {
+                  return;
+                }
+                setState(() => _imagePath = picked.files.single.path);
+              },
+              onClear: () => setState(() => _imagePath = null),
+            ),
           ],
         ),
       ),
@@ -3931,6 +4469,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                 name: _name.text,
                 barcode: _barcode.text,
                 category: _category.text,
+                imagePath: _imagePath,
                 salePriceMinor: price,
                 openingQty: int.tryParse(_qty.text) ?? 0,
                 openingCostMinor: cost,
@@ -3950,6 +4489,7 @@ class _ProductFormData {
     required this.name,
     required this.barcode,
     required this.category,
+    required this.imagePath,
     required this.salePriceMinor,
     required this.openingQty,
     required this.openingCostMinor,
@@ -3959,10 +4499,136 @@ class _ProductFormData {
   final String name;
   final String barcode;
   final String category;
+  final String? imagePath;
   final int salePriceMinor;
   final int openingQty;
   final int openingCostMinor;
   final int minStockQty;
+}
+
+class _ProductImagePicker extends StatelessWidget {
+  const _ProductImagePicker({
+    required this.imagePath,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final String? imagePath;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final file = imagePath == null ? null : File(imagePath!);
+    final hasImage = file != null && file.existsSync();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.62)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 64,
+                height: 64,
+                child: hasImage
+                    ? Image.file(file, fit: BoxFit.cover)
+                    : const ColoredBox(
+                        color: Color(0xEAF7FAF8),
+                        child: Icon(Icons.image_outlined),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                imagePath == null
+                    ? 'لا توجد صورة للمنتج'
+                    : _fileName(imagePath!),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onPick,
+              icon: const Icon(Icons.photo_library),
+              label: const Text('اختيار'),
+            ),
+            if (imagePath != null)
+              IconButton(
+                tooltip: 'إزالة الصورة',
+                onPressed: onClear,
+                icon: const Icon(Icons.close),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BackgroundImagePicker extends StatelessWidget {
+  const _BackgroundImagePicker({
+    required this.imagePath,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final String? imagePath;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.62)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            const Icon(Icons.wallpaper),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                imagePath == null
+                    ? 'استخدم النمط المختار بدون صورة'
+                    : _fileName(imagePath!),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onPick,
+              icon: const Icon(Icons.photo_library),
+              label: const Text('صورة'),
+            ),
+            if (imagePath != null)
+              IconButton(
+                tooltip: 'إزالة الصورة',
+                onPressed: onClear,
+                icon: const Icon(Icons.close),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _backgroundLabel(String preset) {
+  return switch (preset) {
+    'sky' => 'سماء هادئة',
+    'blush' => 'وردي ناعم',
+    'graphite' => 'رمادي احترافي',
+    _ => 'Aurora زجاجي',
+  };
 }
 
 class _PartyDialog extends StatefulWidget {
@@ -4385,6 +5051,96 @@ void _showResult<T>(
       _showSnack(context, success);
     case AppFailure<T>(message: final message):
       _showSnack(context, message);
+  }
+}
+
+Future<AppResult<int>> _runWithNegativeBalanceApproval(
+  BuildContext context, {
+  required Future<AppResult<int>> Function(bool allowNegativeBalance) action,
+}) async {
+  final firstResult = await action(false);
+  if (!context.mounted) return firstResult;
+  if (firstResult case AppConfirmationRequired<int>(
+    code: 'negative_liquid_balance',
+    payload: final NegativeBalanceConfirmation confirmation,
+  )) {
+    final confirmed = await _confirmNegativeBalance(context, confirmation);
+    if (!confirmed || !context.mounted) return firstResult;
+    return action(true);
+  }
+  return firstResult;
+}
+
+Future<bool> _confirmNegativeBalance(
+  BuildContext context,
+  NegativeBalanceConfirmation confirmation,
+) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('الرصيد سيصبح سالبًا'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'هذه العملية ستجعل رصيد الخزينة أو المحفظة أقل من صفر. راجع الأرقام قبل الموافقة.',
+                ),
+                const SizedBox(height: 12),
+                for (final impact in confirmation.impacts)
+                  _NegativeBalanceImpactTile(impact: impact),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.warning_amber),
+              label: const Text('أوافق على الرصيد السالب'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
+
+class _NegativeBalanceImpactTile extends StatelessWidget {
+  const _NegativeBalanceImpactTile({required this.impact});
+
+  final NegativeBalanceImpact impact;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.errorContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(V2DesignTokens.radiusMd),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(impact.label, style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            _InfoLine('الرصيد الحالي', Money(impact.currentMinor).format()),
+            _InfoLine('قيمة الحركة', Money(impact.deltaMinor).format()),
+            _InfoLine('الرصيد بعد العملية', Money(impact.newMinor).format()),
+          ],
+        ),
+      ),
+    );
   }
 }
 

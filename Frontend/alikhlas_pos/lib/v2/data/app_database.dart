@@ -30,6 +30,7 @@ class Products extends Table {
   TextColumn get name => text()();
   TextColumn get barcode => text().nullable().unique()();
   TextColumn get category => text().nullable()();
+  TextColumn get imagePath => text().nullable()();
   IntColumn get stockQty => integer().withDefault(const Constant(0))();
   IntColumn get minStockQty => integer().withDefault(const Constant(1))();
   IntColumn get salePriceMinor => integer()();
@@ -234,7 +235,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? openAppConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -247,6 +248,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 4) {
         await migrator.createTable(expenses);
+      }
+      if (from < 5) {
+        await migrator.addColumn(products, products.imagePath);
       }
     },
     beforeOpen: (details) async {

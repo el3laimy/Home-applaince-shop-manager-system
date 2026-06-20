@@ -21,6 +21,28 @@ class PaymentInput {
   final String? note;
 }
 
+class NegativeBalanceImpact {
+  const NegativeBalanceImpact({
+    required this.accountCode,
+    required this.label,
+    required this.currentMinor,
+    required this.deltaMinor,
+    required this.newMinor,
+  });
+
+  final String accountCode;
+  final String label;
+  final int currentMinor;
+  final int deltaMinor;
+  final int newMinor;
+}
+
+class NegativeBalanceConfirmation {
+  const NegativeBalanceConfirmation({required this.impacts});
+
+  final List<NegativeBalanceImpact> impacts;
+}
+
 class SaleLineInput {
   const SaleLineInput({
     required this.productId,
@@ -199,12 +221,14 @@ class SaleReceiptLine {
     required this.qty,
     required this.unitPriceMinor,
     required this.lineTotalMinor,
+    this.productBarcode,
   });
 
   final String productName;
   final int qty;
   final int unitPriceMinor;
   final int lineTotalMinor;
+  final String? productBarcode;
 }
 
 class SaleReceiptPayment {
@@ -269,6 +293,13 @@ class ShopSettingsSnapshot {
   final String? phone;
   final String? address;
   final String? receiptFooter;
+}
+
+class UiBackgroundSnapshot {
+  const UiBackgroundSnapshot({required this.preset, this.imagePath});
+
+  final String preset;
+  final String? imagePath;
 }
 
 class BackupStatus {
@@ -343,6 +374,7 @@ class WorkbenchSnapshot {
     required this.installmentSummaries,
     required this.backupStatus,
     required this.shopSettings,
+    required this.uiBackground,
   });
 
   final DashboardSnapshot dashboard;
@@ -360,6 +392,7 @@ class WorkbenchSnapshot {
   final List<InstallmentPlanPreview> installmentSummaries;
   final BackupStatus backupStatus;
   final ShopSettingsSnapshot shopSettings;
+  final UiBackgroundSnapshot uiBackground;
 }
 
 class RestoreFileOperations {
@@ -505,6 +538,7 @@ class V2UseCases {
     required String name,
     String? barcode,
     String? category,
+    String? imagePath,
     required int salePriceMinor,
     required int openingQty,
     required int openingCostMinor,
@@ -517,28 +551,27 @@ class V2UseCases {
       );
     }
 
-    final cleanBarcode = barcode?.trim();
-    if (cleanBarcode != null && cleanBarcode.isNotEmpty) {
+    final requestedBarcode = _blankToNull(barcode);
+    final cleanImagePath = _blankToNull(imagePath);
+    if (requestedBarcode != null) {
       final duplicate = await (db.select(
         db.products,
-      )..where((p) => p.barcode.equals(cleanBarcode))).getSingleOrNull();
+      )..where((p) => p.barcode.equals(requestedBarcode))).getSingleOrNull();
       if (duplicate != null) return const AppFailure('الباركود مستخدم بالفعل');
     }
 
     final id = await db.transaction(() async {
+      final cleanBarcode = requestedBarcode ?? await _nextProductBarcode();
       final productId = await db
           .into(db.products)
           .insert(
             ProductsCompanion.insert(
               name: name.trim(),
-              barcode: Value(
-                cleanBarcode == null || cleanBarcode.isEmpty
-                    ? null
-                    : cleanBarcode,
-              ),
+              barcode: Value(cleanBarcode),
               category: Value(
                 category?.trim().isEmpty == true ? null : category?.trim(),
               ),
+              imagePath: Value(cleanImagePath),
               salePriceMinor: salePriceMinor,
               stockQty: Value(openingQty),
               avgCostMinor: Value(openingCostMinor),
@@ -571,6 +604,7 @@ class V2UseCases {
     required String name,
     String? barcode,
     String? category,
+    String? imagePath,
     required int salePriceMinor,
     required int minStockQty,
   }) async {
@@ -581,25 +615,26 @@ class V2UseCases {
       );
     }
 
-    final cleanBarcode = barcode?.trim();
-    if (cleanBarcode != null && cleanBarcode.isNotEmpty) {
+    final requestedBarcode = _blankToNull(barcode);
+    if (requestedBarcode != null) {
       final duplicate =
           await (db.select(db.products)..where(
-                (p) => p.barcode.equals(cleanBarcode) & p.id.equals(id).not(),
+                (p) =>
+                    p.barcode.equals(requestedBarcode) & p.id.equals(id).not(),
               ))
               .getSingleOrNull();
       if (duplicate != null) return const AppFailure('الباركود مستخدم بالفعل');
     }
 
+    final cleanBarcode = requestedBarcode ?? await _nextProductBarcode();
     await (db.update(db.products)..where((p) => p.id.equals(id))).write(
       ProductsCompanion(
         name: Value(name.trim()),
-        barcode: Value(
-          cleanBarcode == null || cleanBarcode.isEmpty ? null : cleanBarcode,
-        ),
+        barcode: Value(cleanBarcode),
         category: Value(
           category?.trim().isEmpty == true ? null : category?.trim(),
         ),
+        imagePath: Value(_blankToNull(imagePath)),
         salePriceMinor: Value(salePriceMinor),
         minStockQty: Value(minStockQty),
         updatedAt: Value(DateTime.now()),
@@ -772,6 +807,9 @@ class V2UseCases {
         if (remaining > 0 && installmentTerms!.count <= 0) {
           throw _BusinessError('عدد الأقساط يجب أن يكون أكبر من صفر');
         }
+        if (remaining > 0 && installmentTerms!.periodDays <= 0) {
+          throw _BusinessError('فترة الأقساط يجب أن تكون أكبر من صفر يوم');
+        }
 
         final invoiceNo = await _nextNumber('saleNo', prefix: 'S');
         final saleId = await db
@@ -891,6 +929,7 @@ class V2UseCases {
     int? supplierId,
     required List<PurchaseLineInput> items,
     required List<PaymentInput> payments,
+    bool allowNegativeBalance = false,
   }) async {
     if (items.isEmpty) return const AppFailure('أضف صنفًا واحدًا على الأقل');
     if (payments.any((payment) => payment.amountMinor < 0)) {
@@ -902,7 +941,7 @@ class V2UseCases {
     }
 
     try {
-      final purchaseId = await db.transaction(() async {
+      final result = await db.transaction<AppResult<int>>(() async {
         var total = 0;
         final products = <int, Product>{};
         for (final item in items) {
@@ -926,6 +965,15 @@ class V2UseCases {
         }
         if (remaining > 0 && supplierId == null) {
           throw _BusinessError('المشتريات الآجلة تحتاج مورد');
+        }
+        if (!allowNegativeBalance) {
+          final confirmation = await _negativeBalanceConfirmationFor([
+            if (cashPaid > 0)
+              _LedgerLineDraft(AccountCodes.cash, creditMinor: cashPaid),
+            if (walletPaid > 0)
+              _LedgerLineDraft(AccountCodes.wallet, creditMinor: walletPaid),
+          ]);
+          if (confirmation != null) return confirmation;
         }
 
         final invoiceNo = await _nextNumber('purchaseNo', prefix: 'P');
@@ -1022,9 +1070,9 @@ class V2UseCases {
           ],
         );
 
-        return purchaseId;
+        return AppSuccess(purchaseId);
       });
-      return AppSuccess(purchaseId);
+      return result;
     } on _BusinessError catch (e) {
       return AppFailure(e.message);
     }
@@ -1035,6 +1083,7 @@ class V2UseCases {
     required Map<int, int> saleItemQuantities,
     required PaymentMethod refundMethod,
     PaymentMethod? overflowRefundMethod,
+    bool allowNegativeBalance = false,
   }) async {
     if (saleItemQuantities.isEmpty) {
       return const AppFailure('اختر صنفًا واحدًا على الأقل');
@@ -1061,16 +1110,15 @@ class V2UseCases {
 
         var refund = 0;
         var returnedCost = 0;
-        final returnNo = await _nextNumber('returnNo', prefix: 'R');
-        final returnId = await db
-            .into(db.saleReturns)
-            .insert(
-              SaleReturnsCompanion.insert(
-                saleId: saleId,
-                returnNo: returnNo,
-                refundMinor: 0,
-              ),
-            );
+        final returnLines =
+            <
+              ({
+                Product product,
+                SaleItem saleItem,
+                int qty,
+                int refundUnitPrice,
+              })
+            >[];
 
         for (final entry in saleItemQuantities.entries) {
           final saleItem = await (db.select(
@@ -1096,47 +1144,17 @@ class V2UseCases {
           final product = await (db.select(
             db.products,
           )..where((p) => p.id.equals(saleItem.productId))).getSingle();
-          final newQty = product.stockQty + qty;
-          await (db.update(
-            db.products,
-          )..where((p) => p.id.equals(product.id))).write(
-            ProductsCompanion(
-              stockQty: Value(newQty),
-              updatedAt: Value(DateTime.now()),
-            ),
-          );
 
-          await db
-              .into(db.saleReturnItems)
-              .insert(
-                SaleReturnItemsCompanion.insert(
-                  returnId: returnId,
-                  saleItemId: saleItem.id,
-                  productId: product.id,
-                  qty: qty,
-                  unitPriceMinor: refundUnitPrice,
-                  unitCostMinor: saleItem.unitCostMinor,
-                ),
-              );
-          await db
-              .into(db.stockMovements)
-              .insert(
-                StockMovementsCompanion.insert(
-                  productId: product.id,
-                  type: 'sale_return',
-                  qtyDelta: qty,
-                  balanceAfter: newQty,
-                  referenceType: 'sale_return',
-                  referenceId: returnId,
-                ),
-              );
           refund += qty * refundUnitPrice;
           // Sale returns reverse inventory at the historical sold cost; current WAC is not recalculated in v2.
           returnedCost += qty * saleItem.unitCostMinor;
+          returnLines.add((
+            product: product,
+            saleItem: saleItem,
+            qty: qty,
+            refundUnitPrice: refundUnitPrice,
+          ));
         }
-
-        await (db.update(db.saleReturns)..where((r) => r.id.equals(returnId)))
-            .write(SaleReturnsCompanion(refundMinor: Value(refund)));
 
         var receivableSettlement = 0;
         var overflowRefund = 0;
@@ -1171,11 +1189,6 @@ class V2UseCases {
               throw _BusinessError('افتح وردية قبل رد فائض المرتجع كاش');
             }
           }
-
-          await _reduceInstallmentPlanForReturn(
-            plan: plan,
-            settlementMinor: receivableSettlement,
-          );
         }
 
         final creditLines = <_LedgerLineDraft>[];
@@ -1210,6 +1223,80 @@ class V2UseCases {
             ),
           );
         }
+        if (!allowNegativeBalance) {
+          final confirmation = await _negativeBalanceConfirmationFor(
+            creditLines,
+          );
+          if (confirmation != null) throw _ConfirmationRequired(confirmation);
+        }
+
+        final returnNo = await _nextNumber('returnNo', prefix: 'R');
+        final returnId = await db
+            .into(db.saleReturns)
+            .insert(
+              SaleReturnsCompanion.insert(
+                saleId: saleId,
+                returnNo: returnNo,
+                refundMinor: refund,
+              ),
+            );
+
+        final productBalances = <int, int>{};
+        for (final line in returnLines) {
+          final currentQty =
+              productBalances[line.product.id] ?? line.product.stockQty;
+          final newQty = currentQty + line.qty;
+          productBalances[line.product.id] = newQty;
+          await (db.update(
+            db.products,
+          )..where((p) => p.id.equals(line.product.id))).write(
+            ProductsCompanion(
+              stockQty: Value(newQty),
+              updatedAt: Value(DateTime.now()),
+            ),
+          );
+
+          await db
+              .into(db.saleReturnItems)
+              .insert(
+                SaleReturnItemsCompanion.insert(
+                  returnId: returnId,
+                  saleItemId: line.saleItem.id,
+                  productId: line.product.id,
+                  qty: line.qty,
+                  unitPriceMinor: line.refundUnitPrice,
+                  unitCostMinor: line.saleItem.unitCostMinor,
+                ),
+              );
+          await db
+              .into(db.stockMovements)
+              .insert(
+                StockMovementsCompanion.insert(
+                  productId: line.product.id,
+                  type: 'sale_return',
+                  qtyDelta: line.qty,
+                  balanceAfter: newQty,
+                  referenceType: 'sale_return',
+                  referenceId: returnId,
+                ),
+              );
+        }
+
+        if (refundMethod == PaymentMethod.installment) {
+          final plan =
+              await (db.select(db.installmentPlans)..where(
+                    (plan) =>
+                        plan.ownerType.equals('sale') &
+                        plan.ownerId.equals(saleId) &
+                        plan.partyType.equals('customer') &
+                        plan.partyId.equals(sale.customerId!),
+                  ))
+                  .getSingle();
+          await _reduceInstallmentPlanForReturn(
+            plan: plan,
+            settlementMinor: receivableSettlement,
+          );
+        }
 
         await _postLedger(
           referenceType: 'sale_return',
@@ -1239,6 +1326,8 @@ class V2UseCases {
         return returnId;
       });
       return AppSuccess(returnId);
+    } on _ConfirmationRequired catch (e) {
+      return e.result;
     } on _BusinessError catch (e) {
       return AppFailure(e.message);
     }
@@ -1310,6 +1399,7 @@ class V2UseCases {
     required String description,
     required int amountMinor,
     required PaymentMethod method,
+    bool allowNegativeBalance = false,
   }) async {
     if (description.trim().isEmpty) {
       return const AppFailure('وصف المصروف مطلوب');
@@ -1324,6 +1414,17 @@ class V2UseCases {
     final shift = await currentShift();
     if (method == PaymentMethod.cash && shift == null) {
       return const AppFailure('افتح وردية قبل تسجيل مصروف نقدي');
+    }
+    if (!allowNegativeBalance) {
+      final confirmation = await _negativeBalanceConfirmationFor([
+        _LedgerLineDraft(
+          method == PaymentMethod.cash
+              ? AccountCodes.cash
+              : AccountCodes.wallet,
+          creditMinor: amountMinor,
+        ),
+      ]);
+      if (confirmation != null) return confirmation;
     }
 
     final expenseId = await db.transaction(() async {
@@ -1386,6 +1487,7 @@ class V2UseCases {
     required int planId,
     required int amountMinor,
     required PaymentMethod method,
+    bool allowNegativeBalance = false,
   }) async {
     return _settleInstallment(
       planId: planId,
@@ -1397,6 +1499,7 @@ class V2UseCases {
           ? AccountCodes.cash
           : AccountCodes.wallet,
       description: 'سداد قسط مورد',
+      allowNegativeBalance: allowNegativeBalance,
     );
   }
 
@@ -1497,6 +1600,7 @@ class V2UseCases {
       ),
       backupStatus: await _backupStatus(),
       shopSettings: await shopSettings(),
+      uiBackground: await uiBackground(),
     );
   }
 
@@ -1523,6 +1627,20 @@ class V2UseCases {
     await _upsertSetting('shop.address', address?.trim() ?? '');
     await _upsertSetting('shop.receiptFooter', receiptFooter?.trim() ?? '');
     return AppSuccess(await shopSettings());
+  }
+
+  Future<UiBackgroundSnapshot> uiBackground() async {
+    return UiBackgroundSnapshot(
+      preset: await _settingValue('ui.backgroundPreset') ?? 'aurora',
+      imagePath: _blankToNull(await _settingValue('ui.backgroundImagePath')),
+    );
+  }
+
+  Future<void> updateUiBackground({required String preset, String? imagePath}) {
+    return db.transaction(() async {
+      await _upsertSetting('ui.backgroundPreset', preset.trim());
+      await _upsertSetting('ui.backgroundImagePath', imagePath?.trim() ?? '');
+    });
   }
 
   Future<PeriodReportSnapshot> periodReport({
@@ -1624,6 +1742,7 @@ class V2UseCases {
           qty: item.qty,
           unitPriceMinor: item.unitPriceMinor,
           lineTotalMinor: item.lineTotalMinor,
+          productBarcode: product.barcode,
         ),
       );
     }
@@ -1843,6 +1962,10 @@ class V2UseCases {
     return '$prefix-${DateTime.now().year}-${next.toString().padLeft(5, '0')}';
   }
 
+  Future<String> _nextProductBarcode() {
+    return _nextNumber('sequence.productBarcode', prefix: 'AK');
+  }
+
   Future<void> _insertPayments(
     String ownerType,
     int ownerId,
@@ -1861,6 +1984,57 @@ class V2UseCases {
             ),
           );
     }
+  }
+
+  Future<AppConfirmationRequired<int>?> _negativeBalanceConfirmationFor(
+    List<_LedgerLineDraft> lines,
+  ) async {
+    final deltas = <String, int>{};
+    for (final line in lines) {
+      if (line.accountCode != AccountCodes.cash &&
+          line.accountCode != AccountCodes.wallet) {
+        continue;
+      }
+      final delta = line.debitMinor - line.creditMinor;
+      if (delta == 0) continue;
+      deltas.update(
+        line.accountCode,
+        (current) => current + delta,
+        ifAbsent: () => delta,
+      );
+    }
+
+    final impacts = <NegativeBalanceImpact>[];
+    for (final entry in deltas.entries) {
+      if (entry.value >= 0) continue;
+      final current = await _accountBalance(entry.key);
+      final next = current + entry.value;
+      if (next >= 0) continue;
+      impacts.add(
+        NegativeBalanceImpact(
+          accountCode: entry.key,
+          label: _liquidAccountLabel(entry.key),
+          currentMinor: current,
+          deltaMinor: entry.value,
+          newMinor: next,
+        ),
+      );
+    }
+
+    if (impacts.isEmpty) return null;
+    return AppConfirmationRequired<int>(
+      code: 'negative_liquid_balance',
+      message: 'هذه العملية ستجعل رصيد الخزينة أو المحفظة سالبًا',
+      payload: NegativeBalanceConfirmation(impacts: impacts),
+    );
+  }
+
+  String _liquidAccountLabel(String accountCode) {
+    return switch (accountCode) {
+      AccountCodes.cash => 'الخزينة',
+      AccountCodes.wallet => 'المحفظة',
+      _ => accountCode,
+    };
   }
 
   Future<void> _createInstallmentPlan({
@@ -1911,6 +2085,7 @@ class V2UseCases {
     required String debitAccount,
     required String creditAccount,
     required String description,
+    bool allowNegativeBalance = false,
   }) async {
     if (amountMinor <= 0) {
       return const AppFailure<int>('قيمة السداد يجب أن تكون أكبر من صفر');
@@ -1938,6 +2113,14 @@ class V2UseCases {
         final remaining = plan.totalMinor - plan.paidMinor;
         if (amountMinor > remaining) {
           throw _BusinessError('قيمة السداد أكبر من المتبقي');
+        }
+        if (!allowNegativeBalance) {
+          final confirmation = await _negativeBalanceConfirmationFor([
+            _LedgerLineDraft(creditAccount, creditMinor: amountMinor),
+          ]);
+          if (confirmation != null) {
+            throw _ConfirmationRequired(confirmation);
+          }
         }
 
         await _allocateInstallmentPayment(planId, amountMinor);
@@ -1992,6 +2175,8 @@ class V2UseCases {
         );
       });
       return AppSuccess(ledgerId);
+    } on _ConfirmationRequired catch (e) {
+      return e.result;
     } on _BusinessError catch (e) {
       return AppFailure(e.message);
     }
@@ -2605,4 +2790,9 @@ class _LedgerLineDraft {
 class _BusinessError implements Exception {
   const _BusinessError(this.message);
   final String message;
+}
+
+class _ConfirmationRequired implements Exception {
+  const _ConfirmationRequired(this.result);
+  final AppConfirmationRequired<int> result;
 }

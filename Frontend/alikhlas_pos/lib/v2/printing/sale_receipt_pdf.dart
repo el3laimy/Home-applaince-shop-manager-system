@@ -5,7 +5,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../application/v2_use_cases.dart';
-import '../core/money.dart';
 
 class SaleReceiptPdf {
   const SaleReceiptPdf._();
@@ -36,10 +35,18 @@ class SaleReceiptPdf {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Center(
-              child: pw.Text(
-                receipt.shopSettings.shopName,
-                style: pw.TextStyle(font: bold, fontSize: 15),
+            pw.Container(
+              padding: const pw.EdgeInsets.only(bottom: 4),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.black, width: 0.8),
+                ),
+              ),
+              child: pw.Center(
+                child: pw.Text(
+                  receipt.shopSettings.shopName,
+                  style: pw.TextStyle(font: bold, fontSize: 15),
+                ),
               ),
             ),
             if (receipt.shopSettings.phone != null)
@@ -75,20 +82,46 @@ class SaleReceiptPdf {
             pw.Divider(),
             _table(receipt, bold, regular),
             pw.Divider(),
-            _amount('الإجمالي', receipt.invoice.subtotalMinor, bold, regular),
-            if (receipt.invoice.discountMinor > 0)
-              _amount('الخصم', receipt.invoice.discountMinor, bold, regular),
-            if (receipt.invoice.interestMinor > 0)
-              _amount(
-                'فائدة التقسيط',
-                receipt.invoice.interestMinor,
-                bold,
-                regular,
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(3),
               ),
-            _amount('المطلوب', receipt.invoice.totalMinor, bold, regular),
-            _amount('المدفوع', receipt.invoice.paidMinor, bold, regular),
-            if (receipt.invoice.remainingMinor > 0)
-              _amount('المتبقي', receipt.invoice.remainingMinor, bold, regular),
+              child: pw.Column(
+                children: [
+                  _amount(
+                    'الإجمالي',
+                    receipt.invoice.subtotalMinor,
+                    bold,
+                    regular,
+                  ),
+                  if (receipt.invoice.discountMinor > 0)
+                    _amount(
+                      'الخصم',
+                      receipt.invoice.discountMinor,
+                      bold,
+                      regular,
+                    ),
+                  if (receipt.invoice.interestMinor > 0)
+                    _amount(
+                      'فائدة التقسيط',
+                      receipt.invoice.interestMinor,
+                      bold,
+                      regular,
+                    ),
+                  _amount('المطلوب', receipt.invoice.totalMinor, bold, regular),
+                  _amount('المدفوع', receipt.invoice.paidMinor, bold, regular),
+                  if (receipt.invoice.remainingMinor > 0)
+                    _amount(
+                      'المتبقي',
+                      receipt.invoice.remainingMinor,
+                      bold,
+                      regular,
+                    ),
+                ],
+              ),
+            ),
             if (receipt.payments.isNotEmpty) ...[
               pw.SizedBox(height: 6),
               pw.Text(
@@ -129,31 +162,57 @@ class SaleReceiptPdf {
         horizontalInside: pw.BorderSide(color: PdfColors.grey300, width: 0.4),
       ),
       columnWidths: const {
-        0: pw.FlexColumnWidth(2.5),
-        1: pw.FlexColumnWidth(0.7),
+        0: pw.FlexColumnWidth(1.2),
+        1: pw.FlexColumnWidth(1.2),
         2: pw.FlexColumnWidth(1.2),
-        3: pw.FlexColumnWidth(1.2),
+        3: pw.FlexColumnWidth(2.5),
       },
       children: [
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.grey200),
           children: [
-            _cell('الصنف', bold),
-            _cell('كمية', bold),
-            _cell('سعر', bold),
             _cell('إجمالي', bold),
+            _cell('سعر', bold),
+            _cell('كمية', bold),
+            _cell('الصنف', bold),
           ],
         ),
         for (final line in receipt.lines)
           pw.TableRow(
             children: [
-              _cell(line.productName, regular),
+              _cell(_money(line.lineTotalMinor), regular),
+              _cell(_money(line.unitPriceMinor), regular),
               _cell(line.qty.toString(), regular),
-              _cell(Money(line.unitPriceMinor).format(), regular),
-              _cell(Money(line.lineTotalMinor).format(), regular),
+              _productCell(line, regular),
             ],
           ),
       ],
+    );
+  }
+
+  static pw.Widget _productCell(SaleReceiptLine line, pw.Font font) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        children: [
+          pw.Text(
+            line.productName,
+            style: pw.TextStyle(font: font, fontSize: 8),
+            textAlign: pw.TextAlign.right,
+          ),
+          if (line.productBarcode != null)
+            pw.Text(
+              line.productBarcode!,
+              style: pw.TextStyle(
+                font: font,
+                fontSize: 6.5,
+                color: PdfColors.grey600,
+              ),
+              textAlign: pw.TextAlign.right,
+            ),
+        ],
+      ),
     );
   }
 
@@ -198,7 +257,7 @@ class SaleReceiptPdf {
       children: [
         pw.Text(label, style: pw.TextStyle(font: bold, fontSize: 9)),
         pw.Text(
-          Money(amountMinor).format(),
+          _money(amountMinor),
           style: pw.TextStyle(font: regular, fontSize: 9),
         ),
       ],
@@ -219,5 +278,13 @@ class SaleReceiptPdf {
     final time =
         '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
     return '$date $time';
+  }
+
+  static String _money(int amountMinor) {
+    final sign = amountMinor < 0 ? '-' : '';
+    final absolute = amountMinor.abs();
+    final pounds = absolute ~/ 100;
+    final cents = (absolute % 100).toString().padLeft(2, '0');
+    return '$sign$pounds.$cents جنيه';
   }
 }
