@@ -26,11 +26,30 @@ class Money implements Comparable<Money> {
     return formatted;
   }
 
+  String formatPlain({String symbol = 'ج.م'}) {
+    final sign = minorUnits < 0 ? '-' : '';
+    final absolute = minorUnits.abs();
+    final pounds = absolute ~/ 100;
+    final cents = (absolute % 100).toString().padLeft(2, '0');
+    return '$sign${_thousands(pounds)}.$cents $symbol';
+  }
+
   @override
   int compareTo(Money other) => minorUnits.compareTo(other.minorUnits);
 
   @override
   String toString() => format();
+}
+
+String _thousands(int value) {
+  final text = value.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < text.length; index++) {
+    final remaining = text.length - index;
+    buffer.write(text[index]);
+    if (remaining > 1 && remaining % 3 == 1) buffer.write(',');
+  }
+  return buffer.toString();
 }
 
 class MoneyInputParse {

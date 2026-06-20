@@ -106,7 +106,7 @@ class ReportSummaryPdf {
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
-                  Money(row.$2).format(),
+                  Money(row.$2).formatPlain(),
                   style: pw.TextStyle(font: bold, fontSize: 13),
                 ),
               ],

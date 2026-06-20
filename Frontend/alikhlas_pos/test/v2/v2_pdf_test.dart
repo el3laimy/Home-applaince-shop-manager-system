@@ -35,9 +35,9 @@ void main() {
           .insert(SuppliersCompanion.insert(name: 'مورد PDF'));
       final saleProduct = await successOf(
         useCases.createProduct(
-          name: 'غسالة PDF',
-          salePriceMinor: 10000,
-          openingQty: 1,
+          name: 'شاشة PDF',
+          salePriceMinor: 8000,
+          openingQty: 2,
           openingCostMinor: 7000,
         ),
       );
@@ -57,14 +57,15 @@ void main() {
           items: [
             SaleLineInput(
               productId: saleProduct.id,
-              qty: 1,
-              unitPriceMinor: 10000,
+              qty: 2,
+              unitPriceMinor: 8000,
             ),
           ],
-          payments: const [PaymentInput(PaymentMethod.cash, 2500)],
+          payments: const [PaymentInput(PaymentMethod.cash, 5000)],
+          discountMinor: 1000,
           installmentTerms: InstallmentTerms(
             partyId: customerId,
-            count: 2,
+            count: 4,
             firstDueDate: DateTime(2026, 7),
           ),
         ),
@@ -106,11 +107,17 @@ void main() {
       );
       expect(
         customerStatement.single.invoiceDetails?.items.single.productName,
-        'غسالة PDF',
+        'شاشة PDF',
       );
-      expect(customerStatement.single.invoiceDetails?.totalMinor, 10000);
-      expect(customerStatement.single.invoiceDetails?.paidMinor, 2500);
-      expect(customerStatement.single.invoiceDetails?.remainingMinor, 7500);
+      expect(customerStatement.single.invoiceDetails?.subtotalMinor, 16000);
+      expect(customerStatement.single.invoiceDetails?.discountMinor, 1000);
+      expect(
+        customerStatement.single.invoiceDetails?.items.single.lineTotalMinor,
+        16000,
+      );
+      expect(customerStatement.single.invoiceDetails?.totalMinor, 15000);
+      expect(customerStatement.single.invoiceDetails?.paidMinor, 5000);
+      expect(customerStatement.single.invoiceDetails?.remainingMinor, 10000);
       expect(
         supplierStatement.single.invoiceDetails?.invoiceNo,
         startsWith('P-'),

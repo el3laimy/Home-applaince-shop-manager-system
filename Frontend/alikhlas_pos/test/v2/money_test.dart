@@ -17,6 +17,14 @@ void main() {
       expect(parseMoneyInput('۱۲۵.۵۰').minorUnits, 12550);
     });
 
+    test('formats plain money without hidden bidi marks for pdf output', () {
+      final text = const Money(1500000).formatPlain();
+
+      expect(text, '15,000.00 ج.م');
+      expect(text, isNot(contains('\u200f')));
+      expect(text, isNot(contains('\u061c')));
+    });
+
     test('rejects ambiguous or invalid money input', () {
       expect(parseMoneyInput('125.555').isValid, isFalse);
       expect(parseMoneyInput('125.50.10').isValid, isFalse);
