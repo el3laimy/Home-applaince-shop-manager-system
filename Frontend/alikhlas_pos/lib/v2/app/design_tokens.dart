@@ -12,8 +12,8 @@ class V2DesignTokens {
   static const iris = Color(0xFF7E8EE8);
   static const rose = Color(0xFFE9A7A0);
   static const pearl = Color(0xFFF7FAF8);
-  static const glassWhite = Color(0xB3FFFFFF);
-  static const glassStroke = Color(0xD9FFFFFF);
+  static const glassWhite = Color(0x8FFFFFFF);
+  static const glassStroke = Color(0xF2FFFFFF);
 
   static const space8 = 8.0;
   static const space16 = 16.0;
@@ -24,9 +24,9 @@ class V2DesignTokens {
   static BorderRadius get radiusXlBorder => BorderRadius.circular(radiusXl);
 
   static final softPaneShadow = BoxShadow(
-    color: Colors.black.withValues(alpha: 0.09),
-    blurRadius: 34,
-    offset: const Offset(0, 18),
+    color: Colors.black.withValues(alpha: 0.11),
+    blurRadius: 38,
+    offset: const Offset(0, 20),
   );
 
   static final softControlShadow = BoxShadow(
@@ -47,12 +47,26 @@ class V2DesignTokens {
     stops: [0, 0.36, 0.72, 1],
   );
 
-  static LinearGradient get paneHighlight => LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
+  static LinearGradient get paneSurface => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
     colors: [
-      Colors.white.withValues(alpha: 0.68),
-      Colors.white.withValues(alpha: 0.08),
+      Colors.white.withValues(alpha: 0.72),
+      Colors.white.withValues(alpha: 0.34),
+      mint.withValues(alpha: 0.08),
+      iris.withValues(alpha: 0.10),
     ],
+    stops: const [0, 0.42, 0.74, 1],
+  );
+
+  static LinearGradient get paneHighlight => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Colors.white.withValues(alpha: 0.95),
+      Colors.white.withValues(alpha: 0.24),
+      Colors.white.withValues(alpha: 0.04),
+    ],
+    stops: const [0, 0.34, 1],
   );
 }
