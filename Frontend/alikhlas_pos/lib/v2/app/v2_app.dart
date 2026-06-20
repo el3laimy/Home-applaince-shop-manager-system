@@ -3890,65 +3890,14 @@ class _PartyStatementDialog extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final line = lines[index];
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.46),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.56),
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _statementIcon(line.entry.referenceType),
-                                color: Theme.of(context).colorScheme.primary,
+                      return _StatementMovementTile(
+                        line: line,
+                        onOpenDetails: line.invoiceDetails == null
+                            ? null
+                            : () => _openStatementInvoiceDetails(
+                                context,
+                                line.invoiceDetails!,
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _statementReferenceLabel(
-                                        line.entry.referenceType,
-                                      ),
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(line.entry.description),
-                                    Text(
-                                      _dateTime(line.entry.createdAt),
-                                      style: const TextStyle(color: _mutedInk),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              _StatementAmount(
-                                label: 'مدين',
-                                amountMinor: line.debitMinor,
-                              ),
-                              const SizedBox(width: 12),
-                              _StatementAmount(
-                                label: 'دائن',
-                                amountMinor: line.creditMinor,
-                              ),
-                              const SizedBox(width: 12),
-                              _StatementAmount(
-                                label: 'الرصيد',
-                                amountMinor: line.balanceMinor,
-                                strong: true,
-                              ),
-                            ],
-                          ),
-                        ),
                       );
                     },
                   ),
@@ -3981,6 +3930,342 @@ class _PartyStatementDialog extends StatelessWidget {
           child: const Text('إغلاق'),
         ),
       ],
+    );
+  }
+}
+
+class _StatementMovementTile extends StatefulWidget {
+  const _StatementMovementTile({required this.line, this.onOpenDetails});
+
+  final PartyStatementLine line;
+  final VoidCallback? onOpenDetails;
+
+  @override
+  State<_StatementMovementTile> createState() => _StatementMovementTileState();
+}
+
+class _StatementMovementTileState extends State<_StatementMovementTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = widget.line.invoiceDetails;
+    final isInteractive = details != null && widget.onOpenDetails != null;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: isInteractive ? widget.onOpenDetails : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: _hovered ? 0.58 : 0.46),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.56)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _statementIcon(widget.line.entry.referenceType),
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: _StatementMovementText(line: widget.line)),
+                    if (isInteractive) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: widget.onOpenDetails,
+                        icon: const Icon(Icons.visibility),
+                        label: const Text('تفاصيل'),
+                      ),
+                    ],
+                    const SizedBox(width: 10),
+                    _StatementAmount(
+                      label: 'مدين',
+                      amountMinor: widget.line.debitMinor,
+                    ),
+                    const SizedBox(width: 12),
+                    _StatementAmount(
+                      label: 'دائن',
+                      amountMinor: widget.line.creditMinor,
+                    ),
+                    const SizedBox(width: 12),
+                    _StatementAmount(
+                      label: 'الرصيد',
+                      amountMinor: widget.line.balanceMinor,
+                      strong: true,
+                    ),
+                  ],
+                ),
+                if (_hovered && details != null) ...[
+                  const SizedBox(height: 10),
+                  _StatementInvoicePreview(details: details),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatementMovementText extends StatelessWidget {
+  const _StatementMovementText({required this.line});
+
+  final PartyStatementLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = line.invoiceDetails;
+    final title = details == null
+        ? _statementReferenceLabel(line.entry.referenceType)
+        : '${_statementReferenceLabel(line.entry.referenceType)} ${details.invoiceNo}';
+    final subtitle = details == null
+        ? line.entry.description
+        : 'الإجمالي ${Money(details.totalMinor).format()} · المدفوع ${Money(details.paidMinor).format()} · المتبقي ${Money(details.remainingMinor).format()}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 2),
+        Text(subtitle),
+        Text(
+          _dateTime(line.entry.createdAt),
+          style: const TextStyle(color: _mutedInk),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatementInvoicePreview extends StatelessWidget {
+  const _StatementInvoicePreview({required this.details});
+
+  final StatementInvoiceDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = details.items.take(3).toList();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.52),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.54)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: [
+                _MiniInfo('الإجمالي', Money(details.totalMinor).format()),
+                _MiniInfo('المدفوع', Money(details.paidMinor).format()),
+                _MiniInfo('المتبقي', Money(details.remainingMinor).format()),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final item in items)
+              Text(
+                '${item.productName} · ${item.qty} × ${Money(item.unitMinor).format()} = ${Money(item.lineTotalMinor).format()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            if (details.items.length > items.length)
+              Text(
+                'و${details.items.length - items.length} أصناف أخرى...',
+                style: const TextStyle(color: _mutedInk),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniInfo extends StatelessWidget {
+  const _MiniInfo(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('$label: $value', style: Theme.of(context).textTheme.bodySmall);
+  }
+}
+
+Future<void> _openStatementInvoiceDetails(
+  BuildContext context,
+  StatementInvoiceDetails details,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => _StatementInvoiceDetailsDialog(details: details),
+  );
+}
+
+class _StatementInvoiceDetailsDialog extends StatelessWidget {
+  const _StatementInvoiceDetailsDialog({required this.details});
+
+  final StatementInvoiceDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        '${details.type == 'purchase' ? 'تفاصيل فاتورة شراء' : 'تفاصيل فاتورة بيع'} ${details.invoiceNo}',
+      ),
+      content: SizedBox(
+        width: 760,
+        height: 560,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TextMetricsGrid(
+              metrics: [
+                ('الإجمالي', Money(details.totalMinor).format(), Icons.receipt),
+                ('المدفوع', Money(details.paidMinor).format(), Icons.payments),
+                (
+                  'المتبقي',
+                  Money(details.remainingMinor).format(),
+                  Icons.account_balance,
+                ),
+                ('التاريخ', _dateTime(details.createdAt), Icons.event),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: DefaultTabController(
+                length: 3,
+                child: Column(
+                  children: [
+                    const TabBar(
+                      tabs: [
+                        Tab(text: 'الأصناف'),
+                        Tab(text: 'المدفوعات'),
+                        Tab(text: 'الأقساط'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _StatementInvoiceItems(details: details),
+                          _StatementInvoicePayments(details: details),
+                          _StatementInvoiceInstallments(details: details),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('إغلاق'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatementInvoiceItems extends StatelessWidget {
+  const _StatementInvoiceItems({required this.details});
+
+  final StatementInvoiceDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    if (details.items.isEmpty) {
+      return const Center(child: Text('لا توجد أصناف'));
+    }
+    return ListView.separated(
+      itemCount: details.items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final item = details.items[index];
+        return ListTile(
+          dense: true,
+          title: Text(item.productName),
+          subtitle: Text('${item.qty} × ${Money(item.unitMinor).format()}'),
+          trailing: Text(Money(item.lineTotalMinor).format()),
+        );
+      },
+    );
+  }
+}
+
+class _StatementInvoicePayments extends StatelessWidget {
+  const _StatementInvoicePayments({required this.details});
+
+  final StatementInvoiceDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    if (details.payments.isEmpty) {
+      return const Center(child: Text('لا توجد دفعات فورية'));
+    }
+    return ListView.separated(
+      itemCount: details.payments.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final payment = details.payments[index];
+        return ListTile(
+          dense: true,
+          leading: Icon(
+            payment.method == PaymentMethod.cash
+                ? Icons.payments
+                : Icons.account_balance_wallet,
+          ),
+          title: Text(_paymentMethodText(payment.method)),
+          subtitle: Text(_dateTime(payment.createdAt)),
+          trailing: Text(Money(payment.amountMinor).format()),
+        );
+      },
+    );
+  }
+}
+
+class _StatementInvoiceInstallments extends StatelessWidget {
+  const _StatementInvoiceInstallments({required this.details});
+
+  final StatementInvoiceDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    if (details.installments.isEmpty) {
+      return const Center(child: Text('لا توجد خطة أقساط'));
+    }
+    return ListView.separated(
+      itemCount: details.installments.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final installment = details.installments[index];
+        final paidLabel = installment.paidAt == null
+            ? 'غير مدفوع'
+            : 'مدفوع ${_date(installment.paidAt!)}';
+        return ListTile(
+          dense: true,
+          leading: Icon(
+            installment.status == 'paid' ? Icons.check_circle : Icons.schedule,
+          ),
+          title: Text(Money(installment.amountMinor).format()),
+          subtitle: Text('استحقاق ${_date(installment.dueDate)} · $paidLabel'),
+        );
+      },
     );
   }
 }

@@ -207,12 +207,84 @@ class PartyStatementLine {
     required this.debitMinor,
     required this.creditMinor,
     required this.balanceMinor,
+    this.invoiceDetails,
   });
 
   final LedgerEntry entry;
   final int debitMinor;
   final int creditMinor;
   final int balanceMinor;
+  final StatementInvoiceDetails? invoiceDetails;
+}
+
+class StatementInvoiceDetails {
+  const StatementInvoiceDetails({
+    required this.type,
+    required this.invoiceNo,
+    required this.createdAt,
+    required this.totalMinor,
+    required this.paidMinor,
+    required this.remainingMinor,
+    required this.items,
+    required this.payments,
+    required this.installments,
+    this.subtotalMinor,
+    this.discountMinor = 0,
+    this.interestMinor = 0,
+  });
+
+  final String type;
+  final String invoiceNo;
+  final DateTime createdAt;
+  final int? subtotalMinor;
+  final int discountMinor;
+  final int interestMinor;
+  final int totalMinor;
+  final int paidMinor;
+  final int remainingMinor;
+  final List<StatementInvoiceItem> items;
+  final List<StatementPaymentDetail> payments;
+  final List<StatementInstallmentDetail> installments;
+}
+
+class StatementInvoiceItem {
+  const StatementInvoiceItem({
+    required this.productName,
+    required this.qty,
+    required this.unitMinor,
+    required this.lineTotalMinor,
+  });
+
+  final String productName;
+  final int qty;
+  final int unitMinor;
+  final int lineTotalMinor;
+}
+
+class StatementPaymentDetail {
+  const StatementPaymentDetail({
+    required this.method,
+    required this.amountMinor,
+    required this.createdAt,
+  });
+
+  final PaymentMethod method;
+  final int amountMinor;
+  final DateTime createdAt;
+}
+
+class StatementInstallmentDetail {
+  const StatementInstallmentDetail({
+    required this.amountMinor,
+    required this.dueDate,
+    required this.status,
+    this.paidAt,
+  });
+
+  final int amountMinor;
+  final DateTime dueDate;
+  final String status;
+  final DateTime? paidAt;
 }
 
 class SaleReceiptLine {
@@ -1699,18 +1771,205 @@ class V2UseCases {
           ]);
     final rows = await query.get();
     var balance = 0;
-    return rows.map((row) {
+    final statement = <PartyStatementLine>[];
+    for (final row in rows) {
       final line = row.readTable(db.ledgerLines);
       final entry = row.readTable(db.ledgerEntries);
       final delta = partyType == 'supplier'
           ? line.creditMinor - line.debitMinor
           : line.debitMinor - line.creditMinor;
       balance += delta;
-      return PartyStatementLine(
-        entry: entry,
-        debitMinor: line.debitMinor,
-        creditMinor: line.creditMinor,
-        balanceMinor: balance,
+      statement.add(
+        PartyStatementLine(
+          entry: entry,
+          debitMinor: line.debitMinor,
+          creditMinor: line.creditMinor,
+          balanceMinor: balance,
+          invoiceDetails: await _statementInvoiceDetails(entry),
+        ),
+      );
+    }
+    return statement;
+  }
+
+  Future<StatementInvoiceDetails?> _statementInvoiceDetails(
+    LedgerEntry entry,
+  ) async {
+    return switch (entry.referenceType) {
+      'sale' => _saleStatementDetails(entry.referenceId),
+      'purchase' => _purchaseStatementDetails(entry.referenceId),
+      'installment_payment' => _installmentOwnerStatementDetails(
+        entry.referenceId,
+      ),
+      'sale_return' => _saleReturnStatementDetails(entry.referenceId),
+      _ => Future.value(null),
+    };
+  }
+
+  Future<StatementInvoiceDetails?> _installmentOwnerStatementDetails(
+    int planId,
+  ) async {
+    final plan = await (db.select(
+      db.installmentPlans,
+    )..where((row) => row.id.equals(planId))).getSingleOrNull();
+    if (plan == null) return null;
+    return switch (plan.ownerType) {
+      'sale' => _saleStatementDetails(plan.ownerId),
+      'purchase' => _purchaseStatementDetails(plan.ownerId),
+      _ => null,
+    };
+  }
+
+  Future<StatementInvoiceDetails?> _saleReturnStatementDetails(
+    int returnId,
+  ) async {
+    final saleReturn = await (db.select(
+      db.saleReturns,
+    )..where((row) => row.id.equals(returnId))).getSingleOrNull();
+    if (saleReturn == null) return null;
+    return _saleStatementDetails(saleReturn.saleId);
+  }
+
+  Future<StatementInvoiceDetails?> _saleStatementDetails(int saleId) async {
+    final invoice = await (db.select(
+      db.saleInvoices,
+    )..where((row) => row.id.equals(saleId))).getSingleOrNull();
+    if (invoice == null) return null;
+    final items =
+        await (db.select(db.saleItems)
+              ..where((row) => row.saleId.equals(saleId))
+              ..orderBy([(row) => OrderingTerm.asc(row.id)]))
+            .get();
+    final paymentRows = await _paymentsFor('sale', saleId);
+    final plan =
+        await (db.select(db.installmentPlans)..where(
+              (row) =>
+                  row.ownerType.equals('sale') & row.ownerId.equals(saleId),
+            ))
+            .getSingleOrNull();
+    return StatementInvoiceDetails(
+      type: 'sale',
+      invoiceNo: invoice.invoiceNo,
+      createdAt: invoice.createdAt,
+      subtotalMinor: invoice.subtotalMinor,
+      discountMinor: invoice.discountMinor,
+      interestMinor: invoice.interestMinor,
+      totalMinor: invoice.totalMinor,
+      paidMinor: invoice.paidMinor,
+      remainingMinor: invoice.remainingMinor,
+      items: await _saleStatementItems(items),
+      payments: paymentRows,
+      installments: plan == null ? const [] : await _installmentsFor(plan.id),
+    );
+  }
+
+  Future<StatementInvoiceDetails?> _purchaseStatementDetails(
+    int purchaseId,
+  ) async {
+    final invoice = await (db.select(
+      db.purchaseInvoices,
+    )..where((row) => row.id.equals(purchaseId))).getSingleOrNull();
+    if (invoice == null) return null;
+    final items =
+        await (db.select(db.purchaseItems)
+              ..where((row) => row.purchaseId.equals(purchaseId))
+              ..orderBy([(row) => OrderingTerm.asc(row.id)]))
+            .get();
+    final paymentRows = await _paymentsFor('purchase', purchaseId);
+    final plan =
+        await (db.select(db.installmentPlans)..where(
+              (row) =>
+                  row.ownerType.equals('purchase') &
+                  row.ownerId.equals(purchaseId),
+            ))
+            .getSingleOrNull();
+    return StatementInvoiceDetails(
+      type: 'purchase',
+      invoiceNo: invoice.invoiceNo,
+      createdAt: invoice.createdAt,
+      totalMinor: invoice.totalMinor,
+      paidMinor: invoice.paidMinor,
+      remainingMinor: invoice.remainingMinor,
+      items: await _purchaseStatementItems(items),
+      payments: paymentRows,
+      installments: plan == null ? const [] : await _installmentsFor(plan.id),
+    );
+  }
+
+  Future<List<StatementInvoiceItem>> _saleStatementItems(
+    List<SaleItem> saleItems,
+  ) async {
+    final items = <StatementInvoiceItem>[];
+    for (final item in saleItems) {
+      final product = await (db.select(
+        db.products,
+      )..where((row) => row.id.equals(item.productId))).getSingle();
+      items.add(
+        StatementInvoiceItem(
+          productName: product.name,
+          qty: item.qty,
+          unitMinor: item.unitPriceMinor,
+          lineTotalMinor: item.lineTotalMinor,
+        ),
+      );
+    }
+    return items;
+  }
+
+  Future<List<StatementInvoiceItem>> _purchaseStatementItems(
+    List<PurchaseItem> purchaseItems,
+  ) async {
+    final items = <StatementInvoiceItem>[];
+    for (final item in purchaseItems) {
+      final product = await (db.select(
+        db.products,
+      )..where((row) => row.id.equals(item.productId))).getSingle();
+      items.add(
+        StatementInvoiceItem(
+          productName: product.name,
+          qty: item.qty,
+          unitMinor: item.unitCostMinor,
+          lineTotalMinor: item.lineTotalMinor,
+        ),
+      );
+    }
+    return items;
+  }
+
+  Future<List<StatementPaymentDetail>> _paymentsFor(
+    String ownerType,
+    int ownerId,
+  ) async {
+    final rows =
+        await (db.select(db.payments)
+              ..where(
+                (row) =>
+                    row.ownerType.equals(ownerType) &
+                    row.ownerId.equals(ownerId),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.id)]))
+            .get();
+    return rows.map((payment) {
+      return StatementPaymentDetail(
+        method: PaymentMethod.values.byName(payment.method),
+        amountMinor: payment.amountMinor,
+        createdAt: payment.createdAt,
+      );
+    }).toList();
+  }
+
+  Future<List<StatementInstallmentDetail>> _installmentsFor(int planId) async {
+    final rows =
+        await (db.select(db.installmentPayments)
+              ..where((row) => row.planId.equals(planId))
+              ..orderBy([(row) => OrderingTerm.asc(row.dueDate)]))
+            .get();
+    return rows.map((payment) {
+      return StatementInstallmentDetail(
+        amountMinor: payment.amountMinor,
+        dueDate: payment.dueDate,
+        status: payment.status,
+        paidAt: payment.paidAt,
       );
     }).toList();
   }
@@ -1759,10 +2018,7 @@ class V2UseCases {
     final payments = paymentRows
         .map(
           (payment) => SaleReceiptPayment(
-            method: PaymentMethod.values.firstWhere(
-              (method) => method.name == payment.method,
-              orElse: () => PaymentMethod.cash,
-            ),
+            method: PaymentMethod.values.byName(payment.method),
             amountMinor: payment.amountMinor,
           ),
         )

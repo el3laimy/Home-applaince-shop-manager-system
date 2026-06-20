@@ -66,6 +66,8 @@ class PartyStatementPdf {
           ),
           pw.SizedBox(height: 16),
           _statementTable(statement, bold, regular),
+          pw.SizedBox(height: 18),
+          _invoiceDetailsSection(statement, bold, regular),
         ],
       ),
     );
@@ -129,16 +131,22 @@ class PartyStatementPdf {
         0: pw.FlexColumnWidth(1.2),
         1: pw.FlexColumnWidth(1.2),
         2: pw.FlexColumnWidth(1.2),
-        3: pw.FlexColumnWidth(2.8),
-        4: pw.FlexColumnWidth(1.5),
+        3: pw.FlexColumnWidth(1.2),
+        4: pw.FlexColumnWidth(1.2),
+        5: pw.FlexColumnWidth(1.5),
+        6: pw.FlexColumnWidth(2.2),
+        7: pw.FlexColumnWidth(1.4),
       },
       children: [
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.grey200),
           children: [
             _cell('الرصيد', bold),
-            _cell('دائن', bold),
-            _cell('مدين', bold),
+            _cell('المتبقي', bold),
+            _cell('المدفوع', bold),
+            _cell('الإجمالي', bold),
+            _cell('الحركة', bold),
+            _cell('الرقم', bold),
             _cell('البيان', bold),
             _cell('التاريخ', bold),
           ],
@@ -147,10 +155,125 @@ class PartyStatementPdf {
           pw.TableRow(
             children: [
               _cell(Money(line.balanceMinor).format(), regular),
-              _cell(Money(line.creditMinor).format(), regular),
-              _cell(Money(line.debitMinor).format(), regular),
+              _cell(
+                _invoiceMoney(line.invoiceDetails?.remainingMinor),
+                regular,
+              ),
+              _cell(_invoiceMoney(line.invoiceDetails?.paidMinor), regular),
+              _cell(_invoiceMoney(line.invoiceDetails?.totalMinor), regular),
+              _cell(_movementAmount(line), regular),
+              _cell(line.invoiceDetails?.invoiceNo ?? '-', regular),
               _cell(line.entry.description, regular),
               _cell(_date(line.entry.createdAt), regular),
+            ],
+          ),
+      ],
+    );
+  }
+
+  static pw.Widget _invoiceDetailsSection(
+    List<PartyStatementLine> statement,
+    pw.Font bold,
+    pw.Font regular,
+  ) {
+    final invoices = <String, StatementInvoiceDetails>{};
+    for (final line in statement) {
+      final details = line.invoiceDetails;
+      if (details != null) invoices[details.invoiceNo] = details;
+    }
+    if (invoices.isEmpty) return pw.SizedBox.shrink();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          'تفاصيل الفواتير',
+          style: pw.TextStyle(font: bold, fontSize: 14),
+        ),
+        pw.SizedBox(height: 8),
+        for (final details in invoices.values) ...[
+          _invoiceBlock(details, bold, regular),
+          pw.SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  static pw.Widget _invoiceBlock(
+    StatementInvoiceDetails details,
+    pw.Font bold,
+    pw.Font regular,
+  ) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(6),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Text(
+            '${details.type == 'purchase' ? 'فاتورة شراء' : 'فاتورة بيع'} ${details.invoiceNo} · الإجمالي ${Money(details.totalMinor).format()} · المدفوع ${Money(details.paidMinor).format()} · المتبقي ${Money(details.remainingMinor).format()}',
+            style: pw.TextStyle(font: bold, fontSize: 10),
+            textAlign: pw.TextAlign.right,
+          ),
+          pw.SizedBox(height: 6),
+          _invoiceItemsTable(details.items, bold, regular),
+          if (details.payments.isNotEmpty) ...[
+            pw.SizedBox(height: 6),
+            pw.Text('المدفوعات', style: pw.TextStyle(font: bold, fontSize: 9)),
+            for (final payment in details.payments)
+              pw.Text(
+                '${_paymentLabel(payment.method)} · ${Money(payment.amountMinor).format()} · ${_date(payment.createdAt)}',
+                style: pw.TextStyle(font: regular, fontSize: 8),
+                textAlign: pw.TextAlign.right,
+              ),
+          ],
+          if (details.installments.isNotEmpty) ...[
+            pw.SizedBox(height: 6),
+            pw.Text('الأقساط', style: pw.TextStyle(font: bold, fontSize: 9)),
+            for (final installment in details.installments)
+              pw.Text(
+                '${_date(installment.dueDate)} · ${Money(installment.amountMinor).format()} · ${installment.status == 'paid' ? 'مدفوع' : 'مستحق'}',
+                style: pw.TextStyle(font: regular, fontSize: 8),
+                textAlign: pw.TextAlign.right,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _invoiceItemsTable(
+    List<StatementInvoiceItem> items,
+    pw.Font bold,
+    pw.Font regular,
+  ) {
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.4),
+      columnWidths: const {
+        0: pw.FlexColumnWidth(1.2),
+        1: pw.FlexColumnWidth(1.2),
+        2: pw.FlexColumnWidth(0.8),
+        3: pw.FlexColumnWidth(2.4),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+          children: [
+            _cell('الإجمالي', bold),
+            _cell('السعر', bold),
+            _cell('كمية', bold),
+            _cell('الصنف', bold),
+          ],
+        ),
+        for (final item in items)
+          pw.TableRow(
+            children: [
+              _cell(Money(item.lineTotalMinor).format(), regular),
+              _cell(Money(item.unitMinor).format(), regular),
+              _cell(item.qty.toString(), regular),
+              _cell(item.productName, regular),
             ],
           ),
       ],
@@ -170,5 +293,22 @@ class PartyStatementPdf {
 
   static String _date(DateTime value) {
     return '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _invoiceMoney(int? amountMinor) {
+    return amountMinor == null ? '-' : Money(amountMinor).format();
+  }
+
+  static String _movementAmount(PartyStatementLine line) {
+    final amount = line.debitMinor > 0 ? line.debitMinor : line.creditMinor;
+    return Money(amount).format();
+  }
+
+  static String _paymentLabel(PaymentMethod method) {
+    return switch (method) {
+      PaymentMethod.cash => 'كاش',
+      PaymentMethod.wallet => 'محفظة',
+      PaymentMethod.installment => 'تقسيط',
+    };
   }
 }

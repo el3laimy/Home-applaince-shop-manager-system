@@ -725,6 +725,30 @@ void main() {
         expect(statement, hasLength(1));
         expect(statement.single.debitMinor, 7500);
         expect(statement.single.balanceMinor, 7500);
+        expect(statement.single.invoiceDetails?.type, 'sale');
+        expect(statement.single.invoiceDetails?.totalMinor, 10500);
+        expect(statement.single.invoiceDetails?.paidMinor, 3000);
+        expect(statement.single.invoiceDetails?.remainingMinor, 7500);
+        expect(
+          statement.single.invoiceDetails?.items.single.productName,
+          'تكييف',
+        );
+        expect(statement.single.invoiceDetails?.items.single.qty, 1);
+        expect(
+          statement.single.invoiceDetails?.payments.single.method,
+          PaymentMethod.cash,
+        );
+        expect(
+          statement.single.invoiceDetails?.payments.single.amountMinor,
+          3000,
+        );
+        expect(statement.single.invoiceDetails?.installments, hasLength(2));
+        expect(
+          statement.single.invoiceDetails?.installments.map(
+            (installment) => installment.amountMinor,
+          ),
+          [3750, 3750],
+        );
         await expectAllLedgerEntriesBalanced(db);
       },
     );
@@ -816,6 +840,10 @@ void main() {
               )..where((entry) => entry.referenceType.equals('expense'))).get())
               .singleWhere((entry) => entry.referenceId == expenseId);
       final snapshot = await useCases.dashboardSnapshot();
+      final supplierStatement = await useCases.partyStatement(
+        partyType: 'supplier',
+        partyId: supplierId,
+      );
 
       expect(rejectedCashExpense, isA<AppFailure<int>>());
       expect(expense.id, expenseId);
@@ -828,6 +856,21 @@ void main() {
       expect(snapshot.walletMinor, -20000);
       expect(snapshot.expensesMinor, 1500);
       expect(snapshot.cashMinor, -1500);
+      expect(supplierStatement, hasLength(2));
+      expect(supplierStatement.first.invoiceDetails?.type, 'purchase');
+      expect(supplierStatement.first.invoiceDetails?.totalMinor, 20000);
+      expect(supplierStatement.first.invoiceDetails?.paidMinor, 0);
+      expect(supplierStatement.first.invoiceDetails?.remainingMinor, 20000);
+      expect(
+        supplierStatement.first.invoiceDetails?.items.single.productName,
+        'شفاط',
+      );
+      expect(supplierStatement.first.invoiceDetails?.items.single.qty, 2);
+      expect(supplierStatement.first.invoiceDetails?.installments, isEmpty);
+      expect(
+        supplierStatement.last.invoiceDetails?.invoiceNo,
+        supplierStatement.first.invoiceDetails?.invoiceNo,
+      );
       await expectAllLedgerEntriesBalanced(db);
     });
 

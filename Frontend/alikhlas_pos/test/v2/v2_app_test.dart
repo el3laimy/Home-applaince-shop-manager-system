@@ -215,6 +215,77 @@ void main() {
     )..where((p) => p.id.equals(product.id))).getSingle();
     expect(storedProduct.stockQty, 1);
   });
+
+  testWidgets('party statement opens invoice item details', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+    final customerId = await db
+        .into(db.customers)
+        .insert(CustomersCompanion.insert(name: 'عميل كشف'));
+    final product = await _success(
+      useCases.createProduct(
+        name: 'غسالة كشف',
+        salePriceMinor: 10000,
+        openingQty: 1,
+        openingCostMinor: 7000,
+      ),
+    );
+    await _success(useCases.openShift(0));
+    await _success(
+      useCases.createSale(
+        customerId: customerId,
+        items: [
+          SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
+        ],
+        payments: const [PaymentInput(PaymentMethod.cash, 3000)],
+        installmentTerms: InstallmentTerms(
+          partyId: customerId,
+          count: 2,
+          firstDueDate: DateTime(2026, 7),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const ALIkhlasV2App(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+      'new-owner-pass',
+    );
+    await tester.tap(find.text('دخول'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الأطراف').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('كشف حساب').first);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('الإجمالي'), findsWidgets);
+    expect(find.textContaining('المدفوع'), findsWidgets);
+    expect(find.textContaining('المتبقي'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'تفاصيل'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('تفاصيل فاتورة بيع'), findsOneWidget);
+    expect(find.text('غسالة كشف'), findsOneWidget);
+    expect(find.text('المدفوعات'), findsOneWidget);
+    expect(find.text('الأقساط'), findsWidgets);
+  });
 }
 
 Future<T> _success<T>(Future<AppResult<T>> future) async {
