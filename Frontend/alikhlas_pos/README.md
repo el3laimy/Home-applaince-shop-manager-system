@@ -47,15 +47,18 @@ flutter build windows
   - `PRAGMA foreign_keys = ON`
   - `PRAGMA journal_mode = WAL`
   - `PRAGMA synchronous = NORMAL`
-- `schemaVersion` الحالي: 4.
+- `schemaVersion` الحالي: 5.
+- v5 أضاف `products.imagePath` لتخزين مسار صورة المنتج الداخلية.
 
 ## الاختبارات المهمة
 
-- `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، full owner day، backup/restore، وترقية migration من v3 إلى v4.
+- `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، full owner day، backup/restore، وترقية migration من v3 إلى v5.
 - `test/v2/v2_app_test.dart`: login، تغيير كلمة المرور، بيع POS، منع إدخال مال غير صالح، وشراء من الواجهة.
 - `test/v2/v2_theme_test.dart`: خط Cairo، التباين، منع رجوع Roboto أو w800، وحصر blur الحقيقي.
 - `test/v2/v2_golden_test.dart`: لقطات Golden لشاشة الدخول والـ dashboard وPOS والتقارير.
 - `test/v2/money_test.dart`: تنسيق المال وparser إدخال المبالغ كـ minor units.
+- `test/v2/v2_pdf_test.dart`: بناء PDF لكشف العميل/المورد باستخدام Cairo المحلي.
+- `test/v2/local_image_store_test.dart`: نسخ صور المنتجات والخلفيات إلى مسار بيانات التطبيق.
 
 ## الواجهة والخط
 
@@ -71,6 +74,8 @@ flutter build windows
   - `assets/fonts/Cairo-Bold.ttf`
   - `assets/fonts/OFL.txt`
 - لا يوجد اعتماد runtime على `google_fonts`.
+- ملفات PDF تستخدم نفس ملفات Cairo المحلية من `assets/fonts`، ولا تحتاج تحميل خطوط وقت الطباعة.
+- صور المنتجات والخلفيات المختارة تُنسخ إلى مسار بيانات التطبيق داخل `product-images/` و`backgrounds/` بدل الاعتماد على مكان الملف الأصلي.
 
 ## النسخ الاحتياطي والاسترجاع
 

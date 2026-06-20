@@ -15,6 +15,7 @@ import '../printing/report_summary_pdf.dart';
 import '../printing/sale_receipt_pdf.dart';
 import 'app_theme.dart';
 import 'design_tokens.dart';
+import 'local_image_store.dart';
 import 'v2_providers.dart';
 
 class ALIkhlasV2App extends ConsumerWidget {
@@ -2542,7 +2543,25 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
       type: FileType.image,
     );
     if (!mounted || picked == null || picked.files.single.path == null) return;
-    setState(() => _backgroundImagePath = picked.files.single.path);
+    try {
+      final localPath = await LocalImageStore.copyBackgroundImage(
+        picked.files.single.path!,
+      );
+      if (!mounted) return;
+      setState(() => _backgroundImagePath = localPath);
+    } on FileSystemException {
+      if (!context.mounted) return;
+      _showSnack(
+        context,
+        'تعذر حفظ صورة الخلفية. اختر ملف صورة PNG أو JPG أو WEBP',
+      );
+    } on ArgumentError {
+      if (!context.mounted) return;
+      _showSnack(
+        context,
+        'تعذر حفظ صورة الخلفية. اختر ملف صورة PNG أو JPG أو WEBP',
+      );
+    }
   }
 }
 
@@ -4731,7 +4750,25 @@ class _ProductDialogState extends State<_ProductDialog> {
                     picked.files.single.path == null) {
                   return;
                 }
-                setState(() => _imagePath = picked.files.single.path);
+                try {
+                  final localPath = await LocalImageStore.copyProductImage(
+                    picked.files.single.path!,
+                  );
+                  if (!mounted) return;
+                  setState(() => _imagePath = localPath);
+                } on FileSystemException {
+                  if (!context.mounted) return;
+                  _showSnack(
+                    context,
+                    'تعذر حفظ صورة المنتج. اختر ملف صورة PNG أو JPG أو WEBP',
+                  );
+                } on ArgumentError {
+                  if (!context.mounted) return;
+                  _showSnack(
+                    context,
+                    'تعذر حفظ صورة المنتج. اختر ملف صورة PNG أو JPG أو WEBP',
+                  );
+                }
               },
               onClear: () => setState(() => _imagePath = null),
             ),

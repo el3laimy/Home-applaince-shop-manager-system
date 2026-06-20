@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../application/v2_use_cases.dart';
+import 'pdf_fonts.dart';
 
 class SaleReceiptPdf {
   const SaleReceiptPdf._();
@@ -18,8 +19,9 @@ class SaleReceiptPdf {
   }
 
   static Future<Uint8List> build(SaleReceiptSnapshot receipt) async {
-    final regular = await PdfGoogleFonts.cairoRegular();
-    final bold = await PdfGoogleFonts.cairoBold();
+    final fonts = await PdfFonts.loadCairo();
+    final regular = fonts.regular;
+    final bold = fonts.bold;
     final theme = pw.ThemeData.withFont(base: regular, bold: bold);
     final doc = pw.Document(theme: theme);
 

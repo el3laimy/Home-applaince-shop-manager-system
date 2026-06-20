@@ -12,6 +12,7 @@
 - SQLite عبر drift.
 - واجهة Apple/iOS-inspired Liquid Glass مبنية على Flutter Material مع أصول محلية.
 - خط الواجهة العربي هو Cairo bundled داخل التطبيق ويعمل أوفلاين.
+- ملفات PDF تستخدم Cairo المحلي من أصول التطبيق، بدون تحميل Google Fonts وقت الطباعة.
 - قاعدة البيانات الافتراضية: `alikhlas_v2.db` داخل مسار بيانات التطبيق الذي يرجعه `path_provider`.
 - كل العمليات المالية تمر عبر use-cases في `Frontend/alikhlas_pos/lib/v2/application/v2_use_cases.dart`.
 - الدفتر `LedgerEntry` و`LedgerLine` هو مصدر الحقيقة للأرصدة والتقارير.
@@ -41,9 +42,10 @@ flutter run -d linux
 3. افتح وردية برصيد افتتاحي.
 4. أضف منتجًا أو نفذ شراءً لزيادة المخزون.
 5. نفذ بيعًا من شاشة POS، ثم جرّب تحصيل قسط أو سداد مورد عند وجود خطة.
-6. نفذ مرتجعًا مرتبطًا بفاتورة بيع.
-7. أغلق الوردية وتأكد أن الفرق واضح.
+6. افتح كشف حساب عميل أو مورد وجرّب طباعة PDF.
+7. نفذ مرتجعًا مرتبطًا بفاتورة بيع.
 8. أنشئ نسخة احتياطية من شاشة النسخ.
+9. أغلق الوردية وتأكد أن الفرق واضح.
 
 ## الواجهة والخط
 
@@ -54,6 +56,7 @@ flutter run -d linux
 - الأوزان المدمجة: 400، 500، 600، 700 فقط.
 - ترخيص الخط مرفق في `Frontend/alikhlas_pos/assets/fonts/OFL.txt`.
 - التطبيق لا يعتمد على `google_fonts` في وقت التشغيل.
+- صور المنتجات والخلفيات المختارة تُنسخ إلى مسار بيانات التطبيق داخل `product-images/` و`backgrounds/` حتى لا تختفي عند نقل الملف الأصلي.
 
 ## الاختبار والبناء
 
@@ -72,6 +75,8 @@ HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter
 cd Frontend/alikhlas_pos
 flutter build windows
 ```
+
+لم يتم توثيق تحقق Windows build محليًا في هذه البيئة؛ يجب تشغيله على Windows أو CI قبل إصدار Windows.
 
 ## النسخ الاحتياطي
 
