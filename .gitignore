@@ -20,6 +20,7 @@
 .flutter-plugins-dependencies
 **/.fvm/
 *.log
+Frontend/alikhlas_pos/test/v2/failures/
 
 # Environment files
 .env

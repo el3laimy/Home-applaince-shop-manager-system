@@ -414,6 +414,7 @@ class InstallmentPlanPreview {
     required this.overdueMinor,
     required this.dueSoonMinor,
     required this.nextDueMinor,
+    required this.schedule,
     this.nextDueDate,
   });
 
@@ -423,10 +424,27 @@ class InstallmentPlanPreview {
   final int overdueMinor;
   final int dueSoonMinor;
   final int nextDueMinor;
+  final List<InstallmentSchedulePreview> schedule;
   final DateTime? nextDueDate;
 
   bool get isOverdue => overdueMinor > 0;
   bool get isDueSoon => dueSoonMinor > 0;
+}
+
+class InstallmentSchedulePreview {
+  const InstallmentSchedulePreview({
+    required this.payment,
+    required this.paidMinor,
+    required this.remainingMinor,
+    required this.isOverdue,
+    required this.isDueSoon,
+  });
+
+  final InstallmentPayment payment;
+  final int paidMinor;
+  final int remainingMinor;
+  final bool isOverdue;
+  final bool isDueSoon;
 }
 
 class WorkbenchSnapshot {
@@ -2745,6 +2763,7 @@ class V2UseCases {
       var dueSoonMinor = 0;
       var nextDueMinor = 0;
       DateTime? nextDueDate;
+      final schedulePreview = <InstallmentSchedulePreview>[];
 
       for (final payment in schedule) {
         final allocated = paidRemainder <= 0
@@ -2754,13 +2773,26 @@ class V2UseCases {
             : paidRemainder;
         final unpaid = payment.amountMinor - allocated;
         paidRemainder -= allocated;
+        final isOverdue = unpaid > 0 && payment.dueDate.isBefore(today);
+        final isDueSoon =
+            unpaid > 0 &&
+            !payment.dueDate.isBefore(today) &&
+            payment.dueDate.isBefore(horizon);
+        schedulePreview.add(
+          InstallmentSchedulePreview(
+            payment: payment,
+            paidMinor: allocated,
+            remainingMinor: unpaid,
+            isOverdue: isOverdue,
+            isDueSoon: isDueSoon,
+          ),
+        );
         if (unpaid == 0) continue;
 
-        if (payment.dueDate.isBefore(today)) {
+        if (isOverdue) {
           overdueMinor += unpaid;
         }
-        if (!payment.dueDate.isBefore(today) &&
-            payment.dueDate.isBefore(horizon)) {
+        if (isDueSoon) {
           dueSoonMinor += unpaid;
         }
         if (nextDueDate == null || payment.dueDate.isBefore(nextDueDate)) {
@@ -2780,6 +2812,7 @@ class V2UseCases {
           overdueMinor: overdueMinor,
           dueSoonMinor: dueSoonMinor,
           nextDueMinor: nextDueMinor,
+          schedule: schedulePreview,
           nextDueDate: nextDueDate,
         ),
       );

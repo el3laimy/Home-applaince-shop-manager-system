@@ -11,6 +11,7 @@ import '../application/v2_use_cases.dart';
 import '../core/money.dart';
 import '../core/result.dart';
 import '../data/app_database.dart';
+import '../printing/barcode_labels_pdf.dart';
 import '../printing/party_statement_pdf.dart';
 import '../printing/report_summary_pdf.dart';
 import '../printing/sale_receipt_pdf.dart';
@@ -86,7 +87,7 @@ class _LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<_LoginScreen> {
   final _username = TextEditingController(text: 'owner');
-  final _password = TextEditingController(text: 'owner123');
+  final _password = TextEditingController();
   String? _error;
   bool _loading = false;
 
@@ -275,7 +276,9 @@ enum _Section {
 
 enum _ReportRange { today, week, month }
 
-enum _InstallmentFilter { all, overdue, dueSoon, customers, suppliers }
+enum _InstallmentTab { customers, suppliers }
+
+enum _PartyFilter { all, customers, suppliers }
 
 enum _InventoryFilter { all, lowStock, active, inactive }
 
@@ -1325,15 +1328,32 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
   }
 }
 
-class _PartiesView extends ConsumerWidget {
+class _PartiesView extends ConsumerStatefulWidget {
   const _PartiesView({required this.snapshot});
   final WorkbenchSnapshot snapshot;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PartiesView> createState() => _PartiesViewState();
+}
+
+class _PartiesViewState extends ConsumerState<_PartiesView> {
+  final _search = TextEditingController();
+  _PartyFilter _filter = _PartyFilter.all;
+  String? _selectedKey;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parties = _filteredParties();
+    final selected = _selectedParty(parties);
     return _Screen(
       title: 'العملاء والموردون',
-      subtitle: 'الأرصدة هنا مشتقة من الدفتر',
+      subtitle: 'حساب كامل لكل طرف: كشف، فواتير، أقساط، وتحصيل سريع',
       trailing: Wrap(
         spacing: 8,
         children: [
@@ -1351,26 +1371,134 @@ class _PartiesView extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: _PartyList(
-              title: 'العملاء',
-              balances: snapshot.customerBalances,
-              onStatement: (party) => _openStatement(context, ref, party),
-              onQuickPayment: (party) => _openQuickPayment(context, ref, party),
+          SizedBox(
+            width: 380,
+            child: _GlassPane(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _search,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      labelText: 'بحث باسم أو هاتف',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+                  SegmentedButton<_PartyFilter>(
+                    selected: {_filter},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _filter = selection.first),
+                    segments: const [
+                      ButtonSegment(
+                        value: _PartyFilter.all,
+                        label: Text('الكل'),
+                        icon: Icon(Icons.groups),
+                      ),
+                      ButtonSegment(
+                        value: _PartyFilter.customers,
+                        label: Text('عملاء'),
+                        icon: Icon(Icons.people),
+                      ),
+                      ButtonSegment(
+                        value: _PartyFilter.suppliers,
+                        label: Text('موردين'),
+                        icon: Icon(Icons.local_shipping),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: parties.isEmpty
+                        ? const Center(child: Text('لا توجد أطراف مطابقة'))
+                        : ListView.separated(
+                            itemCount: parties.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final party = parties[index];
+                              return _PartyDirectoryTile(
+                                party: party,
+                                selected:
+                                    _partyKey(party) ==
+                                    (selected == null
+                                        ? null
+                                        : _partyKey(selected)),
+                                onTap: () => setState(
+                                  () => _selectedKey = _partyKey(party),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: _PartyList(
-              title: 'الموردون',
-              balances: snapshot.supplierBalances,
-              onStatement: (party) => _openStatement(context, ref, party),
-              onQuickPayment: (party) => _openQuickPayment(context, ref, party),
-            ),
+            child: selected == null
+                ? const _GlassPane(
+                    child: Center(child: Text('اختر عميلًا أو موردًا')),
+                  )
+                : _PartyDetailPanel(
+                    party: selected,
+                    plans: widget.snapshot.installmentSummaries
+                        .where(
+                          (item) =>
+                              item.plan.partyType == selected.type &&
+                              item.plan.partyId == selected.id,
+                        )
+                        .toList(),
+                    statementFuture: ref
+                        .read(useCasesProvider)
+                        .partyStatement(
+                          partyType: selected.type,
+                          partyId: selected.id,
+                        ),
+                    onStatement: () => _openStatement(context, ref, selected),
+                    onQuickPayment: () =>
+                        _openQuickPayment(context, ref, selected),
+                  ),
           ),
         ],
       ),
     );
+  }
+
+  List<PartyBalance> _filteredParties() {
+    final query = _search.text.trim();
+    final parties =
+        [
+          ...widget.snapshot.customerBalances,
+          ...widget.snapshot.supplierBalances,
+        ].where((party) {
+          final typeMatch = switch (_filter) {
+            _PartyFilter.all => true,
+            _PartyFilter.customers => party.type == 'customer',
+            _PartyFilter.suppliers => party.type == 'supplier',
+          };
+          final queryMatch =
+              query.isEmpty ||
+              party.name.contains(query) ||
+              (party.phone?.contains(query) ?? false);
+          return typeMatch && queryMatch;
+        }).toList();
+    parties.sort((a, b) {
+      if (a.type != b.type) return a.type == 'customer' ? -1 : 1;
+      return a.name.compareTo(b.name);
+    });
+    return parties;
+  }
+
+  PartyBalance? _selectedParty(List<PartyBalance> parties) {
+    if (parties.isEmpty) return null;
+    for (final party in parties) {
+      if (_partyKey(party) == _selectedKey) return party;
+    }
+    return parties.first;
   }
 
   Future<void> _openPartyDialog(
@@ -1409,7 +1537,7 @@ class _PartiesView extends ConsumerWidget {
       context: context,
       builder: (_) => _PartyStatementDialog(
         party: party,
-        settings: snapshot.shopSettings,
+        settings: widget.snapshot.shopSettings,
         statementFuture: ref
             .read(useCasesProvider)
             .partyStatement(partyType: party.type, partyId: party.id),
@@ -1422,7 +1550,7 @@ class _PartiesView extends ConsumerWidget {
     WidgetRef ref,
     PartyBalance party,
   ) async {
-    final plans = snapshot.installmentSummaries
+    final plans = widget.snapshot.installmentSummaries
         .where(
           (item) =>
               item.plan.partyType == party.type &&
@@ -1465,6 +1593,8 @@ class _PartiesView extends ConsumerWidget {
     _refresh(ref);
   }
 }
+
+String _partyKey(PartyBalance party) => '${party.type}:${party.id}';
 
 class _PurchaseView extends ConsumerStatefulWidget {
   const _PurchaseView({required this.snapshot});
@@ -1517,18 +1647,43 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
             child: _GlassPane(
               child: Column(
                 children: [
-                  TextField(
-                    controller: _search,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      labelText: 'بحث منتج أو باركود',
-                    ),
-                    onChanged: (_) => setState(() {}),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _search,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.search),
+                            labelText: 'بحث منتج أو باركود',
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: _openQuickProduct,
+                        icon: const Icon(Icons.add_box),
+                        label: const Text('منتج جديد'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: products.isEmpty
-                        ? const Center(child: Text('لا توجد منتجات مطابقة'))
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('لا توجد منتجات مطابقة'),
+                                const SizedBox(height: 10),
+                                OutlinedButton.icon(
+                                  onPressed: _openQuickProduct,
+                                  icon: const Icon(Icons.add_box),
+                                  label: const Text('إضافة المنتج كجديد'),
+                                ),
+                              ],
+                            ),
+                          )
                         : ListView.separated(
                             itemCount: products.length,
                             separatorBuilder: (_, __) =>
@@ -1661,6 +1816,35 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
     }
   }
 
+  Future<void> _openQuickProduct() async {
+    final data = await showDialog<_ProductFormData>(
+      context: context,
+      builder: (_) => const _ProductDialog(quickPurchase: true),
+    );
+    if (data == null || !mounted) return;
+    final result = await ref
+        .read(useCasesProvider)
+        .createProduct(
+          name: data.name,
+          barcode: data.barcode,
+          category: data.category,
+          imagePath: data.imagePath,
+          salePriceMinor: data.salePriceMinor,
+          openingQty: 0,
+          openingCostMinor: 0,
+          minStockQty: data.minStockQty,
+        );
+    if (!mounted) return;
+    _showResult(context, result, success: 'تمت إضافة المنتج للفاتورة');
+    if (result case AppSuccess<Product>(value: final product)) {
+      setState(() {
+        _search.clear();
+        _addToCart(product);
+      });
+      _refresh(ref);
+    }
+  }
+
   Future<void> _submitPurchase(int total) async {
     final cash = _requireMoney(context, _cash, 'كاش');
     final wallet = _requireMoney(context, _wallet, 'محفظة');
@@ -1692,8 +1876,11 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
           ),
     );
     if (!mounted) return;
+    final barcodeItems = _barcodeItemsFromPurchaseCart(_cart);
     _showResult(context, result, success: 'تم تسجيل الشراء');
     if (result is AppSuccess<int>) {
+      await _promptBarcodePrinting(barcodeItems);
+      if (!mounted) return;
       setState(() {
         _cart.clear();
         _cash.clear();
@@ -1701,6 +1888,30 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
       });
       _refresh(ref);
     }
+  }
+
+  List<BarcodeLabelItem> _barcodeItemsFromPurchaseCart(
+    List<_PurchaseCartLine> cart,
+  ) {
+    return [
+      for (final line in cart)
+        BarcodeLabelItem(
+          productName: line.product.name,
+          barcode: line.product.barcode,
+          quantity: line.qty,
+        ),
+    ];
+  }
+
+  Future<void> _promptBarcodePrinting(List<BarcodeLabelItem> items) async {
+    final printable = BarcodeLabelsPdf.printableItems(items);
+    if (printable.isEmpty && items.isEmpty) return;
+    final labels = await showDialog<List<BarcodeLabelItem>>(
+      context: context,
+      builder: (_) => _BarcodePrintPromptDialog(items: items),
+    );
+    if (labels == null || labels.isEmpty || !mounted) return;
+    await ref.read(barcodeLabelPrinterProvider)(labels);
   }
 }
 
@@ -1713,36 +1924,88 @@ class _InstallmentsView extends ConsumerStatefulWidget {
 }
 
 class _InstallmentsViewState extends ConsumerState<_InstallmentsView> {
-  _InstallmentFilter _filter = _InstallmentFilter.all;
+  final _search = TextEditingController();
+  _InstallmentTab _tab = _InstallmentTab.customers;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final summaries = widget.snapshot.installmentSummaries;
-    final filtered = summaries.where(_matchesFilter).toList();
+    final customerPlans = summaries
+        .where((item) => item.plan.partyType == 'customer')
+        .toList();
+    final supplierPlans = summaries
+        .where((item) => item.plan.partyType == 'supplier')
+        .toList();
+    final query = _search.text.trim();
+    final customerRows = _customerScheduleRows(customerPlans).where((row) {
+      return query.isEmpty || row.plan.partyName.contains(query);
+    }).toList();
+    final filteredSupplierPlans =
+        supplierPlans.where((plan) {
+          return query.isEmpty || plan.partyName.contains(query);
+        }).toList()..sort((a, b) {
+          final byRemaining = b.remainingMinor.compareTo(a.remainingMinor);
+          if (byRemaining != 0) return byRemaining;
+          return a.plan.createdAt.compareTo(b.plan.createdAt);
+        });
     final customerRemaining = summaries
         .where((item) => item.plan.partyType == 'customer')
         .fold<int>(0, (sum, item) => sum + item.remainingMinor);
     final supplierRemaining = summaries
         .where((item) => item.plan.partyType == 'supplier')
         .fold<int>(0, (sum, item) => sum + item.remainingMinor);
-    final overdue = summaries.fold<int>(
+    final overdue = customerRows.fold<int>(
       0,
-      (sum, item) => sum + item.overdueMinor,
+      (sum, row) =>
+          sum +
+          (row.installment.isOverdue ? row.installment.remainingMinor : 0),
     );
-    final dueSoon = summaries.fold<int>(
+    final dueSoon = customerRows.fold<int>(
       0,
-      (sum, item) => sum + item.dueSoonMinor,
+      (sum, row) =>
+          sum +
+          (row.installment.isDueSoon ? row.installment.remainingMinor : 0),
     );
 
     return _Screen(
       title: 'الأقساط',
-      subtitle: 'تحصيل العملاء وسداد الموردين',
-      trailing: _InstallmentFilterSelector(
-        selected: _filter,
-        onChanged: (filter) => setState(() => _filter = filter),
+      subtitle: 'الأولوية حسب تاريخ السداد: المتأخر أولًا ثم الأقرب',
+      trailing: SegmentedButton<_InstallmentTab>(
+        selected: {_tab},
+        onSelectionChanged: (selection) =>
+            setState(() => _tab = selection.first),
+        segments: const [
+          ButtonSegment(
+            value: _InstallmentTab.customers,
+            icon: Icon(Icons.people),
+            label: Text('عملاء'),
+          ),
+          ButtonSegment(
+            value: _InstallmentTab.suppliers,
+            icon: Icon(Icons.local_shipping),
+            label: Text('موردين'),
+          ),
+        ],
       ),
       child: Column(
         children: [
+          TextField(
+            controller: _search,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              labelText: _tab == _InstallmentTab.customers
+                  ? 'بحث باسم العميل'
+                  : 'بحث باسم المورد',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
           _MetricsGrid(
             metrics: [
               ('متأخر', overdue, Icons.warning_amber),
@@ -1754,39 +2017,30 @@ class _InstallmentsViewState extends ConsumerState<_InstallmentsView> {
           const SizedBox(height: 14),
           Expanded(
             child: _GlassPane(
-              child: filtered.isEmpty
-                  ? const Center(child: Text('لا توجد خطط أقساط في هذا العرض'))
-                  : ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final preview = filtered[index];
-                        return _InstallmentPlanTile(
-                          preview: preview,
-                          onPay: () => _payInstallment(
-                            context,
-                            ref,
-                            preview.plan,
-                            preview.remainingMinor,
-                          ),
-                        );
-                      },
+              child: _tab == _InstallmentTab.customers
+                  ? _CustomerInstallmentsList(
+                      rows: customerRows,
+                      onPay: (row) => _payInstallment(
+                        context,
+                        ref,
+                        row.plan.plan,
+                        row.installment.remainingMinor,
+                      ),
+                    )
+                  : _SupplierInstallmentsList(
+                      plans: filteredSupplierPlans,
+                      onPay: (preview) => _payInstallment(
+                        context,
+                        ref,
+                        preview.plan,
+                        preview.remainingMinor,
+                      ),
                     ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  bool _matchesFilter(InstallmentPlanPreview preview) {
-    return switch (_filter) {
-      _InstallmentFilter.all => true,
-      _InstallmentFilter.overdue => preview.isOverdue,
-      _InstallmentFilter.dueSoon => preview.isDueSoon,
-      _InstallmentFilter.customers => preview.plan.partyType == 'customer',
-      _InstallmentFilter.suppliers => preview.plan.partyType == 'supplier',
-    };
   }
 
   Future<void> _payInstallment(
@@ -1828,112 +2082,293 @@ class _InstallmentsViewState extends ConsumerState<_InstallmentsView> {
   }
 }
 
-class _InstallmentPlanTile extends StatelessWidget {
-  const _InstallmentPlanTile({required this.preview, required this.onPay});
+class _CustomerInstallmentRow {
+  const _CustomerInstallmentRow({
+    required this.plan,
+    required this.installment,
+  });
 
-  final InstallmentPlanPreview preview;
-  final VoidCallback onPay;
+  final InstallmentPlanPreview plan;
+  final InstallmentSchedulePreview installment;
+}
+
+class _CustomerInstallmentsList extends StatelessWidget {
+  const _CustomerInstallmentsList({required this.rows, required this.onPay});
+
+  final List<_CustomerInstallmentRow> rows;
+  final ValueChanged<_CustomerInstallmentRow> onPay;
 
   @override
   Widget build(BuildContext context) {
-    final plan = preview.plan;
-    final isCustomer = plan.partyType == 'customer';
-    final nextDue = preview.nextDueDate == null
-        ? 'لا يوجد قسط قادم'
-        : '${_date(preview.nextDueDate!)} · ${Money(preview.nextDueMinor).format()}';
-    return ListTile(
-      leading: Icon(
-        preview.isOverdue
-            ? Icons.warning_amber
-            : isCustomer
-            ? Icons.person
-            : Icons.local_shipping,
-        color: preview.isOverdue
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.primary,
-      ),
-      title: Text(
-        isCustomer
-            ? 'عميل: ${preview.partyName}'
-            : 'مورد: ${preview.partyName}',
-      ),
-      subtitle: Wrap(
-        spacing: 10,
-        runSpacing: 4,
-        children: [
-          Text('${plan.installmentCount} قسط'),
-          Text('مدفوع ${Money(plan.paidMinor).format()}'),
-          Text('التالي $nextDue'),
-          if (preview.overdueMinor > 0)
-            Text(
-              'متأخر ${Money(preview.overdueMinor).format()}',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+    if (rows.isEmpty) {
+      return const Center(child: Text('لا توجد أقساط عملاء مطابقة'));
+    }
+    return ListView.separated(
+      itemCount: rows.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        return _InstallmentScheduleRow(
+          preview: row.plan,
+          installment: row.installment,
+          onPay: () => onPay(row),
+        );
+      },
+    );
+  }
+}
+
+class _SupplierInstallmentsList extends StatelessWidget {
+  const _SupplierInstallmentsList({required this.plans, required this.onPay});
+
+  final List<InstallmentPlanPreview> plans;
+  final ValueChanged<InstallmentPlanPreview> onPay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (plans.isEmpty) {
+      return const Center(child: Text('لا توجد أرصدة موردين مطابقة'));
+    }
+    return ListView.separated(
+      itemCount: plans.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final preview = plans[index];
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.54),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.62)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.local_shipping,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    preview.partyName,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                Expanded(
+                  child: _StackedAmount(
+                    label: 'مدفوع',
+                    amountMinor: preview.plan.paidMinor,
+                  ),
+                ),
+                Expanded(
+                  child: _StackedAmount(
+                    label: 'المتبقي',
+                    amountMinor: preview.remainingMinor,
+                    strong: true,
+                  ),
+                ),
+                FilledButton(
+                  onPressed: () => onPay(preview),
+                  child: const Text('سداد'),
+                ),
+              ],
             ),
-          if (preview.dueSoonMinor > 0)
-            Text('قريب ${Money(preview.dueSoonMinor).format()}'),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InstallmentScheduleRow extends StatelessWidget {
+  const _InstallmentScheduleRow({
+    required this.preview,
+    required this.installment,
+    this.onPay,
+    this.compact = false,
+  });
+
+  final InstallmentPlanPreview preview;
+  final InstallmentSchedulePreview installment;
+  final VoidCallback? onPay;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _installmentStatusLabel(installment);
+    final statusColor = _installmentStatusColor(context, installment);
+    final content = Row(
+      children: [
+        Icon(Icons.event_available, color: statusColor),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                preview.partyName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              Text(
+                'خطة ${preview.plan.installmentCount} أقساط · ${_date(installment.payment.dueDate)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        if (!compact) ...[
+          Expanded(
+            child: _StackedAmount(
+              label: 'القسط',
+              amountMinor: installment.payment.amountMinor,
+            ),
+          ),
+          Expanded(
+            child: _StackedAmount(
+              label: 'مدفوع',
+              amountMinor: installment.paidMinor,
+            ),
+          ),
         ],
+        Expanded(
+          child: _StackedAmount(
+            label: 'المتبقي',
+            amountMinor: installment.remainingMinor,
+            strong: true,
+          ),
+        ),
+        _StatusPill(label: status, color: statusColor),
+        if (onPay != null) ...[
+          const SizedBox(width: 10),
+          FilledButton(onPressed: onPay, child: const Text('تحصيل')),
+        ],
+      ],
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: statusColor.withValues(
+          alpha: installment.isOverdue ? 0.14 : 0.08,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: statusColor.withValues(alpha: 0.26)),
       ),
-      trailing: Wrap(
-        spacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            Money(preview.remainingMinor).format(),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          FilledButton(
-            onPressed: onPay,
-            child: Text(isCustomer ? 'تحصيل' : 'سداد'),
-          ),
-        ],
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 14,
+          vertical: compact ? 8 : 12,
+        ),
+        child: content,
       ),
     );
   }
 }
 
-class _InstallmentFilterSelector extends StatelessWidget {
-  const _InstallmentFilterSelector({
-    required this.selected,
-    required this.onChanged,
+class _StackedAmount extends StatelessWidget {
+  const _StackedAmount({
+    required this.label,
+    required this.amountMinor,
+    this.strong = false,
   });
 
-  final _InstallmentFilter selected;
-  final ValueChanged<_InstallmentFilter> onChanged;
+  final String label;
+  final int amountMinor;
+  final bool strong;
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<_InstallmentFilter>(
-      selected: {selected},
-      onSelectionChanged: (selection) => onChanged(selection.first),
-      segments: const [
-        ButtonSegment(
-          value: _InstallmentFilter.all,
-          icon: Icon(Icons.list_alt),
-          label: Text('الكل'),
-        ),
-        ButtonSegment(
-          value: _InstallmentFilter.overdue,
-          icon: Icon(Icons.warning_amber),
-          label: Text('متأخر'),
-        ),
-        ButtonSegment(
-          value: _InstallmentFilter.dueSoon,
-          icon: Icon(Icons.event_available),
-          label: Text('قريب'),
-        ),
-        ButtonSegment(
-          value: _InstallmentFilter.customers,
-          icon: Icon(Icons.people),
-          label: Text('عملاء'),
-        ),
-        ButtonSegment(
-          value: _InstallmentFilter.suppliers,
-          icon: Icon(Icons.local_shipping),
-          label: Text('موردين'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+        Text(
+          Money(amountMinor).format(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: strong
+              ? Theme.of(context).textTheme.titleSmall
+              : Theme.of(context).textTheme.bodyMedium,
         ),
       ],
     );
   }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+List<_CustomerInstallmentRow> _customerScheduleRows(
+  List<InstallmentPlanPreview> plans,
+) {
+  final rows = <_CustomerInstallmentRow>[];
+  for (final plan in plans) {
+    for (final installment in plan.schedule) {
+      if (installment.remainingMinor <= 0) continue;
+      rows.add(_CustomerInstallmentRow(plan: plan, installment: installment));
+    }
+  }
+  rows.sort((a, b) {
+    if (a.installment.isOverdue != b.installment.isOverdue) {
+      return a.installment.isOverdue ? -1 : 1;
+    }
+    final byDate = a.installment.payment.dueDate.compareTo(
+      b.installment.payment.dueDate,
+    );
+    if (byDate != 0) return byDate;
+    return a.plan.partyName.compareTo(b.plan.partyName);
+  });
+  return rows;
+}
+
+String _installmentStatusLabel(InstallmentSchedulePreview installment) {
+  if (installment.isOverdue) return 'متأخر';
+  final due = installment.payment.dueDate;
+  final now = DateTime.now();
+  if (due.year == now.year && due.month == now.month && due.day == now.day) {
+    return 'اليوم';
+  }
+  if (installment.isDueSoon) return 'قريب';
+  return 'منتظر';
+}
+
+Color _installmentStatusColor(
+  BuildContext context,
+  InstallmentSchedulePreview installment,
+) {
+  if (installment.isOverdue) return Theme.of(context).colorScheme.error;
+  final label = _installmentStatusLabel(installment);
+  if (label == 'اليوم' || label == 'قريب') return const Color(0xFF9A6700);
+  return Theme.of(context).colorScheme.primary;
 }
 
 class _ReturnsView extends ConsumerWidget {
@@ -2020,6 +2455,11 @@ class _ReportsViewState extends ConsumerState<_ReportsView> {
           _ReportRangeSelector(
             selected: _range,
             onChanged: (range) => setState(() => _range = range),
+          ),
+          FilledButton.icon(
+            onPressed: _addExpense,
+            icon: const Icon(Icons.add_card),
+            label: const Text('مصروف جديد'),
           ),
           FilledButton.icon(
             onPressed: () => _printCurrentReport(bounds),
@@ -2187,6 +2627,17 @@ class _ReportsViewState extends ConsumerState<_ReportsView> {
       report: await useCases.periodReport(start: bounds.$1, end: bounds.$2),
       expenses: await useCases.expensesReport(start: bounds.$1, end: bounds.$2),
     );
+  }
+
+  Future<void> _addExpense() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _ExpenseDialog(),
+    );
+    if (saved == true && mounted) {
+      _refresh(ref);
+      setState(() {});
+    }
   }
 
   Future<void> _printCurrentReport((DateTime, DateTime) bounds) async {
@@ -3131,16 +3582,133 @@ class _ProductAvatar extends StatelessWidget {
 
 class _PurchaseCartLine {
   _PurchaseCartLine(this.product) {
-    costMinor = product.avgCostMinor == 0
-        ? product.salePriceMinor
-        : product.avgCostMinor;
-    costInput = _minorToInputText(costMinor);
+    costMinor = product.avgCostMinor;
+    costInput = product.avgCostMinor == 0
+        ? ''
+        : _minorToInputText(product.avgCostMinor);
   }
 
   final Product product;
   int qty = 1;
   late int costMinor;
   late String costInput;
+}
+
+class _BarcodePrintPromptDialog extends StatefulWidget {
+  const _BarcodePrintPromptDialog({required this.items});
+
+  final List<BarcodeLabelItem> items;
+
+  @override
+  State<_BarcodePrintPromptDialog> createState() =>
+      _BarcodePrintPromptDialogState();
+}
+
+class _BarcodePrintPromptDialogState extends State<_BarcodePrintPromptDialog> {
+  late final List<TextEditingController> _quantities;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantities = [
+      for (final item in widget.items)
+        TextEditingController(
+          text: item.canPrint ? item.quantity.toString() : '0',
+        ),
+    ];
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _quantities) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = _labels();
+    final skippedCount = widget.items.where((item) => !item.canPrint).length;
+    final totalLabels = BarcodeLabelsPdf.printableCount(labels);
+
+    return AlertDialog(
+      title: const Text('طباعة باركود الوارد؟'),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('إجمالي الملصقات: $totalLabels'),
+            if (skippedCount > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'بعض الأصناف لا تحتوي على باركود',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: widget.items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) => _labelTile(index),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('تخطي'),
+        ),
+        FilledButton.icon(
+          onPressed: totalLabels == 0
+              ? null
+              : () => Navigator.pop(
+                  context,
+                  BarcodeLabelsPdf.printableItems(labels),
+                ),
+          icon: const Icon(Icons.print),
+          label: const Text('طباعة الباركود'),
+        ),
+      ],
+    );
+  }
+
+  Widget _labelTile(int index) {
+    final item = widget.items[index];
+    final hasBarcode = item.barcode?.trim().isNotEmpty == true;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(item.productName),
+      subtitle: Text(hasBarcode ? item.barcode!.trim() : 'بدون باركود'),
+      trailing: SizedBox(
+        width: 96,
+        child: TextField(
+          controller: _quantities[index],
+          enabled: hasBarcode,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'العدد'),
+          onChanged: (_) => setState(() {}),
+        ),
+      ),
+    );
+  }
+
+  List<BarcodeLabelItem> _labels() {
+    return [
+      for (var index = 0; index < widget.items.length; index++)
+        BarcodeLabelItem(
+          productName: widget.items[index].productName,
+          barcode: widget.items[index].barcode,
+          quantity: int.tryParse(_quantities[index].text) ?? 0,
+        ),
+    ];
+  }
 }
 
 class _CartList extends StatelessWidget {
@@ -3199,7 +3767,7 @@ class _PurchaseCart extends StatelessWidget {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'تكلفة الوحدة',
-                errorText: _moneyInputError('تكلفة الوحدة', line.costInput),
+                errorText: _purchaseCostInputError(line),
               ),
               onChanged: (value) {
                 line.costInput = value;
@@ -3269,54 +3837,194 @@ class _QtyStepper extends StatelessWidget {
   }
 }
 
-class _PartyList extends StatelessWidget {
-  const _PartyList({
-    required this.title,
-    required this.balances,
-    required this.onStatement,
-    required this.onQuickPayment,
+class _PartyDirectoryTile extends StatelessWidget {
+  const _PartyDirectoryTile({
+    required this.party,
+    required this.selected,
+    required this.onTap,
   });
-  final String title;
-  final List<PartyBalance> balances;
-  final ValueChanged<PartyBalance> onStatement;
-  final ValueChanged<PartyBalance> onQuickPayment;
+
+  final PartyBalance party;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? color.withValues(alpha: 0.16)
+              : Colors.white.withValues(alpha: 0.48),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? color.withValues(alpha: 0.42)
+                : Colors.white.withValues(alpha: 0.58),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                party.type == 'customer' ? Icons.person : Icons.local_shipping,
+                color: color,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      party.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_partyTypeLabel(party.type)} · ${party.phone ?? 'بدون هاتف'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('الرصيد', style: Theme.of(context).textTheme.labelSmall),
+                  Text(
+                    Money(party.balanceMinor).format(),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PartyDetailPanel extends StatelessWidget {
+  const _PartyDetailPanel({
+    required this.party,
+    required this.plans,
+    required this.statementFuture,
+    required this.onStatement,
+    required this.onQuickPayment,
+  });
+
+  final PartyBalance party;
+  final List<InstallmentPlanPreview> plans;
+  final Future<List<PartyStatementLine>> statementFuture;
+  final VoidCallback onStatement;
+  final VoidCallback onQuickPayment;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = plans.fold<int>(
+      0,
+      (sum, item) => sum + item.remainingMinor,
+    );
     return _GlassPane(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                party.type == 'customer' ? Icons.person : Icons.local_shipping,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      party.name,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    Text(
+                      '${_partyTypeLabel(party.type)} · ${party.phone ?? 'بدون هاتف'}',
+                      style: const TextStyle(color: _mutedInk),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onStatement,
+                icon: const Icon(Icons.manage_search),
+                label: const Text('كشف الحساب'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: plans.isEmpty ? null : onQuickPayment,
+                icon: const Icon(Icons.payments),
+                label: Text(party.type == 'customer' ? 'تحصيل' : 'سداد'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          FutureBuilder<List<PartyStatementLine>>(
+            future: statementFuture,
+            builder: (context, snapshot) {
+              final lines = snapshot.data ?? const <PartyStatementLine>[];
+              final invoices = _uniqueInvoiceDetails(lines);
+              final debit = lines.fold<int>(
+                0,
+                (sum, line) => sum + line.debitMinor,
+              );
+              final credit = lines.fold<int>(
+                0,
+                (sum, line) => sum + line.creditMinor,
+              );
+              return _TextMetricsGrid(
+                metrics: [
+                  ('الرصيد', Money(party.balanceMinor).format(), Icons.balance),
+                  ('الفواتير', invoices.length.toString(), Icons.receipt_long),
+                  ('مدين', Money(debit).format(), Icons.south_west),
+                  ('دائن', Money(credit).format(), Icons.north_east),
+                  ('خطط مفتوحة', plans.length.toString(), Icons.payments),
+                  ('متبقي أقساط', Money(remaining).format(), Icons.schedule),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 14),
           Expanded(
-            child: ListView.separated(
-              itemCount: balances.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final party = balances[index];
-                return ListTile(
-                  title: Text(party.name),
-                  subtitle: Text(party.phone ?? 'بدون هاتف'),
-                  trailing: Wrap(
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(Money(party.balanceMinor).format()),
-                      IconButton(
-                        tooltip: 'كشف حساب',
-                        onPressed: () => onStatement(party),
-                        icon: const Icon(Icons.manage_search),
-                      ),
-                      IconButton(
-                        tooltip: party.type == 'customer' ? 'تحصيل' : 'سداد',
-                        onPressed: () => onQuickPayment(party),
-                        icon: const Icon(Icons.payments),
-                      ),
-                    ],
+            child: Row(
+              children: [
+                Expanded(
+                  child: _PartyInstallmentSummary(
+                    partyType: party.type,
+                    plans: plans,
                   ),
-                );
-              },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FutureBuilder<List<PartyStatementLine>>(
+                    future: statementFuture,
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final invoices = _uniqueInvoiceDetails(snapshot.data!);
+                      return _PartyInvoiceSummary(invoices: invoices);
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -3324,6 +4032,123 @@ class _PartyList extends StatelessWidget {
     );
   }
 }
+
+class _PartyInstallmentSummary extends StatelessWidget {
+  const _PartyInstallmentSummary({
+    required this.partyType,
+    required this.plans,
+  });
+
+  final String partyType;
+  final List<InstallmentPlanPreview> plans;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = partyType == 'customer'
+        ? _customerScheduleRows(plans).take(8).toList()
+        : const <_CustomerInstallmentRow>[];
+    return _GlassPane(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('الأقساط', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Expanded(
+            child: plans.isEmpty
+                ? const Center(child: Text('لا توجد خطط أقساط مفتوحة'))
+                : partyType == 'customer'
+                ? ListView.separated(
+                    itemCount: rows.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final row = rows[index];
+                      return _InstallmentScheduleRow(
+                        preview: row.plan,
+                        installment: row.installment,
+                        compact: true,
+                        onPay: null,
+                      );
+                    },
+                  )
+                : ListView.separated(
+                    itemCount: plans.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final plan = plans[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('رصيد مورد مفتوح'),
+                        subtitle: Text(
+                          'مدفوع ${Money(plan.plan.paidMinor).format()}',
+                        ),
+                        trailing: Text(Money(plan.remainingMinor).format()),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PartyInvoiceSummary extends StatelessWidget {
+  const _PartyInvoiceSummary({required this.invoices});
+
+  final List<StatementInvoiceDetails> invoices;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPane(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('آخر الفواتير', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Expanded(
+            child: invoices.isEmpty
+                ? const Center(child: Text('لا توجد فواتير مرتبطة'))
+                : ListView.separated(
+                    itemCount: invoices.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final invoice = invoices[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(invoice.invoiceNo),
+                        subtitle: Text(_dateTime(invoice.createdAt)),
+                        trailing: Text(Money(invoice.remainingMinor).format()),
+                        onTap: () =>
+                            _openStatementInvoiceDetails(context, invoice),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<StatementInvoiceDetails> _uniqueInvoiceDetails(
+  List<PartyStatementLine> lines,
+) {
+  final seen = <String>{};
+  final invoices = <StatementInvoiceDetails>[];
+  for (final line in lines.reversed) {
+    final details = line.invoiceDetails;
+    if (details == null) continue;
+    final key = '${details.type}:${details.invoiceNo}';
+    if (seen.add(key)) invoices.add(details);
+  }
+  return invoices;
+}
+
+String _partyTypeLabel(String type) => type == 'customer' ? 'عميل' : 'مورد';
 
 class _LowStockList extends StatelessWidget {
   const _LowStockList({required this.products});
@@ -3684,6 +4509,132 @@ class _ExpensesPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ExpenseDialog extends ConsumerStatefulWidget {
+  const _ExpenseDialog();
+
+  @override
+  ConsumerState<_ExpenseDialog> createState() => _ExpenseDialogState();
+}
+
+class _ExpenseDialogState extends ConsumerState<_ExpenseDialog> {
+  final _description = TextEditingController();
+  final _amount = TextEditingController();
+  PaymentMethod _method = PaymentMethod.cash;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _description.dispose();
+    _amount.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('مصروف جديد'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(
+                labelText: 'وصف المصروف',
+                prefixIcon: Icon(Icons.description),
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 10),
+            _moneyField(_amount, 'المبلغ'),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<PaymentMethod>(
+              initialValue: _method,
+              decoration: const InputDecoration(
+                labelText: 'طريقة الدفع',
+                prefixIcon: Icon(Icons.payments),
+              ),
+              items: const [
+                DropdownMenuItem(value: PaymentMethod.cash, child: Text('كاش')),
+                DropdownMenuItem(
+                  value: PaymentMethod.wallet,
+                  child: Text('محفظة'),
+                ),
+              ],
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _method = value ?? _method),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _method == PaymentMethod.cash
+                  ? 'المصروف النقدي يحتاج وردية مفتوحة.'
+                  : 'مصروف المحفظة لا يحتاج وردية مفتوحة.',
+              style: const TextStyle(color: _mutedInk, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save),
+          label: const Text('حفظ المصروف'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final description = _description.text.trim();
+    if (description.isEmpty) {
+      _showSnack(context, 'وصف المصروف مطلوب');
+      return;
+    }
+    final amount = _requireMoney(context, _amount, 'المبلغ');
+    if (amount == null) return;
+    if (amount <= 0) {
+      _showSnack(context, 'قيمة المصروف يجب أن تكون أكبر من صفر');
+      return;
+    }
+
+    setState(() => _saving = true);
+    final result = await _runWithNegativeBalanceApproval(
+      context,
+      action: (allowNegativeBalance) => ref
+          .read(useCasesProvider)
+          .recordExpense(
+            description: description,
+            amountMinor: amount,
+            method: _method,
+            allowNegativeBalance: allowNegativeBalance,
+          ),
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+
+    switch (result) {
+      case AppSuccess<int>():
+        _showSnack(context, 'تم تسجيل المصروف');
+        Navigator.pop(context, true);
+      case AppFailure<int>(message: final message):
+        _showSnack(context, message);
+    }
   }
 }
 
@@ -4209,7 +5160,7 @@ class _StatementMovementText extends StatelessWidget {
         : '${_statementReferenceLabel(line.entry.referenceType)} ${details.invoiceNo}';
     final subtitle = details == null
         ? line.entry.description
-        : 'الإجمالي ${Money(details.totalMinor).format()} · المدفوع ${Money(details.paidMinor).format()} · المتبقي ${Money(details.remainingMinor).format()}';
+        : _statementInvoiceSummaryText(details);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4248,7 +5199,16 @@ class _StatementInvoicePreview extends StatelessWidget {
               spacing: 10,
               runSpacing: 6,
               children: [
-                _MiniInfo('الإجمالي', Money(details.totalMinor).format()),
+                _MiniInfo(
+                  details.discountMinor > 0 ? 'قبل الخصم' : 'الإجمالي',
+                  Money(_statementInvoiceSubtotal(details)).format(),
+                ),
+                if (details.discountMinor > 0)
+                  _MiniInfo('الخصم', Money(details.discountMinor).format()),
+                if (details.interestMinor > 0)
+                  _MiniInfo('الفائدة', Money(details.interestMinor).format()),
+                if (details.discountMinor > 0 || details.interestMinor > 0)
+                  _MiniInfo('الصافي', Money(details.totalMinor).format()),
                 _MiniInfo('المدفوع', Money(details.paidMinor).format()),
                 _MiniInfo('المتبقي', Money(details.remainingMinor).format()),
               ],
@@ -4284,6 +5244,47 @@ class _MiniInfo extends StatelessWidget {
   }
 }
 
+String _statementInvoiceSummaryText(StatementInvoiceDetails details) {
+  final parts = <String>[
+    'إجمالي الأصناف ${Money(_statementInvoiceSubtotal(details)).format()}',
+    if (details.discountMinor > 0)
+      'خصم ${Money(details.discountMinor).format()}',
+    if (details.interestMinor > 0)
+      'فائدة ${Money(details.interestMinor).format()}',
+    'الصافي ${Money(details.totalMinor).format()}',
+    'المدفوع ${Money(details.paidMinor).format()}',
+    'المتبقي ${Money(details.remainingMinor).format()}',
+  ];
+  return parts.join(' · ');
+}
+
+int _statementInvoiceSubtotal(StatementInvoiceDetails details) {
+  return details.subtotalMinor ??
+      details.items.fold<int>(0, (sum, item) => sum + item.lineTotalMinor);
+}
+
+List<(String, String, IconData)> _statementInvoiceDetailMetrics(
+  StatementInvoiceDetails details,
+) {
+  final metrics = <(String, String, IconData)>[
+    (
+      details.discountMinor > 0 ? 'إجمالي الأصناف' : 'الإجمالي',
+      Money(_statementInvoiceSubtotal(details)).format(),
+      Icons.receipt_long,
+    ),
+    if (details.discountMinor > 0)
+      ('خصم الفاتورة', Money(details.discountMinor).format(), Icons.sell),
+    if (details.interestMinor > 0)
+      ('فائدة التقسيط', Money(details.interestMinor).format(), Icons.percent),
+    if (details.discountMinor > 0 || details.interestMinor > 0)
+      ('صافي الفاتورة', Money(details.totalMinor).format(), Icons.calculate),
+    ('المدفوع', Money(details.paidMinor).format(), Icons.payments),
+    ('المتبقي', Money(details.remainingMinor).format(), Icons.account_balance),
+    ('التاريخ', _dateTime(details.createdAt), Icons.event),
+  ];
+  return metrics;
+}
+
 Future<void> _openStatementInvoiceDetails(
   BuildContext context,
   StatementInvoiceDetails details,
@@ -4311,18 +5312,7 @@ class _StatementInvoiceDetailsDialog extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _TextMetricsGrid(
-              metrics: [
-                ('الإجمالي', Money(details.totalMinor).format(), Icons.receipt),
-                ('المدفوع', Money(details.paidMinor).format(), Icons.payments),
-                (
-                  'المتبقي',
-                  Money(details.remainingMinor).format(),
-                  Icons.account_balance,
-                ),
-                ('التاريخ', _dateTime(details.createdAt), Icons.event),
-              ],
-            ),
+            _TextMetricsGrid(metrics: _statementInvoiceDetailMetrics(details)),
             const SizedBox(height: 12),
             Expanded(
               child: DefaultTabController(
@@ -4788,8 +5778,9 @@ class _ReceiptInfoBlock extends StatelessWidget {
 }
 
 class _ProductDialog extends StatefulWidget {
-  const _ProductDialog({this.product});
+  const _ProductDialog({this.product, this.quickPurchase = false});
   final Product? product;
+  final bool quickPurchase;
 
   @override
   State<_ProductDialog> createState() => _ProductDialogState();
@@ -4812,7 +5803,9 @@ class _ProductDialogState extends State<_ProductDialog> {
     text: widget.product?.stockQty.toString() ?? '0',
   );
   late final _cost = TextEditingController(
-    text: widget.product == null
+    text: widget.quickPurchase
+        ? '0'
+        : widget.product == null
         ? ''
         : _minorToInputText(widget.product!.avgCostMinor),
   );
@@ -4836,7 +5829,13 @@ class _ProductDialogState extends State<_ProductDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.product == null ? 'منتج جديد' : 'تعديل منتج'),
+      title: Text(
+        widget.quickPurchase
+            ? 'منتج جديد للشراء'
+            : widget.product == null
+            ? 'منتج جديد'
+            : 'تعديل منتج',
+      ),
       content: SizedBox(
         width: 520,
         child: Column(
@@ -4881,7 +5880,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                 ),
               ],
             ),
-            if (widget.product == null) ...[
+            if (widget.product == null && !widget.quickPurchase) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -4944,20 +5943,56 @@ class _ProductDialogState extends State<_ProductDialog> {
         ),
         FilledButton(
           onPressed: () {
+            final name = _name.text.trim();
+            if (name.isEmpty) {
+              _showSnack(context, 'اسم المنتج مطلوب');
+              return;
+            }
             final price = _requireMoney(context, _price, 'سعر البيع');
-            final cost = _requireMoney(context, _cost, 'تكلفة افتتاحية');
-            if (price == null || cost == null) return;
+            if (price == null) return;
+            if (price <= 0) {
+              _showSnack(context, 'سعر البيع يجب أن يكون أكبر من صفر');
+              return;
+            }
+            final minStockQty = int.tryParse(_min.text.trim());
+            if (minStockQty == null || minStockQty < 0) {
+              _showSnack(context, 'حد النقص يجب أن يكون رقمًا غير سالب');
+              return;
+            }
+            var openingQty = 0;
+            var openingCostMinor = 0;
+            if (widget.product == null && !widget.quickPurchase) {
+              final qtyText = _qty.text.trim();
+              openingQty = qtyText.isEmpty ? 0 : int.tryParse(qtyText) ?? -1;
+              if (openingQty < 0) {
+                _showSnack(
+                  context,
+                  'الرصيد الافتتاحي يجب أن يكون رقمًا غير سالب',
+                );
+                return;
+              }
+              final cost = _requireMoney(context, _cost, 'تكلفة افتتاحية');
+              if (cost == null) return;
+              if (openingQty > 0 && cost <= 0) {
+                _showSnack(
+                  context,
+                  'تكلفة افتتاحية مطلوبة عند إدخال رصيد افتتاحي',
+                );
+                return;
+              }
+              openingCostMinor = openingQty > 0 ? cost : 0;
+            }
             Navigator.pop(
               context,
               _ProductFormData(
-                name: _name.text,
+                name: name,
                 barcode: _barcode.text,
                 category: _category.text,
                 imagePath: _imagePath,
                 salePriceMinor: price,
-                openingQty: int.tryParse(_qty.text) ?? 0,
-                openingCostMinor: cost,
-                minStockQty: int.tryParse(_min.text) ?? 1,
+                openingQty: openingQty,
+                openingCostMinor: openingCostMinor,
+                minStockQty: minStockQty,
               ),
             );
           },
@@ -5467,12 +6502,18 @@ String? _firstMoneyInputError(Map<String, TextEditingController> inputs) {
 
 String? _firstPurchaseCostError(List<_PurchaseCartLine> cart) {
   for (final line in cart) {
-    final error = _moneyInputError(
-      'تكلفة ${line.product.name}',
-      line.costInput,
-    );
+    final error = _purchaseCostInputError(line);
     if (error != null) return error;
   }
+  return null;
+}
+
+String? _purchaseCostInputError(_PurchaseCartLine line) {
+  final parsed = parseMoneyInput(line.costInput);
+  if (!parsed.isValid) {
+    return 'تكلفة ${line.product.name}: ${parsed.errorMessage}';
+  }
+  if (parsed.minorUnits <= 0) return 'أدخل سعر شراء صحيح للصنف';
   return null;
 }
 

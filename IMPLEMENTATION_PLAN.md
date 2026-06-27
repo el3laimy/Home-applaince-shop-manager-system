@@ -19,6 +19,28 @@ After the first Liquid Glass pass, the next improvement phase hardens the real o
 - Strengthen `_GlassStage` with deterministic code-drawn light layers so the glass surfaces have visible depth while preserving readability.
 - Expand golden coverage to include Login, Dashboard, POS, and Reports after the background polish.
 
+## Reports And Expense Workflow Addendum
+
+The Reports screen currently displays period expenses, but the UI does not provide a way to create a new expense. The `recordExpense` use-case exists and is covered by use-case tests, while the screen only reads existing `expenses` rows and ledger-derived period totals.
+
+This is a real delivery gap because the shop owner needs to record daily expenses without leaving the app.
+
+- Add a clear `مصروف جديد` action to the Reports screen, and consider a secondary shortcut from the Daily screen after the Reports flow is stable.
+- Implement an expense dialog with Arabic validation for:
+  - description;
+  - amount;
+  - payment method: cash or wallet only.
+- Use the existing `recordExpense` workflow.
+- Preserve the current rules:
+  - cash expenses require an open shift;
+  - wallet expenses do not require a shift;
+  - installment is not allowed for expenses;
+  - negative cash or wallet balance requires explicit per-operation approval.
+- Refresh the dashboard/report snapshot after a successful expense.
+- Keep all period report totals derived from `LedgerLine`; do not introduce manually maintained report totals.
+- Add widget coverage proving the owner can record an expense from the UI and see it reflected in `مصروفات الفترة`.
+- Add a Reports source audit note documenting which panels are ledger-derived, invoice-table-derived, product-table-derived, or snapshot-derived.
+
 ## Current UI Problems
 
 - `Frontend/alikhlas_pos/lib/v2/app/v2_app.dart` currently uses `fontFamily: 'Roboto'`, which is not the right controlled font choice for Arabic UI.

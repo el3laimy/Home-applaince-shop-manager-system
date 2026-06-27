@@ -3,6 +3,7 @@ import 'package:alikhlas_pos/v2/app/v2_providers.dart';
 import 'package:alikhlas_pos/v2/application/v2_use_cases.dart';
 import 'package:alikhlas_pos/v2/core/result.dart';
 import 'package:alikhlas_pos/v2/data/app_database.dart';
+import 'package:alikhlas_pos/v2/printing/barcode_labels_pdf.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,7 +25,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('إخلاص POS'), findsOneWidget);
+    final passwordField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+    );
+    expect(passwordField.controller?.text, isEmpty);
 
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+      'owner123',
+    );
     await tester.tap(find.text('دخول'));
     await tester.pumpAndSettle();
 
@@ -192,6 +201,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.add).first);
     await tester.pumpAndSettle();
+
+    final unitCostField = find.widgetWithText(TextFormField, 'تكلفة الوحدة');
+    final costField = tester.widget<TextFormField>(unitCostField);
+    expect(costField.initialValue, isEmpty);
+    await tester.tap(find.text('تسجيل الشراء'));
+    await tester.pumpAndSettle();
+    expect(find.text('أدخل سعر شراء صحيح للصنف'), findsWidgets);
+    expect(await db.select(db.purchaseInvoices).get(), isEmpty);
+
+    await tester.enterText(unitCostField, '150');
+    await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'كاش'), '150');
     await tester.tap(find.text('تسجيل الشراء'));
     await tester.pumpAndSettle();
@@ -207,6 +227,10 @@ void main() {
     await tester.tap(
       find.widgetWithText(FilledButton, 'أوافق على الرصيد السالب'),
     );
+    await tester.pumpAndSettle();
+
+    expect(find.text('طباعة باركود الوارد؟'), findsOneWidget);
+    await tester.tap(find.text('تخطي'));
     await tester.pumpAndSettle();
 
     expect((await db.select(db.purchaseInvoices).get()).length, 1);
@@ -247,6 +271,7 @@ void main() {
           SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
         ],
         payments: const [PaymentInput(PaymentMethod.cash, 3000)],
+        discountMinor: 1000,
         installmentTerms: InstallmentTerms(
           partyId: customerId,
           count: 2,
@@ -271,10 +296,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('الأطراف').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('كشف حساب').first);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'كشف الحساب'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('الإجمالي'), findsWidgets);
+    expect(find.textContaining('إجمالي الأصناف'), findsWidgets);
     expect(find.textContaining('المدفوع'), findsWidgets);
     expect(find.textContaining('المتبقي'), findsWidgets);
 
@@ -282,10 +307,496 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('تفاصيل فاتورة بيع'), findsOneWidget);
+    expect(find.text('إجمالي الأصناف'), findsOneWidget);
+    expect(find.text('خصم الفاتورة'), findsOneWidget);
+    expect(find.text('صافي الفاتورة'), findsOneWidget);
     expect(find.text('غسالة كشف'), findsOneWidget);
     expect(find.text('المدفوعات'), findsOneWidget);
     expect(find.text('الأقساط'), findsWidgets);
   });
+
+  testWidgets(
+    'installments screen searches customers and prioritizes overdue',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final useCases = V2UseCases(db);
+      await useCases.bootstrap();
+      final owner = await _success(useCases.login('owner', 'owner123'));
+      await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+      final overdueCustomer = await _success(
+        useCases.createCustomer(name: 'عميل متأخر'),
+      );
+      final futureCustomer = await _success(
+        useCases.createCustomer(name: 'عميل قادم'),
+      );
+      final product = await _success(
+        useCases.createProduct(
+          name: 'مكيف أقساط',
+          salePriceMinor: 5000,
+          openingQty: 2,
+          openingCostMinor: 3000,
+        ),
+      );
+      await _success(useCases.openShift(0));
+      await _success(
+        useCases.createSale(
+          customerId: overdueCustomer.id,
+          items: [
+            SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 5000),
+          ],
+          payments: const [],
+          installmentTerms: InstallmentTerms(
+            partyId: overdueCustomer.id,
+            count: 1,
+            firstDueDate: DateTime.now().subtract(const Duration(days: 2)),
+          ),
+        ),
+      );
+      await _success(
+        useCases.createSale(
+          customerId: futureCustomer.id,
+          items: [
+            SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 5000),
+          ],
+          payments: const [],
+          installmentTerms: InstallmentTerms(
+            partyId: futureCustomer.id,
+            count: 1,
+            firstDueDate: DateTime.now().add(const Duration(days: 12)),
+          ),
+        ),
+      );
+
+      await _pumpLoggedInWorkbench(tester, db);
+      await tester.tap(find.text('الأقساط').first);
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(TextField, 'بحث باسم العميل'), findsOneWidget);
+      expect(find.text('تحصيل'), findsWidgets);
+      expect(find.text('متأخر'), findsWidgets);
+
+      final overdueTop = tester.getTopLeft(find.text('عميل متأخر').first).dy;
+      final futureTop = tester.getTopLeft(find.text('عميل قادم').first).dy;
+      expect(overdueTop, lessThan(futureTop));
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'بحث باسم العميل'),
+        'قادم',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('عميل قادم'), findsWidgets);
+      expect(find.text('عميل متأخر'), findsNothing);
+    },
+  );
+
+  testWidgets('installments screen shows supplier balances separately', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+    final supplier = await _success(useCases.createSupplier(name: 'مورد سريع'));
+    final product = await _success(
+      useCases.createProduct(
+        name: 'شاشة مورد',
+        salePriceMinor: 9000,
+        openingQty: 0,
+        openingCostMinor: 0,
+      ),
+    );
+    await _success(
+      useCases.createPurchase(
+        supplierId: supplier.id,
+        items: [
+          PurchaseLineInput(productId: product.id, qty: 1, unitCostMinor: 7000),
+        ],
+        payments: const [],
+      ),
+    );
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('الأقساط').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('موردين'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(TextField, 'بحث باسم المورد'), findsOneWidget);
+    expect(find.text('مورد سريع'), findsWidgets);
+    expect(find.widgetWithText(FilledButton, 'سداد'), findsWidgets);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'بحث باسم المورد'),
+      'غير موجود',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('لا توجد أرصدة موردين مطابقة'), findsOneWidget);
+  });
+
+  testWidgets('purchase quick product adds item to cart without stock intake', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('الشراء').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'منتج جديد'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('منتج جديد للشراء'), findsOneWidget);
+    expect(find.text('رصيد افتتاحي'), findsNothing);
+    expect(find.text('تكلفة افتتاحية'), findsNothing);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المنتج'),
+      'منتج سريع شراء',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'سعر البيع'), '120');
+    await tester.tap(find.text('حفظ'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تمت إضافة المنتج للفاتورة'), findsOneWidget);
+    expect(find.text('منتج سريع شراء'), findsWidgets);
+    final costField = tester.widget<TextFormField>(
+      find.widgetWithText(TextFormField, 'تكلفة الوحدة'),
+    );
+    expect(costField.initialValue, isEmpty);
+    final product = await (db.select(
+      db.products,
+    )..where((p) => p.name.equals('منتج سريع شراء'))).getSingle();
+    expect(product.stockQty, 0);
+    expect(await db.select(db.purchaseInvoices).get(), isEmpty);
+  });
+
+  testWidgets('inventory screen adds a new product with minimal fields', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('المخزون').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'منتج جديد'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المنتج'),
+      'مروحة جديدة',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'سعر البيع'), '350');
+    await tester.tap(find.text('حفظ'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مروحة جديدة'), findsOneWidget);
+    final product = await (db.select(
+      db.products,
+    )..where((row) => row.name.equals('مروحة جديدة'))).getSingle();
+    expect(product.salePriceMinor, 35000);
+    expect(product.stockQty, 0);
+  });
+
+  testWidgets('inventory product dialog keeps invalid sale price visible', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('المخزون').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'منتج جديد'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المنتج'),
+      'منتج بلا سعر',
+    );
+    await tester.tap(find.text('حفظ'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AlertDialog, 'منتج جديد'), findsOneWidget);
+    expect(find.text('سعر البيع يجب أن يكون أكبر من صفر'), findsOneWidget);
+    expect(await db.select(db.products).get(), isEmpty);
+  });
+
+  testWidgets('inventory product dialog requires cost for opening stock', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('المخزون').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'منتج جديد'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المنتج'),
+      'منتج برصيد بلا تكلفة',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'سعر البيع'), '100');
+    await tester.enterText(find.widgetWithText(TextField, 'رصيد افتتاحي'), '2');
+    await tester.tap(find.text('حفظ'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AlertDialog, 'منتج جديد'), findsOneWidget);
+    expect(
+      find.text('تكلفة افتتاحية مطلوبة عند إدخال رصيد افتتاحي'),
+      findsOneWidget,
+    );
+    expect(await db.select(db.products).get(), isEmpty);
+  });
+
+  testWidgets('reports screen records a new expense from the UI', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+    await _success(useCases.openShift(10000));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('التقارير').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'مصروف جديد'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'وصف المصروف'),
+      'نقل داخلي',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'المبلغ'), '50');
+    await tester.tap(find.widgetWithText(FilledButton, 'حفظ المصروف'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('الرصيد سيصبح سالبًا'), findsOneWidget);
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'أوافق على الرصيد السالب'),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('نقل داخلي'), findsOneWidget);
+    expect((await db.select(db.expenses).get()).single.amountMinor, 5000);
+  });
+
+  testWidgets('reports expense cash entry requires an open shift', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('التقارير').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'مصروف جديد'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'وصف المصروف'),
+      'مصروف بدون وردية',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'المبلغ'), '25');
+    await tester.tap(find.widgetWithText(FilledButton, 'حفظ المصروف'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('افتح وردية قبل تسجيل مصروف نقدي'), findsOneWidget);
+    expect(await db.select(db.expenses).get(), isEmpty);
+  });
+
+  testWidgets('reports expense dialog rejects invalid money input', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+    await _success(useCases.openShift(10000));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('التقارير').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'مصروف جديد'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'وصف المصروف'),
+      'مصروف خطأ',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'المبلغ'), 'abc');
+    await tester.tap(find.widgetWithText(FilledButton, 'حفظ المصروف'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('المبلغ:'), findsOneWidget);
+    expect(await db.select(db.expenses).get(), isEmpty);
+  });
+
+  testWidgets('purchase flow prints incoming barcode labels from cart', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final printedItems = <BarcodeLabelItem>[];
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+    await _success(useCases.openShift(0));
+    final product = await _success(
+      useCases.createProduct(
+        name: 'ميكروويف ملصق',
+        salePriceMinor: 9000,
+        openingQty: 0,
+        openingCostMinor: 0,
+      ),
+    );
+
+    await _pumpLoggedInWorkbench(
+      tester,
+      db,
+      barcodeLabelPrinter: (items) async {
+        printedItems
+          ..clear()
+          ..addAll(items);
+      },
+    );
+    await tester.tap(find.text('الشراء').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('إضافة للفاتورة').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'تكلفة الوحدة'),
+      '90',
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'كاش'), '180');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تسجيل الشراء'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'أوافق على الرصيد السالب'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('طباعة باركود الوارد؟'), findsOneWidget);
+    expect(find.text('إجمالي الملصقات: 2'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'طباعة الباركود'));
+    await tester.pumpAndSettle();
+
+    expect(printedItems, hasLength(1));
+    expect(printedItems.single.productName, 'ميكروويف ملصق');
+    expect(printedItems.single.barcode, product.barcode);
+    expect(printedItems.single.quantity, 2);
+    expect((await db.select(db.purchaseInvoices).get()).length, 1);
+  });
+}
+
+Future<void> _pumpLoggedInWorkbench(
+  WidgetTester tester,
+  AppDatabase db, {
+  BarcodeLabelPrinter? barcodeLabelPrinter,
+}) async {
+  final overrides = [
+    databaseProvider.overrideWithValue(db),
+    if (barcodeLabelPrinter != null)
+      barcodeLabelPrinterProvider.overrideWithValue(barcodeLabelPrinter),
+  ];
+  await tester.pumpWidget(
+    ProviderScope(overrides: overrides, child: const ALIkhlasV2App()),
+  );
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.widgetWithText(TextField, 'كلمة المرور'),
+    'new-owner-pass',
+  );
+  await tester.tap(find.text('دخول'));
+  await tester.pumpAndSettle();
 }
 
 Future<T> _success<T>(Future<AppResult<T>> future) async {

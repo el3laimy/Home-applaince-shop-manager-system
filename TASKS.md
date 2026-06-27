@@ -204,3 +204,41 @@ Acceptance:
 - [x] Golden tests cover Login, Dashboard, POS, and Reports.
 - [x] Analyze, tests, and Linux build pass.
 - [x] The final tree is clean after commit.
+
+## Phase 8: Reports Audit And Expense Entry
+
+Review skills:
+
+- `frontend-design`
+- `test-guard`
+- `clean-code-guard`
+
+Tasks:
+
+- [x] Audit every Reports screen panel and document its data source.
+- [x] Mark each report as ledger-derived, invoice-table-derived, product-table-derived, or snapshot-derived.
+- [x] Confirm period money totals remain derived from `LedgerLine`.
+- [x] Add a `مصروف جديد` action to the Reports screen.
+- [x] Add an expense dialog with description, amount, and payment method.
+- [x] Reuse the existing integer-minor-unit money parser.
+- [x] Call the existing `recordExpense` use-case from the UI.
+- [x] Show Arabic validation for empty description, invalid amount, and unsupported payment methods.
+- [x] Preserve the current cash-expense rule: an open shift is required.
+- [x] Preserve the current wallet-expense rule: no shift required.
+- [x] Preserve the existing negative-balance confirmation flow for cash and wallet expenses.
+- [x] Refresh the Reports and Daily/dashboard data after saving an expense.
+- [x] Add widget coverage for creating an expense from Reports.
+- [x] Add widget coverage that a cash expense without an open shift shows the existing shift error.
+- [x] Add widget coverage that invalid money input does not create an expense.
+- [x] Run `dart analyze lib/v2 lib/main.dart test/v2`.
+- [x] Run `flutter test`.
+- [x] Run `HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter/bin/flutter build linux`.
+
+Acceptance:
+
+- [x] The owner can record daily expenses from the UI.
+- [x] `مصروفات الفترة` shows newly recorded expenses without leaving the app.
+- [x] Period expense totals match ledger expense account movement.
+- [x] No new manual report totals are introduced.
+- [x] Reports source audit is written and matches the actual code.
+- [x] Analyze, tests, and Linux build pass.

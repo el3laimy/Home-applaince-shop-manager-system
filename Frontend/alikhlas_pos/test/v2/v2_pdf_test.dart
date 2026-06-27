@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:alikhlas_pos/v2/application/v2_use_cases.dart';
 import 'package:alikhlas_pos/v2/core/result.dart';
 import 'package:alikhlas_pos/v2/data/app_database.dart';
+import 'package:alikhlas_pos/v2/printing/barcode_labels_pdf.dart';
 import 'package:alikhlas_pos/v2/printing/party_statement_pdf.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,32 @@ void main() {
     expect(printingSource, isNot(contains('PdfGoogleFonts.cairoBold')));
     expect(printingSource, contains('assets/fonts/Cairo-Regular.ttf'));
     expect(printingSource, contains('assets/fonts/Cairo-Bold.ttf'));
+  });
+
+  test('barcode labels pdf builds printable incoming-stock labels', () async {
+    final labels = [
+      const BarcodeLabelItem(
+        productName: 'غسالة باركود',
+        barcode: 'AK-2026-00001',
+        quantity: 3,
+      ),
+      const BarcodeLabelItem(
+        productName: 'منتج بدون باركود',
+        barcode: null,
+        quantity: 5,
+      ),
+    ];
+
+    expect(BarcodeLabelsPdf.printableCount(labels), 3);
+    expect(BarcodeLabelsPdf.printableItems(labels), hasLength(1));
+
+    final pdf = await BarcodeLabelsPdf.build(labels);
+
+    expect(pdf.length, greaterThan(1000));
+    expect(
+      File('lib/v2/printing/barcode_labels_pdf.dart').readAsStringSync(),
+      contains('Barcode.code128()'),
+    );
   });
 
   test(

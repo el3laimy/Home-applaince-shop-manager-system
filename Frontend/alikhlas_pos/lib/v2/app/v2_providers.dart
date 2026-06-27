@@ -2,6 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/v2_use_cases.dart';
 import '../data/app_database.dart';
+import '../printing/barcode_labels_pdf.dart';
+
+typedef BarcodeLabelPrinter =
+    Future<void> Function(List<BarcodeLabelItem> items);
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -11,6 +15,10 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 
 final useCasesProvider = Provider<V2UseCases>((ref) {
   return V2UseCases(ref.watch(databaseProvider));
+});
+
+final barcodeLabelPrinterProvider = Provider<BarcodeLabelPrinter>((ref) {
+  return (items) => BarcodeLabelsPdf.printLabels(items);
 });
 
 final bootstrapProvider = FutureProvider<void>((ref) async {
