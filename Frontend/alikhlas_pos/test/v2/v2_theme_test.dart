@@ -39,7 +39,7 @@ void main() {
   });
 
   test('liquid glass keeps real blur centralized and opt-in', () {
-    final appSource = File('lib/v2/app/v2_app.dart').readAsStringSync();
+    final appSource = _readTree(Directory('lib/v2/app'));
 
     expect(RegExp(r'BackdropFilter\(').allMatches(appSource), hasLength(1));
     expect(appSource, contains('this.enableBlur = false'));
