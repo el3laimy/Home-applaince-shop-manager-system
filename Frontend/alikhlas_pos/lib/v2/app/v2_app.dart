@@ -35,6 +35,7 @@ part 'shared/v2_visual.dart';
 part 'shared/v2_cart_product_widgets.dart';
 part 'shared/v2_party_widgets.dart';
 part 'shared/v2_report_widgets.dart';
+part 'shared/v2_daily_widgets.dart';
 part 'shared/v2_statement_widgets.dart';
 part 'shared/v2_dialogs.dart';
 part 'shared/v2_product_dialogs.dart';
