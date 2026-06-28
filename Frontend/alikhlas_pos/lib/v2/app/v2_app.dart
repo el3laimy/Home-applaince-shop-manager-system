@@ -37,6 +37,7 @@ part 'shared/v2_party_widgets.dart';
 part 'shared/v2_report_widgets.dart';
 part 'shared/v2_statement_widgets.dart';
 part 'shared/v2_dialogs.dart';
+part 'shared/v2_product_dialogs.dart';
 part 'shared/v2_helpers.dart';
 
 class ALIkhlasV2App extends ConsumerWidget {
