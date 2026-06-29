@@ -3,41 +3,51 @@
 ## Build Reference
 
 - Branch: `fix/v2-installment-returns`
-- Application build commit: `1eb157a08a1218b1b45c241196e60e6dc77faf1d`
-- Application build short commit: `1eb157a`
+- Release artifact commit: `f69f81484ddfbabf3e795596342a75102d993833`
+- Release artifact short commit: `f69f814`
 - Flutter used by CI: `3.44.2` stable
 
 ## Available Artifacts
 
 ### Linux
 
-- Local ZIP on this machine: `/tmp/alikhlas-pos-linux-1eb157a.zip`
+- GitHub Actions workflow: `Desktop Release Build`
+- Successful run: <https://github.com/el3laimy/Home-applaince-shop-manager-system/actions/runs/28386193066>
+- Artifact name: `alikhlas-pos-linux`
+- Artifact id: `7957800299`
+- Artifact size: `15,859,198` bytes
+- Artifact digest: `sha256:f659e2dcb7d6a7a92b7601f4a786ce737798f5350bea8dae90a3ff283b78c258`
+- Artifact expiry on GitHub Actions: `2026-09-27T16:12:20Z`
+- Local ZIP on this machine: `/tmp/alikhlas-pos-linux-f69f814.zip`
 - Size: `15M`
 - The ZIP contains the Linux executable `alikhlas_pos`, `lib/libapp.so`, SQLite native library, PDF/printing libraries, Material icons, and bundled Cairo font assets.
 - The clean ZIP check found no stale `cupertino_icons` or `iconsax_flutter` asset folders.
 
 ### Windows
 
-- GitHub Actions workflow: `Windows Release Build`
-- Successful run: <https://github.com/el3laimy/Home-applaince-shop-manager-system/actions/runs/28383813030>
+- GitHub Actions workflow: `Desktop Release Build`
+- Successful run: <https://github.com/el3laimy/Home-applaince-shop-manager-system/actions/runs/28386193066>
 - Artifact name: `alikhlas-pos-windows`
-- Artifact id: `7956886830`
-- Artifact size: `17,928,723` bytes
-- Artifact digest: `sha256:ba71161f013b2d85880e38e9b99be925fb94857b242f7bb38af8bfe3e1e5922e`
-- Artifact expiry on GitHub Actions: `2026-09-27T15:34:48Z`
+- Artifact id: `7957842881`
+- Artifact size: `17,928,717` bytes
+- Artifact digest: `sha256:75c3555c9cbb60b234a74d30d925b2213681471bddf68a819373eb2d53dba44f`
+- Artifact expiry on GitHub Actions: `2026-09-27T16:12:20Z`
 
 ## Automated Verification Already Passed
 
 - `dart analyze lib/v2 lib/main.dart test/v2`
 - `flutter test`
 - Clean `flutter build linux`
-- GitHub Actions `Windows Release Build`:
+- GitHub Actions `Desktop Release Build`:
   - Checkout: passed
   - Flutter setup: passed
-  - `flutter pub get`: passed
-  - `dart analyze lib/v2 lib/main.dart test/v2`: passed
+  - Linux build dependencies installation: passed
+  - `flutter pub get`: passed on Windows and Linux
+  - `dart analyze lib/v2 lib/main.dart test/v2`: passed on Windows
   - `flutter build windows --release`: passed
+  - `flutter build linux --release`: passed
   - Upload artifact `alikhlas-pos-windows`: passed
+  - Upload artifact `alikhlas-pos-linux`: passed
 
 ## Delivery Smoke Test
 
@@ -79,4 +89,4 @@ Do not treat the Windows delivery as final until the Windows artifact launches o
 - Ledger entries remain the financial source of truth for balances and reports.
 - Barcode labels can be printed after purchases and reprinted later from Inventory when a label is damaged.
 - Barcode label dimensions are configurable from Settings.
-- Windows build is produced by GitHub Actions because Flutter Windows builds require a Windows host.
+- Windows and Linux release bundles are produced by GitHub Actions. Windows still requires a Windows host, so it is built on `windows-latest`.
