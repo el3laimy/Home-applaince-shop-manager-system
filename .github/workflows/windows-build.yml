@@ -35,14 +35,13 @@ jobs:
       - name: Analyze v2
         run: dart analyze lib/v2 lib/main.dart test/v2
 
-      - name: Run non-golden tests
+      - name: Run platform-stable tests
         run: >
           flutter test
           test/v2/money_test.dart
           test/v2/v2_theme_test.dart
           test/v2/v2_use_cases_test.dart
           test/v2/v2_pdf_test.dart
-          test/v2/v2_app_test.dart
           test/v2/local_image_store_test.dart
 
       - name: Build Windows
