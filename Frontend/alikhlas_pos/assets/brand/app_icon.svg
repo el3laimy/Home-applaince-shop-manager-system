@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="ALIkhlasPOS app icon">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="80" x2="900" y2="940" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7FEFF"/>
+      <stop offset="0.34" stop-color="#96E7E4"/>
+      <stop offset="0.68" stop-color="#087B75"/>
+      <stop offset="1" stop-color="#102C44"/>
+    </linearGradient>
+    <radialGradient id="cyan" cx="280" cy="210" r="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.42" stop-color="#B9FBFF" stop-opacity="0.46"/>
+      <stop offset="1" stop-color="#B9FBFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rose" cx="800" cy="170" r="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB8C7" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#FFB8C7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="250" y1="190" x2="780" y2="790" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.88"/>
+      <stop offset="0.48" stop-color="#EAFBFB" stop-opacity="0.54"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.30"/>
+    </linearGradient>
+    <linearGradient id="receipt" x1="330" y1="250" x2="700" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DAF5F3"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#003A3D" flood-opacity="0.26"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="224" fill="url(#cyan)"/>
+  <rect width="1024" height="1024" rx="224" fill="url(#rose)"/>
+
+  <path d="M170 240C300 155 505 145 675 200c148 48 242 153 250 292 10 174-90 320-260 370-156 45-358 23-477-82C61 668 48 431 170 240Z"
+        fill="#FFFFFF" opacity="0.16"/>
+  <rect x="192" y="172" width="640" height="690" rx="164" fill="url(#glass)" stroke="#FFFFFF" stroke-opacity="0.70" stroke-width="8"/>
+  <path d="M240 205C380 165 610 172 785 292" fill="none" stroke="#FFFFFF" stroke-opacity="0.86" stroke-width="14" stroke-linecap="round"/>
+  <path d="M220 792C350 850 610 856 780 778" fill="none" stroke="#80FFFF" stroke-opacity="0.36" stroke-width="10" stroke-linecap="round"/>
+
+  <g filter="url(#shadow)">
+    <path d="M351 256h322c31 0 56 25 56 56v390c0 31-25 56-56 56H351c-31 0-56-25-56-56V312c0-31 25-56 56-56Z"
+          fill="url(#receipt)"/>
+    <path d="M351 256h322c31 0 56 25 56 56v77H295v-77c0-31 25-56 56-56Z"
+          fill="#0D817B"/>
+    <circle cx="604" cy="323" r="38" fill="#E9FFFB"/>
+    <circle cx="604" cy="323" r="18" fill="#0D817B"/>
+    <rect x="356" y="312" width="156" height="24" rx="12" fill="#E9FFFB" opacity="0.95"/>
+    <rect x="354" y="448" width="318" height="28" rx="14" fill="#8FD9D3" opacity="0.55"/>
+    <rect x="354" y="512" width="250" height="28" rx="14" fill="#8FD9D3" opacity="0.42"/>
+    <g fill="#0A625E">
+      <rect x="358" y="602" width="22" height="90" rx="8"/>
+      <rect x="398" y="578" width="34" height="114" rx="9"/>
+      <rect x="452" y="616" width="18" height="76" rx="7"/>
+      <rect x="492" y="568" width="42" height="124" rx="10"/>
+      <rect x="554" y="594" width="28" height="98" rx="9"/>
+      <rect x="604" y="552" width="46" height="140" rx="10"/>
+    </g>
+  </g>
+
+  <path d="M320 264C405 226 612 228 700 276" fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="8" stroke-linecap="round"/>
+  <path d="M247 173C182 255 155 382 176 505" fill="none" stroke="#FFFFFF" stroke-opacity="0.52" stroke-width="12" stroke-linecap="round"/>
+</svg>
