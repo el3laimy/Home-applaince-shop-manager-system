@@ -28,6 +28,7 @@
 - Party statements show invoice totals, paid amounts, remaining balances, invoice items, payments, and sale installment details in the UI and PDF output.
 - Party statement invoice details now derive current paid/remaining values from direct payments, installment-plan payments, and sale returns instead of stale invoice snapshots.
 - Barcode label printing defaults to 40x30mm, can be adjusted from Settings, and supports both incoming-stock labels and reprinting an existing product label from Inventory.
+- Windows release bundles can be produced from the `Windows Release Build` GitHub Actions workflow.
 - Sale returns keep installment interest as non-refundable by default; any interest refund must be posted later as an explicit manual settlement.
 - Purchases reject zero unit cost at the use-case boundary, not only in the UI.
 - Partial installment payments are shown as partial in statement details and PDFs with paid/remaining amounts.

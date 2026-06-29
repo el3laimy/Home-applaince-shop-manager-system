@@ -1,0 +1,56 @@
+name: Windows Release Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/v2-installment-returns
+    paths:
+      - ".github/workflows/windows-build.yml"
+      - "Frontend/alikhlas_pos/**"
+
+jobs:
+  build-windows:
+    name: Build Windows release
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: Frontend/alikhlas_pos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.2"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze v2
+        run: dart analyze lib/v2 lib/main.dart test/v2
+
+      - name: Run non-golden tests
+        run: >
+          flutter test
+          test/v2/money_test.dart
+          test/v2/v2_theme_test.dart
+          test/v2/v2_use_cases_test.dart
+          test/v2/v2_pdf_test.dart
+          test/v2/v2_app_test.dart
+          test/v2/local_image_store_test.dart
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Upload Windows bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: alikhlas-pos-windows
+          path: Frontend/alikhlas_pos/build/windows/x64/runner/Release
+          if-no-files-found: error

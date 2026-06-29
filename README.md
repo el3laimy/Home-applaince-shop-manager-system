@@ -71,14 +71,16 @@ HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter
 
 أمر Linux build الأخير مستخدم في هذه البيئة لأن Flutter SDK موجود في `/home/el3laimy/development/flutter`.
 
-لبناء Windows، شغّل من جهاز Windows أو CI يدعم Windows Desktop:
+لبناء Windows، شغّل من جهاز Windows أو استخدم GitHub Actions workflow باسم `Windows Release Build`، والذي يرفع artifact باسم `alikhlas-pos-windows`.
+
+الأمر المحلي من Windows:
 
 ```bash
 cd Frontend/alikhlas_pos
 flutter build windows
 ```
 
-لم يتم توثيق تحقق Windows build محليًا في هذه البيئة؛ يجب تشغيله على Windows أو CI قبل إصدار Windows.
+لم يتم توثيق تحقق Windows build محليًا في هذه البيئة لأنها Linux؛ يجب انتظار نتيجة GitHub Actions أو تشغيله على Windows قبل إصدار Windows النهائي.
 
 ## النسخ الاحتياطي
 
