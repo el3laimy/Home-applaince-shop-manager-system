@@ -1,4 +1,4 @@
-name: Windows Release Build
+name: Desktop Release Build
 
 on:
   workflow_dispatch:
@@ -43,4 +43,41 @@ jobs:
         with:
           name: alikhlas-pos-windows
           path: Frontend/alikhlas_pos/build/windows/x64/runner/Release
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Linux release
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Frontend/alikhlas_pos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.2"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Upload Linux bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: alikhlas-pos-linux
+          path: Frontend/alikhlas_pos/build/linux/x64/release/bundle
           if-no-files-found: error
