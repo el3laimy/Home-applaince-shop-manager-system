@@ -362,6 +362,23 @@ class ShopSettingsSnapshot {
   final String? receiptFooter;
 }
 
+class BarcodeLabelSettingsSnapshot {
+  const BarcodeLabelSettingsSnapshot({
+    required this.widthMm,
+    required this.heightMm,
+  });
+
+  static const defaultWidthMm = 40;
+  static const defaultHeightMm = 30;
+  static const minWidthMm = 20;
+  static const maxWidthMm = 100;
+  static const minHeightMm = 15;
+  static const maxHeightMm = 80;
+
+  final int widthMm;
+  final int heightMm;
+}
+
 class UiBackgroundSnapshot {
   const UiBackgroundSnapshot({required this.preset, this.imagePath});
 
@@ -459,6 +476,7 @@ class WorkbenchSnapshot {
     required this.installmentSummaries,
     required this.backupStatus,
     required this.shopSettings,
+    required this.barcodeLabelSettings,
     required this.uiBackground,
   });
 
@@ -477,6 +495,7 @@ class WorkbenchSnapshot {
   final List<InstallmentPlanPreview> installmentSummaries;
   final BackupStatus backupStatus;
   final ShopSettingsSnapshot shopSettings;
+  final BarcodeLabelSettingsSnapshot barcodeLabelSettings;
   final UiBackgroundSnapshot uiBackground;
 }
 

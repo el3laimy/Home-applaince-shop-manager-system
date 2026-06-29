@@ -49,9 +49,15 @@ class _PurchaseCartLine {
 }
 
 class _BarcodePrintPromptDialog extends StatefulWidget {
-  const _BarcodePrintPromptDialog({required this.items});
+  const _BarcodePrintPromptDialog({
+    required this.items,
+    this.title = 'طباعة باركود الوارد؟',
+    this.skipLabel = 'تخطي',
+  });
 
   final List<BarcodeLabelItem> items;
+  final String title;
+  final String skipLabel;
 
   @override
   State<_BarcodePrintPromptDialog> createState() =>
@@ -87,7 +93,7 @@ class _BarcodePrintPromptDialogState extends State<_BarcodePrintPromptDialog> {
     final totalLabels = BarcodeLabelsPdf.printableCount(labels);
 
     return AlertDialog(
-      title: const Text('طباعة باركود الوارد؟'),
+      title: Text(widget.title),
       content: SizedBox(
         width: 560,
         child: Column(
@@ -117,7 +123,7 @@ class _BarcodePrintPromptDialogState extends State<_BarcodePrintPromptDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('تخطي'),
+          child: Text(widget.skipLabel),
         ),
         FilledButton.icon(
           onPressed: totalLabels == 0

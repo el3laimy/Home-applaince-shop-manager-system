@@ -24,6 +24,19 @@ class BarcodeLabelItem {
 class BarcodeLabelsPdf {
   const BarcodeLabelsPdf._();
 
+  static final defaultLabelFormat = labelFormat(widthMm: 40, heightMm: 30);
+
+  static PdfPageFormat labelFormat({
+    required int widthMm,
+    required int heightMm,
+  }) {
+    return PdfPageFormat(
+      widthMm * PdfPageFormat.mm,
+      heightMm * PdfPageFormat.mm,
+      marginAll: 2 * PdfPageFormat.mm,
+    );
+  }
+
   static final label40x30 = PdfPageFormat(
     40 * PdfPageFormat.mm,
     30 * PdfPageFormat.mm,
@@ -79,7 +92,7 @@ class BarcodeLabelsPdf {
       for (var copy = 0; copy < labelItem.quantity; copy++) {
         doc.addPage(
           pw.Page(
-            pageFormat: pageFormat ?? label40x30,
+            pageFormat: pageFormat ?? defaultLabelFormat,
             textDirection: pw.TextDirection.rtl,
             build: (context) => _label(labelItem, barcode, regular, bold),
           ),

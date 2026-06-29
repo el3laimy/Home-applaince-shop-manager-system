@@ -155,6 +155,12 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                             children: [
                               Text(Money(product.salePriceMinor).format()),
                               IconButton(
+                                tooltip: 'طباعة باركود بدل تالف',
+                                onPressed: () =>
+                                    _printBarcodeForProduct(context, product),
+                                icon: const Icon(Icons.qr_code_2),
+                              ),
+                              IconButton(
                                 tooltip: 'تعديل',
                                 onPressed: () => _openProductDialog(
                                   context,
@@ -222,6 +228,33 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
       };
     });
     return products;
+  }
+
+  Future<void> _printBarcodeForProduct(
+    BuildContext context,
+    Product product,
+  ) async {
+    final labels = await showDialog<List<BarcodeLabelItem>>(
+      context: context,
+      builder: (_) => _BarcodePrintPromptDialog(
+        title: 'طباعة باركود المنتج',
+        skipLabel: 'إلغاء',
+        items: [
+          BarcodeLabelItem(
+            productName: product.name,
+            barcode: product.barcode,
+            quantity: 1,
+          ),
+        ],
+      ),
+    );
+    if (labels == null || labels.isEmpty || !context.mounted) return;
+    await ref.read(barcodeLabelPrinterProvider)(
+      labels,
+      widget.snapshot.barcodeLabelSettings,
+    );
+    if (!context.mounted) return;
+    _showSnack(context, 'تم إرسال الباركود للطباعة');
   }
 
   Future<void> _openProductDialog(

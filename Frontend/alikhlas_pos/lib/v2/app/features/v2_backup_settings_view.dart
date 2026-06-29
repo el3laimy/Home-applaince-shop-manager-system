@@ -143,6 +143,12 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
   late final _footer = TextEditingController(
     text: widget.snapshot.shopSettings.receiptFooter ?? '',
   );
+  late final _barcodeWidth = TextEditingController(
+    text: widget.snapshot.barcodeLabelSettings.widthMm.toString(),
+  );
+  late final _barcodeHeight = TextEditingController(
+    text: widget.snapshot.barcodeLabelSettings.heightMm.toString(),
+  );
   late String _backgroundPreset = widget.snapshot.uiBackground.preset;
   late String? _backgroundImagePath = widget.snapshot.uiBackground.imagePath;
   bool _saving = false;
@@ -153,6 +159,8 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
     _phone.dispose();
     _address.dispose();
     _footer.dispose();
+    _barcodeWidth.dispose();
+    _barcodeHeight.dispose();
     super.dispose();
   }
 
@@ -193,6 +201,37 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                     decoration: const InputDecoration(
                       labelText: 'تذييل الفاتورة',
                     ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'طباعة الباركود',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _barcodeWidth,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'عرض الملصق mm',
+                            prefixIcon: Icon(Icons.width_normal),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _barcodeHeight,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'ارتفاع الملصق mm',
+                            prefixIcon: Icon(Icons.height),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 18),
                   Text(
@@ -268,6 +307,10 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                       ? 'لا توجد'
                       : _fileName(widget.snapshot.uiBackground.imagePath!),
                 ),
+                _InfoLine(
+                  'ملصق الباركود',
+                  '${widget.snapshot.barcodeLabelSettings.widthMm} × ${widget.snapshot.barcodeLabelSettings.heightMm} mm',
+                ),
                 const Divider(height: 24),
                 _InfoLine(
                   'مجلد النسخ',
@@ -315,6 +358,19 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
   }
 
   Future<void> _save() async {
+    final barcodeWidth = _barcodeDimension(_barcodeWidth.text);
+    final barcodeHeight = _barcodeDimension(_barcodeHeight.text);
+    if (barcodeWidth == null || barcodeHeight == null) {
+      _showSnack(context, 'أدخل أبعاد باركود صحيحة بالأرقام');
+      return;
+    }
+    if (!_isBarcodeDimensionAllowed(barcodeWidth, barcodeHeight)) {
+      _showSnack(
+        context,
+        'أبعاد ملصق الباركود يجب أن تكون ضمن الحدود المسموحة',
+      );
+      return;
+    }
     setState(() => _saving = true);
     final result = await ref
         .read(useCasesProvider)
@@ -325,6 +381,18 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
           receiptFooter: _footer.text,
         );
     if (result is AppSuccess<ShopSettingsSnapshot>) {
+      final barcodeResult = await ref
+          .read(useCasesProvider)
+          .updateBarcodeLabelSettings(
+            widthMm: barcodeWidth,
+            heightMm: barcodeHeight,
+          );
+      if (barcodeResult is AppFailure<BarcodeLabelSettingsSnapshot>) {
+        if (!mounted) return;
+        _showSnack(context, barcodeResult.message);
+        setState(() => _saving = false);
+        return;
+      }
       await ref
           .read(useCasesProvider)
           .updateUiBackground(
@@ -336,6 +404,18 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
     _showResult(context, result, success: 'تم حفظ الإعدادات');
     setState(() => _saving = false);
     _refresh(ref);
+  }
+
+  int? _barcodeDimension(String value) {
+    final dimension = int.tryParse(value.trim());
+    return dimension == null || dimension <= 0 ? null : dimension;
+  }
+
+  bool _isBarcodeDimensionAllowed(int widthMm, int heightMm) {
+    return widthMm >= BarcodeLabelSettingsSnapshot.minWidthMm &&
+        widthMm <= BarcodeLabelSettingsSnapshot.maxWidthMm &&
+        heightMm >= BarcodeLabelSettingsSnapshot.minHeightMm &&
+        heightMm <= BarcodeLabelSettingsSnapshot.maxHeightMm;
   }
 
   Future<void> _pickBackgroundImage() async {

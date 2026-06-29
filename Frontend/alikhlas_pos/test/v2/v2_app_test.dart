@@ -531,6 +531,69 @@ void main() {
     expect(product.stockQty, 0);
   });
 
+  testWidgets(
+    'inventory screen reprints a barcode label for an existing product',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final printedItems = <BarcodeLabelItem>[];
+      BarcodeLabelSettingsSnapshot? printedSettings;
+      final useCases = V2UseCases(db);
+      await useCases.bootstrap();
+      final owner = await _success(useCases.login('owner', 'owner123'));
+      await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+      final product = await _success(
+        useCases.createProduct(
+          name: 'باركود تالف',
+          salePriceMinor: 35000,
+          openingQty: 4,
+          openingCostMinor: 22000,
+        ),
+      );
+      await _success(
+        useCases.updateBarcodeLabelSettings(widthMm: 62, heightMm: 28),
+      );
+
+      await _pumpLoggedInWorkbench(
+        tester,
+        db,
+        barcodeLabelPrinter: (items, settings) async {
+          printedItems
+            ..clear()
+            ..addAll(items);
+          printedSettings = settings;
+        },
+      );
+      await tester.tap(find.text('المخزون').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('طباعة باركود بدل تالف'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('طباعة باركود المنتج'), findsOneWidget);
+      expect(find.text('إجمالي الملصقات: 1'), findsOneWidget);
+      await tester.enterText(find.widgetWithText(TextField, 'العدد'), '3');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'طباعة الباركود'));
+      await tester.pumpAndSettle();
+
+      expect(printedItems, hasLength(1));
+      expect(printedItems.single.productName, 'باركود تالف');
+      expect(printedItems.single.barcode, product.barcode);
+      expect(printedItems.single.quantity, 3);
+      expect(printedSettings?.widthMm, 62);
+      expect(printedSettings?.heightMm, 28);
+      final persistedProduct = await (db.select(
+        db.products,
+      )..where((row) => row.id.equals(product.id))).getSingle();
+      expect(persistedProduct.stockQty, 4);
+    },
+  );
+
   testWidgets('inventory product dialog keeps invalid sale price visible', (
     tester,
   ) async {
@@ -710,6 +773,38 @@ void main() {
     expect(await db.select(db.expenses).get(), isEmpty);
   });
 
+  testWidgets('settings screen saves barcode label dimensions', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await _pumpLoggedInWorkbench(tester, db);
+    await tester.tap(find.text('الإعدادات').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'عرض الملصق mm'),
+      '60',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ارتفاع الملصق mm'),
+      '35',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
+    await tester.pumpAndSettle();
+
+    final settings = await useCases.barcodeLabelSettings();
+    expect(settings.widthMm, 60);
+    expect(settings.heightMm, 35);
+  });
+
   testWidgets('purchase flow prints incoming barcode labels from cart', (
     tester,
   ) async {
@@ -721,6 +816,7 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final printedItems = <BarcodeLabelItem>[];
+    BarcodeLabelSettingsSnapshot? printedSettings;
     final useCases = V2UseCases(db);
     await useCases.bootstrap();
     final owner = await _success(useCases.login('owner', 'owner123'));
@@ -734,14 +830,18 @@ void main() {
         openingCostMinor: 0,
       ),
     );
+    await _success(
+      useCases.updateBarcodeLabelSettings(widthMm: 55, heightMm: 25),
+    );
 
     await _pumpLoggedInWorkbench(
       tester,
       db,
-      barcodeLabelPrinter: (items) async {
+      barcodeLabelPrinter: (items, settings) async {
         printedItems
           ..clear()
           ..addAll(items);
+        printedSettings = settings;
       },
     );
     await tester.tap(find.text('الشراء').first);
@@ -773,6 +873,8 @@ void main() {
     expect(printedItems.single.productName, 'ميكروويف ملصق');
     expect(printedItems.single.barcode, product.barcode);
     expect(printedItems.single.quantity, 2);
+    expect(printedSettings?.widthMm, 55);
+    expect(printedSettings?.heightMm, 25);
     expect((await db.select(db.purchaseInvoices).get()).length, 1);
   });
 }

@@ -315,6 +315,9 @@ class _PurchaseViewState extends ConsumerState<_PurchaseView> {
       builder: (_) => _BarcodePrintPromptDialog(items: items),
     );
     if (labels == null || labels.isEmpty || !mounted) return;
-    await ref.read(barcodeLabelPrinterProvider)(labels);
+    await ref.read(barcodeLabelPrinterProvider)(
+      labels,
+      widget.snapshot.barcodeLabelSettings,
+    );
   }
 }

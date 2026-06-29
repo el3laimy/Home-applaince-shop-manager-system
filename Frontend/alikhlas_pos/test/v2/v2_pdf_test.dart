@@ -37,7 +37,10 @@ void main() {
     expect(BarcodeLabelsPdf.printableCount(labels), 3);
     expect(BarcodeLabelsPdf.printableItems(labels), hasLength(1));
 
-    final pdf = await BarcodeLabelsPdf.build(labels);
+    final pdf = await BarcodeLabelsPdf.build(
+      labels,
+      pageFormat: BarcodeLabelsPdf.labelFormat(widthMm: 55, heightMm: 25),
+    );
 
     expect(pdf.length, greaterThan(1000));
     expect(

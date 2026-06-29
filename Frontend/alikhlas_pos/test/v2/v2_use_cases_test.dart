@@ -218,6 +218,31 @@ void main() {
     );
 
     test(
+      'barcode label settings default, save, and validate dimensions',
+      () async {
+        final defaults = await useCases.barcodeLabelSettings();
+
+        expect(defaults.widthMm, 40);
+        expect(defaults.heightMm, 30);
+
+        final saved = await successOf(
+          useCases.updateBarcodeLabelSettings(widthMm: 55, heightMm: 25),
+        );
+        final persisted = await useCases.barcodeLabelSettings();
+        final rejected = await useCases.updateBarcodeLabelSettings(
+          widthMm: 10,
+          heightMm: 25,
+        );
+
+        expect(saved.widthMm, 55);
+        expect(saved.heightMm, 25);
+        expect(persisted.widthMm, 55);
+        expect(persisted.heightMm, 25);
+        expect(rejected, isA<AppFailure<BarcodeLabelSettingsSnapshot>>());
+      },
+    );
+
+    test(
       'cash and wallet sale posts balanced ledger and historical COGS',
       () async {
         final product = await successOf(

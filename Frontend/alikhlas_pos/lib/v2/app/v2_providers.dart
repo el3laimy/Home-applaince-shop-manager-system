@@ -5,7 +5,10 @@ import '../data/app_database.dart';
 import '../printing/barcode_labels_pdf.dart';
 
 typedef BarcodeLabelPrinter =
-    Future<void> Function(List<BarcodeLabelItem> items);
+    Future<void> Function(
+      List<BarcodeLabelItem> items,
+      BarcodeLabelSettingsSnapshot settings,
+    );
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -18,7 +21,13 @@ final useCasesProvider = Provider<V2UseCases>((ref) {
 });
 
 final barcodeLabelPrinterProvider = Provider<BarcodeLabelPrinter>((ref) {
-  return (items) => BarcodeLabelsPdf.printLabels(items);
+  return (items, settings) => BarcodeLabelsPdf.printLabels(
+    items,
+    pageFormat: BarcodeLabelsPdf.labelFormat(
+      widthMm: settings.widthMm,
+      heightMm: settings.heightMm,
+    ),
+  );
 });
 
 final bootstrapProvider = FutureProvider<void>((ref) async {

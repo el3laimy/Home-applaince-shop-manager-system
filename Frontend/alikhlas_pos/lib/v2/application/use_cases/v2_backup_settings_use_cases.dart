@@ -147,11 +147,14 @@ extension V2BackupSettingsUseCases on V2UseCases {
   }
 
   Future<int> _backupRetentionCopies() async {
-    final configuredCopies = int.tryParse(
-      await _settingValue('backup.keepCopies') ?? '',
+    final configuredCopies = await _integerSetting(
+      'backup.keepCopies',
+      fallback: 30,
     );
-    return configuredCopies == null || configuredCopies < 1
-        ? 30
-        : configuredCopies;
+    return configuredCopies < 1 ? 30 : configuredCopies;
+  }
+
+  Future<int> _integerSetting(String key, {required int fallback}) async {
+    return int.tryParse(await _settingValue(key) ?? '') ?? fallback;
   }
 }

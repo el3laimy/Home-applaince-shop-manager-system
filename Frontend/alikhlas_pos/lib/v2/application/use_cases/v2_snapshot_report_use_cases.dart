@@ -98,6 +98,7 @@ extension V2SnapshotReportUseCases on V2UseCases {
       ),
       backupStatus: await _backupStatus(),
       shopSettings: await shopSettings(),
+      barcodeLabelSettings: await barcodeLabelSettings(),
       uiBackground: await uiBackground(),
     );
   }
@@ -125,6 +126,36 @@ extension V2SnapshotReportUseCases on V2UseCases {
     await _upsertSetting('shop.address', address?.trim() ?? '');
     await _upsertSetting('shop.receiptFooter', receiptFooter?.trim() ?? '');
     return AppSuccess(await shopSettings());
+  }
+
+  Future<BarcodeLabelSettingsSnapshot> barcodeLabelSettings() async {
+    return BarcodeLabelSettingsSnapshot(
+      widthMm: await _integerSetting(
+        'barcode.labelWidthMm',
+        fallback: BarcodeLabelSettingsSnapshot.defaultWidthMm,
+      ),
+      heightMm: await _integerSetting(
+        'barcode.labelHeightMm',
+        fallback: BarcodeLabelSettingsSnapshot.defaultHeightMm,
+      ),
+    );
+  }
+
+  Future<AppResult<BarcodeLabelSettingsSnapshot>> updateBarcodeLabelSettings({
+    required int widthMm,
+    required int heightMm,
+  }) async {
+    if (widthMm < BarcodeLabelSettingsSnapshot.minWidthMm ||
+        widthMm > BarcodeLabelSettingsSnapshot.maxWidthMm ||
+        heightMm < BarcodeLabelSettingsSnapshot.minHeightMm ||
+        heightMm > BarcodeLabelSettingsSnapshot.maxHeightMm) {
+      return const AppFailure(
+        'أبعاد ملصق الباركود يجب أن تكون ضمن الحدود المسموحة',
+      );
+    }
+    await _upsertSetting('barcode.labelWidthMm', widthMm.toString());
+    await _upsertSetting('barcode.labelHeightMm', heightMm.toString());
+    return AppSuccess(await barcodeLabelSettings());
   }
 
   Future<UiBackgroundSnapshot> uiBackground() async {
