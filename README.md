@@ -62,6 +62,8 @@ flutter run -d linux
 
 ## الاختبار والبناء
 
+ملف التسليم العملي موجود في `DELIVERY_HANDOFF.md` ويحتوي على commit البناء، روابط artifacts، وchecklist الاختبار اليدوي قبل التسليم النهائي.
+
 ```bash
 cd Frontend/alikhlas_pos
 dart analyze lib/v2 lib/main.dart test/v2
