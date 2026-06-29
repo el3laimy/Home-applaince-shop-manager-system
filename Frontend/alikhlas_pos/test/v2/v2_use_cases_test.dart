@@ -320,6 +320,31 @@ void main() {
       await expectAllLedgerEntriesBalanced(db);
     });
 
+    test('purchase rejects zero unit cost at the use-case boundary', () async {
+      final product = await successOf(
+        useCases.createProduct(
+          name: 'منتج تكلفة صفر',
+          salePriceMinor: 12000,
+          openingQty: 0,
+          openingCostMinor: 0,
+        ),
+      );
+
+      final purchase = await useCases.createPurchase(
+        items: [
+          PurchaseLineInput(productId: product.id, qty: 1, unitCostMinor: 0),
+        ],
+        payments: const [],
+      );
+      final storedProduct = await productById(db, product.id);
+
+      expect(purchase, isA<AppFailure<int>>());
+      expect((purchase as AppFailure<int>).message, 'أدخل سعر شراء صحيح للصنف');
+      expect(storedProduct.stockQty, 0);
+      expect(await db.select(db.purchaseInvoices).get(), isEmpty);
+      expect(await db.select(db.ledgerEntries).get(), isEmpty);
+    });
+
     test(
       'purchase that overdrafts wallet requires approval before writing data',
       () async {
@@ -618,7 +643,7 @@ void main() {
       await successOf(
         useCases.collectInstallment(
           planId: plan.id,
-          amountMinor: 3000,
+          amountMinor: 1500,
           method: PaymentMethod.cash,
         ),
       );
@@ -626,12 +651,27 @@ void main() {
       final updatedPlan = await db.select(db.installmentPlans).getSingle();
       final installments = await db.select(db.installmentPayments).get();
       final snapshot = await useCases.dashboardSnapshot();
+      final statement = await useCases.partyStatement(
+        partyType: 'customer',
+        partyId: customerId,
+      );
+      final currentDetails = statement.last.invoiceDetails!;
 
-      expect(updatedPlan.paidMinor, 3000);
+      expect(updatedPlan.paidMinor, 1500);
       expect(updatedPlan.status, 'open');
-      expect(installments.first.status, 'paid');
-      expect(snapshot.cashMinor, 5000);
-      expect(snapshot.receivablesMinor, 6001);
+      expect(installments.first.status, 'partial');
+      expect(snapshot.cashMinor, 3500);
+      expect(snapshot.receivablesMinor, 7501);
+      expect(statement, hasLength(2));
+      expect(currentDetails.paidMinor, 3500);
+      expect(currentDetails.remainingMinor, 7501);
+      expect(currentDetails.payments.map((payment) => payment.amountMinor), [
+        2000,
+        1500,
+      ]);
+      expect(currentDetails.installments.first.status, 'partial');
+      expect(currentDetails.installments.first.paidMinor, 1500);
+      expect(currentDetails.installments.first.remainingMinor, 1500);
       await expectAllLedgerEntriesBalanced(db);
     });
 
@@ -859,8 +899,8 @@ void main() {
       expect(supplierStatement, hasLength(2));
       expect(supplierStatement.first.invoiceDetails?.type, 'purchase');
       expect(supplierStatement.first.invoiceDetails?.totalMinor, 20000);
-      expect(supplierStatement.first.invoiceDetails?.paidMinor, 0);
-      expect(supplierStatement.first.invoiceDetails?.remainingMinor, 20000);
+      expect(supplierStatement.first.invoiceDetails?.paidMinor, 20000);
+      expect(supplierStatement.first.invoiceDetails?.remainingMinor, 0);
       expect(
         supplierStatement.first.invoiceDetails?.items.single.productName,
         'شفاط',
@@ -1237,11 +1277,19 @@ void main() {
       final updatedPlan = await (db.select(
         db.installmentPlans,
       )..where((plan) => plan.ownerType.equals('sale'))).getSingle();
+      final customerStatement = await useCases.partyStatement(
+        partyType: 'customer',
+        partyId: customerId,
+      );
+      final currentSaleDetails = customerStatement.last.invoiceDetails!;
 
       expect(storedProduct.stockQty, 2);
       expect(storedProduct.avgCostMinor, 7000);
       expect(returnItem.unitPriceMinor, 9000);
       expect(updatedPlan.paidMinor, 1000);
+      expect(currentSaleDetails.returnedMinor, 9000);
+      expect(currentSaleDetails.paidMinor, 9000);
+      expect(currentSaleDetails.remainingMinor, 1000);
       expect(dashboard.salesMinor, 9000);
       expect(dashboard.cogsMinor, 7000);
       expect(period.interestMinor, 1000);

@@ -246,8 +246,15 @@ class _StatementInvoicePreview extends StatelessWidget {
                   _MiniInfo('الخصم', Money(details.discountMinor).format()),
                 if (details.interestMinor > 0)
                   _MiniInfo('الفائدة', Money(details.interestMinor).format()),
+                if (details.returnedMinor > 0)
+                  _MiniInfo('المرتجع', Money(details.returnedMinor).format()),
                 if (details.discountMinor > 0 || details.interestMinor > 0)
                   _MiniInfo('الصافي', Money(details.totalMinor).format()),
+                if (details.returnedMinor > 0)
+                  _MiniInfo(
+                    'بعد المرتجع',
+                    Money(_statementInvoiceDueAfterReturns(details)).format(),
+                  ),
                 _MiniInfo('المدفوع', Money(details.paidMinor).format()),
                 _MiniInfo('المتبقي', Money(details.remainingMinor).format()),
               ],
@@ -290,7 +297,11 @@ String _statementInvoiceSummaryText(StatementInvoiceDetails details) {
       'خصم ${Money(details.discountMinor).format()}',
     if (details.interestMinor > 0)
       'فائدة ${Money(details.interestMinor).format()}',
+    if (details.returnedMinor > 0)
+      'مرتجع ${Money(details.returnedMinor).format()}',
     'الصافي ${Money(details.totalMinor).format()}',
+    if (details.returnedMinor > 0)
+      'بعد المرتجع ${Money(_statementInvoiceDueAfterReturns(details)).format()}',
     'المدفوع ${Money(details.paidMinor).format()}',
     'المتبقي ${Money(details.remainingMinor).format()}',
   ];
@@ -300,6 +311,11 @@ String _statementInvoiceSummaryText(StatementInvoiceDetails details) {
 int _statementInvoiceSubtotal(StatementInvoiceDetails details) {
   return details.subtotalMinor ??
       details.items.fold<int>(0, (sum, item) => sum + item.lineTotalMinor);
+}
+
+int _statementInvoiceDueAfterReturns(StatementInvoiceDetails details) {
+  final dueMinor = details.totalMinor - details.returnedMinor;
+  return dueMinor < 0 ? 0 : dueMinor;
 }
 
 List<(String, String, IconData)> _statementInvoiceDetailMetrics(
@@ -315,8 +331,20 @@ List<(String, String, IconData)> _statementInvoiceDetailMetrics(
       ('خصم الفاتورة', Money(details.discountMinor).format(), Icons.sell),
     if (details.interestMinor > 0)
       ('فائدة التقسيط', Money(details.interestMinor).format(), Icons.percent),
+    if (details.returnedMinor > 0)
+      (
+        'مرتجعات وتسويات',
+        Money(details.returnedMinor).format(),
+        Icons.keyboard_return,
+      ),
     if (details.discountMinor > 0 || details.interestMinor > 0)
       ('صافي الفاتورة', Money(details.totalMinor).format(), Icons.calculate),
+    if (details.returnedMinor > 0)
+      (
+        'المستحق بعد المرتجعات',
+        Money(_statementInvoiceDueAfterReturns(details)).format(),
+        Icons.price_check,
+      ),
     ('المدفوع', Money(details.paidMinor).format(), Icons.payments),
     ('المتبقي', Money(details.remainingMinor).format(), Icons.account_balance),
     ('التاريخ', _dateTime(details.createdAt), Icons.event),
@@ -426,7 +454,7 @@ class _StatementInvoicePayments extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (details.payments.isEmpty) {
-      return const Center(child: Text('لا توجد دفعات فورية'));
+      return const Center(child: Text('لا توجد دفعات مسجلة'));
     }
     return ListView.separated(
       itemCount: details.payments.length,
@@ -464,20 +492,36 @@ class _StatementInvoiceInstallments extends StatelessWidget {
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final installment = details.installments[index];
-        final paidLabel = installment.paidAt == null
-            ? 'غير مدفوع'
-            : 'مدفوع ${_date(installment.paidAt!)}';
+        final paidLabel = _statementInstallmentStatus(installment);
         return ListTile(
           dense: true,
           leading: Icon(
-            installment.status == 'paid' ? Icons.check_circle : Icons.schedule,
+            installment.remainingMinor == 0
+                ? Icons.check_circle
+                : installment.paidMinor > 0
+                ? Icons.timelapse
+                : Icons.schedule,
           ),
           title: Text(Money(installment.amountMinor).format()),
-          subtitle: Text('استحقاق ${_date(installment.dueDate)} · $paidLabel'),
+          subtitle: Text(
+            'استحقاق ${_date(installment.dueDate)} · $paidLabel'
+            ' · مدفوع ${Money(installment.paidMinor).format()}'
+            ' · متبقي ${Money(installment.remainingMinor).format()}',
+          ),
         );
       },
     );
   }
+}
+
+String _statementInstallmentStatus(StatementInstallmentDetail installment) {
+  if (installment.remainingMinor == 0) {
+    return installment.paidAt == null
+        ? 'مدفوع'
+        : 'مدفوع ${_date(installment.paidAt!)}';
+  }
+  if (installment.paidMinor > 0) return 'مدفوع جزئيًا';
+  return 'مستحق';
 }
 
 String _statementReferenceLabel(String referenceType) {

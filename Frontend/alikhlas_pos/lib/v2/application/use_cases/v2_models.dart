@@ -220,6 +220,7 @@ class StatementInvoiceDetails {
     this.subtotalMinor,
     this.discountMinor = 0,
     this.interestMinor = 0,
+    this.returnedMinor = 0,
   });
 
   final String type;
@@ -228,6 +229,7 @@ class StatementInvoiceDetails {
   final int? subtotalMinor;
   final int discountMinor;
   final int interestMinor;
+  final int returnedMinor;
   final int totalMinor;
   final int paidMinor;
   final int remainingMinor;
@@ -265,12 +267,16 @@ class StatementPaymentDetail {
 class StatementInstallmentDetail {
   const StatementInstallmentDetail({
     required this.amountMinor,
+    required this.paidMinor,
+    required this.remainingMinor,
     required this.dueDate,
     required this.status,
     this.paidAt,
   });
 
   final int amountMinor;
+  final int paidMinor;
+  final int remainingMinor;
   final DateTime dueDate;
   final String status;
   final DateTime? paidAt;

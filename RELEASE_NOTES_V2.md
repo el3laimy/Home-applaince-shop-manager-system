@@ -26,6 +26,10 @@
 - Sale receipt, party statement, and report PDFs use the bundled Cairo font assets without loading fonts at print time.
 - Product images and custom background images are copied into the application data directory before saving their paths.
 - Party statements show invoice totals, paid amounts, remaining balances, invoice items, payments, and sale installment details in the UI and PDF output.
+- Party statement invoice details now derive current paid/remaining values from direct payments, installment-plan payments, and sale returns instead of stale invoice snapshots.
+- Sale returns keep installment interest as non-refundable by default; any interest refund must be posted later as an explicit manual settlement.
+- Purchases reject zero unit cost at the use-case boundary, not only in the UI.
+- Partial installment payments are shown as partial in statement details and PDFs with paid/remaining amounts.
 - Money input parsing is centralized around integer minor units, accepts Arabic and English digits, and blocks invalid text before any workflow is posted.
 - A full owner operating-day test covers login/change password, shift, purchase, sale, installment collection, return, close shift, and backup.
 

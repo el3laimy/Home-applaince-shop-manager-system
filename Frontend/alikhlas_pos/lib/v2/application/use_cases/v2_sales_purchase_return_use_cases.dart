@@ -206,8 +206,11 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
         var total = 0;
         final products = <int, Product>{};
         for (final item in items) {
-          if (item.qty <= 0 || item.unitCostMinor < 0) {
+          if (item.qty <= 0) {
             throw _BusinessError('تحقق من الكمية وسعر الشراء');
+          }
+          if (item.unitCostMinor <= 0) {
+            throw _BusinessError('أدخل سعر شراء صحيح للصنف');
           }
           final product = await (db.select(
             db.products,

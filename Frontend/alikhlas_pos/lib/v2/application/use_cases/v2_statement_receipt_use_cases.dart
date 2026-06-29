@@ -49,13 +49,14 @@ extension V2StatementReceiptUseCases on V2UseCases {
               ..where((row) => row.saleId.equals(saleId))
               ..orderBy([(row) => OrderingTerm.asc(row.id)]))
             .get();
-    final paymentRows = await _paymentsFor('sale', saleId);
     final plan =
         await (db.select(db.installmentPlans)..where(
               (row) =>
                   row.ownerType.equals('sale') & row.ownerId.equals(saleId),
             ))
             .getSingleOrNull();
+    final paymentRows = await _invoicePayments('sale', saleId, plan);
+    final returnedMinor = await _saleReturnedMinor(saleId);
     return StatementInvoiceDetails(
       type: 'sale',
       invoiceNo: invoice.invoiceNo,
@@ -63,12 +64,15 @@ extension V2StatementReceiptUseCases on V2UseCases {
       subtotalMinor: invoice.subtotalMinor,
       discountMinor: invoice.discountMinor,
       interestMinor: invoice.interestMinor,
+      returnedMinor: returnedMinor,
       totalMinor: invoice.totalMinor,
-      paidMinor: invoice.paidMinor,
-      remainingMinor: invoice.remainingMinor,
+      paidMinor: invoice.paidMinor + (plan?.paidMinor ?? 0),
+      remainingMinor: plan == null
+          ? math.max(0, invoice.totalMinor - invoice.paidMinor - returnedMinor)
+          : math.max(0, plan.totalMinor - plan.paidMinor),
       items: await _saleStatementItems(items),
       payments: paymentRows,
-      installments: plan == null ? const [] : await _installmentsFor(plan.id),
+      installments: plan == null ? const [] : await _installmentsFor(plan),
     );
   }
 
@@ -84,7 +88,6 @@ extension V2StatementReceiptUseCases on V2UseCases {
               ..where((row) => row.purchaseId.equals(purchaseId))
               ..orderBy([(row) => OrderingTerm.asc(row.id)]))
             .get();
-    final paymentRows = await _paymentsFor('purchase', purchaseId);
     final plan =
         await (db.select(db.installmentPlans)..where(
               (row) =>
@@ -92,16 +95,19 @@ extension V2StatementReceiptUseCases on V2UseCases {
                   row.ownerId.equals(purchaseId),
             ))
             .getSingleOrNull();
+    final paymentRows = await _invoicePayments('purchase', purchaseId, plan);
     return StatementInvoiceDetails(
       type: 'purchase',
       invoiceNo: invoice.invoiceNo,
       createdAt: invoice.createdAt,
       totalMinor: invoice.totalMinor,
-      paidMinor: invoice.paidMinor,
-      remainingMinor: invoice.remainingMinor,
+      paidMinor: invoice.paidMinor + (plan?.paidMinor ?? 0),
+      remainingMinor: plan == null
+          ? math.max(0, invoice.totalMinor - invoice.paidMinor)
+          : math.max(0, plan.totalMinor - plan.paidMinor),
       items: await _purchaseStatementItems(items),
       payments: paymentRows,
-      installments: plan == null ? const [] : await _installmentsFor(plan.id),
+      installments: plan == null ? const [] : await _installmentsFor(plan),
     );
   }
 
@@ -145,6 +151,19 @@ extension V2StatementReceiptUseCases on V2UseCases {
     return items;
   }
 
+  Future<List<StatementPaymentDetail>> _invoicePayments(
+    String ownerType,
+    int ownerId,
+    InstallmentPlan? plan,
+  ) async {
+    final payments = [
+      ...await _paymentsFor(ownerType, ownerId),
+      if (plan != null) ...await _paymentsFor('installment_plan', plan.id),
+    ];
+    payments.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return payments;
+  }
+
   Future<List<StatementPaymentDetail>> _paymentsFor(
     String ownerType,
     int ownerId,
@@ -167,18 +186,43 @@ extension V2StatementReceiptUseCases on V2UseCases {
     }).toList();
   }
 
-  Future<List<StatementInstallmentDetail>> _installmentsFor(int planId) async {
+  Future<int> _saleReturnedMinor(int saleId) async {
+    final returns = await (db.select(
+      db.saleReturns,
+    )..where((row) => row.saleId.equals(saleId))).get();
+    return returns.fold<int>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.refundMinor,
+    );
+  }
+
+  Future<List<StatementInstallmentDetail>> _installmentsFor(
+    InstallmentPlan plan,
+  ) async {
     final rows =
         await (db.select(db.installmentPayments)
-              ..where((row) => row.planId.equals(planId))
+              ..where((row) => row.planId.equals(plan.id))
               ..orderBy([(row) => OrderingTerm.asc(row.dueDate)]))
             .get();
+    var remainingPaid = plan.paidMinor;
     return rows.map((payment) {
+      final paidMinor = remainingPaid <= 0
+          ? 0
+          : math.min(remainingPaid, payment.amountMinor);
+      remainingPaid -= paidMinor;
+      final remainingMinor = payment.amountMinor - paidMinor;
+      final status = remainingMinor == 0
+          ? 'paid'
+          : paidMinor > 0
+          ? 'partial'
+          : 'pending';
       return StatementInstallmentDetail(
         amountMinor: payment.amountMinor,
+        paidMinor: paidMinor,
+        remainingMinor: remainingMinor,
         dueDate: payment.dueDate,
-        status: payment.status,
-        paidAt: payment.paidAt,
+        status: status,
+        paidAt: status == 'paid' ? payment.paidAt : null,
       );
     }).toList();
   }

@@ -78,7 +78,7 @@ void main() {
       );
 
       await successOf(useCases.openShift(0));
-      await successOf(
+      final saleId = await successOf(
         useCases.createSale(
           customerId: customerId,
           items: [
@@ -95,6 +95,26 @@ void main() {
             count: 4,
             firstDueDate: DateTime(2026, 7),
           ),
+        ),
+      );
+      final plan = await (db.select(
+        db.installmentPlans,
+      )..where((row) => row.ownerType.equals('sale'))).getSingle();
+      await successOf(
+        useCases.collectInstallment(
+          planId: plan.id,
+          amountMinor: 1500,
+          method: PaymentMethod.cash,
+        ),
+      );
+      final saleItem = await (db.select(
+        db.saleItems,
+      )..where((row) => row.saleId.equals(saleId))).getSingle();
+      await successOf(
+        useCases.createSaleReturn(
+          saleId: saleId,
+          saleItemQuantities: {saleItem.id: 1},
+          refundMethod: PaymentMethod.installment,
         ),
       );
       await successOf(
@@ -128,23 +148,40 @@ void main() {
         partyId: supplierId,
       );
 
+      final customerDetails = customerStatement.last.invoiceDetails!;
+      expect(customerDetails.invoiceNo, startsWith('S-'));
+      expect(customerDetails.items.single.productName, 'شاشة PDF');
+      expect(customerDetails.subtotalMinor, 16000);
+      expect(customerDetails.discountMinor, 1000);
+      expect(customerDetails.items.single.lineTotalMinor, 16000);
+      expect(customerDetails.totalMinor, 15000);
+      expect(customerDetails.returnedMinor, 7500);
+      expect(customerDetails.paidMinor, 6500);
+      expect(customerDetails.remainingMinor, 1000);
+      expect(customerDetails.payments.map((payment) => payment.amountMinor), [
+        5000,
+        1500,
+      ]);
       expect(
-        customerStatement.single.invoiceDetails?.invoiceNo,
-        startsWith('S-'),
+        customerDetails.installments.fold<int>(
+          0,
+          (sum, installment) => sum + installment.paidMinor,
+        ),
+        1500,
       );
       expect(
-        customerStatement.single.invoiceDetails?.items.single.productName,
-        'شاشة PDF',
+        customerDetails.installments.fold<int>(
+          0,
+          (sum, installment) => sum + installment.remainingMinor,
+        ),
+        1000,
       );
-      expect(customerStatement.single.invoiceDetails?.subtotalMinor, 16000);
-      expect(customerStatement.single.invoiceDetails?.discountMinor, 1000);
       expect(
-        customerStatement.single.invoiceDetails?.items.single.lineTotalMinor,
-        16000,
+        customerDetails.installments.any(
+          (installment) => installment.status == 'partial',
+        ),
+        isTrue,
       );
-      expect(customerStatement.single.invoiceDetails?.totalMinor, 15000);
-      expect(customerStatement.single.invoiceDetails?.paidMinor, 5000);
-      expect(customerStatement.single.invoiceDetails?.remainingMinor, 10000);
       expect(
         supplierStatement.single.invoiceDetails?.invoiceNo,
         startsWith('P-'),

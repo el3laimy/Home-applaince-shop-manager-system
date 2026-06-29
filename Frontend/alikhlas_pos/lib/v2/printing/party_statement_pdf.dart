@@ -202,6 +202,13 @@ class PartyStatementPdf {
                   regular,
                 ),
                 _metricBox('المدفوع', _money(details.paidMinor), bold, regular),
+                if (details.returnedMinor > 0)
+                  _metricBox(
+                    'المرتجع',
+                    _money(details.returnedMinor),
+                    bold,
+                    regular,
+                  ),
                 _metricBox(
                   'المتبقي',
                   _money(details.remainingMinor),
@@ -302,7 +309,11 @@ class PartyStatementPdf {
             pw.SizedBox(height: 4),
             for (final installment in details.installments)
               _plainLine(
-                'استحقاق ${_date(installment.dueDate)} - ${_money(installment.amountMinor)} - ${installment.status == 'paid' ? 'مدفوع' : 'مستحق'}',
+                'استحقاق ${_date(installment.dueDate)} - '
+                'قيمة ${_money(installment.amountMinor)} - '
+                'مدفوع ${_money(installment.paidMinor)} - '
+                'متبقي ${_money(installment.remainingMinor)} - '
+                '${_installmentStatusLabel(installment)}',
                 regular,
               ),
           ],
@@ -366,8 +377,22 @@ class PartyStatementPdf {
             _amountLine('خصم الفاتورة', -details.discountMinor, bold, regular),
           if (details.interestMinor > 0)
             _amountLine('فائدة التقسيط', details.interestMinor, bold, regular),
+          if (details.returnedMinor > 0)
+            _amountLine(
+              'مرتجعات وتسويات',
+              -details.returnedMinor,
+              bold,
+              regular,
+            ),
           pw.Divider(color: PdfColors.grey400, height: 8),
           _amountLine('صافي الفاتورة', details.totalMinor, bold, bold),
+          if (details.returnedMinor > 0)
+            _amountLine(
+              'المستحق بعد المرتجعات',
+              _invoiceDueAfterReturns(details),
+              bold,
+              regular,
+            ),
           _amountLine('المدفوع', details.paidMinor, bold, regular),
           _amountLine('المتبقي', details.remainingMinor, bold, bold),
         ],
@@ -488,6 +513,11 @@ class PartyStatementPdf {
     return items.fold<int>(0, (sum, item) => sum + item.lineTotalMinor);
   }
 
+  static int _invoiceDueAfterReturns(StatementInvoiceDetails details) {
+    final dueMinor = details.totalMinor - details.returnedMinor;
+    return dueMinor < 0 ? 0 : dueMinor;
+  }
+
   static String _invoiceType(StatementInvoiceDetails details) {
     return details.type == 'purchase' ? 'فاتورة شراء' : 'فاتورة بيع';
   }
@@ -503,6 +533,14 @@ class PartyStatementPdf {
   static String _movementAmount(PartyStatementLine line) {
     final amount = line.debitMinor > 0 ? line.debitMinor : line.creditMinor;
     return _money(amount);
+  }
+
+  static String _installmentStatusLabel(
+    StatementInstallmentDetail installment,
+  ) {
+    if (installment.remainingMinor == 0) return 'مدفوع';
+    if (installment.paidMinor > 0) return 'مدفوع جزئيًا';
+    return 'مستحق';
   }
 
   static String _paymentLabel(PaymentMethod method) {
