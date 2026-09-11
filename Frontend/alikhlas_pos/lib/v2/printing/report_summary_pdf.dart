@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 
 import '../application/v2_use_cases.dart';
 import '../core/money.dart';
+import 'pdf_fonts.dart';
 
 class ReportSummaryPdf {
   const ReportSummaryPdf._();
@@ -25,8 +26,9 @@ class ReportSummaryPdf {
     required PeriodReportSnapshot report,
     required ShopSettingsSnapshot settings,
   }) async {
-    final regular = await PdfGoogleFonts.cairoRegular();
-    final bold = await PdfGoogleFonts.cairoBold();
+    final fonts = await PdfFonts.loadCairo();
+    final regular = fonts.regular;
+    final bold = fonts.bold;
     final theme = pw.ThemeData.withFont(base: regular, bold: bold);
     final doc = pw.Document(theme: theme);
 
@@ -76,6 +78,7 @@ class ReportSummaryPdf {
       ('المبيعات', report.salesMinor),
       ('تكلفة البضاعة', report.cogsMinor),
       ('المصروفات', report.expensesMinor),
+      ('فروق الجرد', report.inventoryVarianceMinor),
       ('الفوائد', report.interestMinor),
       ('الربح', report.profitMinor),
       ('صافي الكاش', report.cashNetMinor),
@@ -104,7 +107,7 @@ class ReportSummaryPdf {
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
-                  Money(row.$2).format(),
+                  Money(row.$2).formatPlain(),
                   style: pw.TextStyle(font: bold, fontSize: 13),
                 ),
               ],

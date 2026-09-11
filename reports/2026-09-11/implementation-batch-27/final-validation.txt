@@ -1,0 +1,25 @@
+dart analyze lib/v2 lib/main.dart test/v2
+Analyzing v2, main.dart, v2...
+No issues found!
+
+flutter test --no-pub test/v2
+02:08 +150: All tests passed!
+
+git diff --check
+PASS
+
+flutter build linux --release --no-pub
+Building Linux application...
+Built build/linux/x64/release/bundle/alikhlas_pos
+
+bash tool/build_linux_deb.sh build/linux/x64/release/bundle ../../reports/2026-09-11/implementation-batch-27 1.0.0
+../../reports/2026-09-11/implementation-batch-27/alikhlas-pos_1.0.0_amd64.deb
+
+dpkg-deb --info
+Package: alikhlas-pos
+Version: 1.0.0
+Architecture: amd64
+Depends: libgtk-3-0, libstdc++6, liblzma5
+
+sha256sum
+6a6476e0285cca9d20c2e25431548fbffb50fc20f471e078435e5cc3f65cbcc0  alikhlas-pos_1.0.0_amd64.deb

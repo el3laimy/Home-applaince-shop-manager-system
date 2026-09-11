@@ -6,6 +6,7 @@ class AccountCodes {
   static const receivables = 'receivables';
   static const payables = 'payables';
   static const inventory = 'inventory';
+  static const inventoryVariance = 'inventory_variance';
   static const sales = 'sales';
   static const cogs = 'cogs';
   static const expenses = 'expenses';

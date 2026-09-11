@@ -12,7 +12,8 @@
 
 - Local owner login with forced default password change.
 - PBKDF2-SHA256 password hashing with legacy SHA-256 upgrade on login.
-- SQLite WAL setup and drift schema version 4.
+- SQLite WAL with `synchronous=FULL` and drift schema version 7.
+- Schema v5 adds `products.imagePath`; schema v6 adds auditable inventory-adjustment documents; schema v7 adds opening-balance documents protected by durable operation receipts.
 - Ledger-based sales, purchases, expenses, installments, returns, shifts, and reports.
 - Sale returns handle installment over-refund correctly:
   - receivable settlement is capped at remaining customer debt;
@@ -21,6 +22,22 @@
 - Expense records are stored in an `expenses` table and posted to the ledger.
 - Backup uses `VACUUM INTO`, keeps the latest 30 backup files, and restore clears WAL/SHM sidecar files.
 - Liquid Glass daily operations UI covers dashboard, POS, inventory, parties, purchases, installments, returns, reports, backup, and settings.
+- Apple/iOS-inspired Liquid Glass polish now uses bundled Cairo Arabic fonts, shared theme tokens, stronger glass contrast, opt-in real blur, and golden coverage for login/dashboard/POS/reports surfaces.
+- Sale receipt, party statement, and report PDFs use the bundled Cairo font assets without loading fonts at print time.
+- Product images and custom background images are copied into the application data directory before saving their paths.
+- Party statements show invoice totals, paid amounts, remaining balances, invoice items, payments, and sale installment details in the UI and PDF output.
+- Party statement invoice details now derive current paid/remaining values from direct payments, installment-plan payments, and sale returns instead of stale invoice snapshots.
+- Barcode label printing defaults to 40x30mm, can be adjusted from Settings, and supports both incoming-stock labels and reprinting an existing product label from Inventory.
+- Windows and Linux release bundles can be produced from the `Desktop Release Build` GitHub Actions workflow.
+- Sale returns keep installment interest as non-refundable by default; any interest refund must be posted later as an explicit manual settlement.
+- Purchases reject zero unit cost at the use-case boundary, not only in the UI.
+- Partial installment payments are shown as partial in statement details and PDFs with paid/remaining amounts.
+- Money input parsing is centralized around integer minor units, accepts Arabic and English digits, and blocks invalid text before any workflow is posted.
+- A full owner operating-day test covers login/change password, shift, purchase, sale, installment collection, return, close shift, and backup.
+- Sale and purchase drafts survive restart without posting financial records and warn before leaving unsaved edits.
+- Financial mutations use durable operation receipts and recoverable pending requests to prevent duplicate posting after rapid taps or a lost reply.
+- Opening balances use the same receipt, payload-conflict, rollback, and pending-recovery contract as the other financial mutations.
+- Inventory reconciliation records the counted quantity, reason, stock movement, ledger variance, and idempotency receipt in one transaction.
 
 ## Verification
 
@@ -43,8 +60,14 @@ The v2 test suite covers:
 - installment collection and supplier payment;
 - expenses;
 - partial returns and installment return overflow;
-- backup/restore and v3 to v4 migration.
+- backup/restore and v3/v4 to v7 migration.
+- inventory-adjustment accounting, recovery, integrity checks, and minimum-window UI coverage.
+- Cairo theme, glass contrast, centralized blur, and visual golden snapshots for login/dashboard/POS/reports.
+- party statement PDF smoke coverage with invoice details.
+- local image copy coverage for product and background images.
 
 ## Remaining
 
 - Validate Windows build on a Windows machine or Windows CI.
+- Validate printed sale receipts and party statements on the target thermal/A4 printers.
+- Sign and field-test the Windows installer and clean-install/upgrade/remove the Debian package before end-user release.

@@ -1,36 +1,46 @@
-# مشروع ALIkhlasPOS (نظام الكاشير والإدارة)
+# مشروع ALIkhlasPOS v2
 
-## نظرة عامة (Overview)
-نظام متكامل لإدارة نقاط البيع (POS) وتخطيط موارد المؤسسات (ERP) مصمم للمراكز التجارية، وتحديداً محلات الأدوات المنزلية وتجهيزات العرائس. يركز النظام على السرعة، إدارة المخزون، ودعم المبيعات المعقدة مثل الأقساط (Installments) والمجموعات (Bundles).
+## الحالة الحالية
 
-## المكدس التقني (Tech Stack)
-- **الواجهة الأمامية (Frontend):** Flutter for Desktop (Windows/Linux) - لضمان تجربة مستخدم عصرية وسريعة.
-- **الواجهة الخلفية (Backend):** C# .NET 9 Web API - مبنية باستخدام Clean Architecture و CQRS pattern.
-- **قواعد البيانات (Databases):** 
-  - PostgreSQL (القاعدة الأساسية).
-  - Redis (للتخزين المؤقت Caching للباركود والأسعار والـ Sessions).
+ALIkhlasPOS v2 هو تطبيق Flutter Desktop محلي لإدارة محل واحد، ويعمل بدون Backend منفصل أو Docker أو PostgreSQL أو Redis. المسار النشط الوحيد هو:
 
-## الهندسة المعمارية (Architecture)
-### Backend (.NET Core)
-مقسم إلى عدة طبقات (Layers) لضمان الفصل النظيف (Separation of Concerns):
-- **API Layer:** مسؤولة عن استقبال الطلبات (Controllers) مثل `SuppliersController` والمصادقة.
-- **Application Layer:** تحتوي على الـ Use Cases، الـ DTOs، والـ Interfaces (مثل `IUnitOfWork` و `IRepository`).
-- **Domain Layer:** تحتوي على الكيانات الأساسية (Entities) مثل `Invoice`, `ProductUnit`, `Supplier`، وقواعد العمل (Business Rules).
-- **Infrastructure Layer:** مسؤولة عن الاتصال بقاعدة البيانات (Entity Framework Core)، الـ Migrations، وعمليات الـ Redis.
+`Frontend/alikhlas_pos`
 
-### Frontend (Flutter)
-- تصميم يعتمد على الـ Widgets القابلة لإعادة الاستخدام.
-- إدارة الحالة (State Management) باستخدام Provider/Riverpod أو Bloc (حسب المطبق).
-- هيكلة المجلدات تتضمن `core` للأساسيات المشتركة (مثل `main_shell.dart`)، و `features` لكل وحدة وظيفية (POS, Inventory, Customers، الخ).
+## المكدس التقني
 
-## الميزات والوحدات الأساسية (Core Features)
-1. **محرك الباركود الذكي:** دعم EAN-13 و Code 128، مع توليد باركود تلقائي للأصناف غير المعلمة.
-2. **إدارة المخازن (Inventory):** دعم الأصناف المركبة (Bundles) وتعدد الوحدات (قطعة، دستة، كرتونة) للمنتج الواحد.
-3. **نظام العرائس والأقساط:** حجز بضائع، جدولة أقساط، وإصدار كشوفات حساب مفصلة للمتبقيات والدفعات.
-4. **الموردين والمصروفات (Suppliers & Expenses):** تتبع حسابات الموردين، وإدارة المصروفات اليومية للمحل.
-5. **المزامنة مع الخزينة (Treasury Sync):** تسجيل المبيعات النقدية والمقدمات بشكل تلقائي في الخزينة.
+- Flutter Desktop مستهدف لـ Linux وWindows.
+- SQLite عبر drift.
+- Riverpod لإدارة حالة التطبيق.
+- PDF/printing للطباعة والتصدير.
+- واجهة Apple/iOS-inspired Liquid Glass بخط Cairo مدمج محليًا.
 
-## تعليمات برمجية (Coding Conventions)
-- **Backend:** استخدام C# الحديثة، حقن التبعيات (Dependency Injection)، معالجة الأخطاء الشاملة (Global Exception Handling)، واستخدام الـ Async/Await بشكل كامل.
-- **Frontend:** الحفاظ على اللغات (Localization) باللغة العربية، استخدام Material Design، وفصل منطق واجهة المستخدم عن منطق الأعمال (UI/Business Logic Separation).
-- جميع الرسائل، التنبيهات، والتوثيقات يجب أن تكون بـ **اللغة العربية** لسهولة التواصل مع المستخدم النهائي.
+## قواعد العمل الأساسية
+
+- كل المال يُخزن كـ integer minor units، وليس `double`.
+- الدفتر `LedgerEntry` و`LedgerLine` هو مصدر الحقيقة للأرصدة والتقارير.
+- العمليات المالية تمر عبر use-cases في `lib/v2/application/v2_use_cases.dart`.
+- لا VAT في v2.
+- المستخدم الحالي مالك واحد محليًا، بدون أدوار أو صلاحيات متعددة.
+- المرتجعات تعكس قيمة البضاعة وCOGS، وفائدة التقسيط لا تُرد تلقائيًا.
+
+## وحدات v2
+
+- POS والبيع المختلط: كاش، محفظة، تقسيط.
+- المشتريات وتحديث WAC.
+- المخزون وصور المنتجات وطباعة باركود الوارد.
+- العملاء والموردون وكشف الحساب التفاعلي/PDF.
+- الأقساط، المصروفات، التقارير، الوردية، النسخ الاحتياطي والاسترجاع.
+
+## تعليمات التطوير
+
+- لا تعدل schema أو قواعد ledger إلا لاختبار bug محاسبي مؤكد.
+- حافظ على اشتقاق التقارير والأرصدة من `LedgerLine`.
+- اختبر أي تغيير مالي على SQLite الحقيقي.
+- أوامر التحقق الأساسية:
+
+```bash
+cd Frontend/alikhlas_pos
+dart analyze lib/v2 lib/main.dart test/v2
+flutter test
+HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter/bin/flutter build linux
+```

@@ -1,11 +1,11 @@
 {
-    "name": "alikhlas_pos",
-    "short_name": "alikhlas_pos",
+    "name": "ALIkhlasPOS v2",
+    "short_name": "ALIkhlasPOS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#EAF7F8",
+    "theme_color": "#0D817B",
+    "description": "Offline POS and inventory desktop app for ALIkhlas.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
