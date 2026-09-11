@@ -305,6 +305,7 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
   late String _backgroundPreset = widget.snapshot.uiBackground.preset;
   late String? _backgroundImagePath = widget.snapshot.uiBackground.imagePath;
   bool _saving = false;
+  bool _openingBalanceSubmitting = false;
 
   @override
   void dispose() {
@@ -433,64 +434,90 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
             ),
           );
           final summary = _GlassPane(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'ملخص التشغيل',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                _InfoLine('اسم المحل', widget.snapshot.shopSettings.shopName),
-                _InfoLine(
-                  'الهاتف',
-                  widget.snapshot.shopSettings.phone ?? 'غير مسجل',
-                ),
-                _InfoLine(
-                  'العنوان',
-                  widget.snapshot.shopSettings.address ?? 'غير مسجل',
-                ),
-                _InfoLine(
-                  'الخلفية',
-                  _backgroundLabel(widget.snapshot.uiBackground.preset),
-                ),
-                _InfoLine(
-                  'صورة الخلفية',
-                  widget.snapshot.uiBackground.imagePath == null
-                      ? 'لا توجد'
-                      : _fileName(widget.snapshot.uiBackground.imagePath!),
-                ),
-                _InfoLine(
-                  'ملصق الباركود',
-                  '${widget.snapshot.barcodeLabelSettings.widthMm} × ${widget.snapshot.barcodeLabelSettings.heightMm} mm',
-                ),
-                const Divider(height: 24),
-                _InfoLine(
-                  'مجلد النسخ',
-                  widget.snapshot.backupStatus.directory ?? 'لم يتم اختياره',
-                ),
-                _InfoLine(
-                  'آخر نسخة تلقائية',
-                  widget.snapshot.backupStatus.lastDate ?? 'لا يوجد',
-                ),
-                _InfoLine(
-                  'آخر ملف',
-                  widget.snapshot.backupStatus.latestBackupPath == null
-                      ? 'لا يوجد'
-                      : _fileName(
-                          widget.snapshot.backupStatus.latestBackupPath!,
-                        ),
-                ),
-                _InfoLine(
-                  'الاحتفاظ',
-                  '${widget.snapshot.backupStatus.backupCount}/${widget.snapshot.backupStatus.retentionCopies} نسخة',
-                ),
-              ],
+            child: SingleChildScrollView(
+              key: const ValueKey('settings-summary-scroll'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'ملخص التشغيل',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  _InfoLine('اسم المحل', widget.snapshot.shopSettings.shopName),
+                  _InfoLine(
+                    'الهاتف',
+                    widget.snapshot.shopSettings.phone ?? 'غير مسجل',
+                  ),
+                  _InfoLine(
+                    'العنوان',
+                    widget.snapshot.shopSettings.address ?? 'غير مسجل',
+                  ),
+                  _InfoLine(
+                    'الخلفية',
+                    _backgroundLabel(widget.snapshot.uiBackground.preset),
+                  ),
+                  _InfoLine(
+                    'صورة الخلفية',
+                    widget.snapshot.uiBackground.imagePath == null
+                        ? 'لا توجد'
+                        : _fileName(widget.snapshot.uiBackground.imagePath!),
+                  ),
+                  _InfoLine(
+                    'ملصق الباركود',
+                    '${widget.snapshot.barcodeLabelSettings.widthMm} × ${widget.snapshot.barcodeLabelSettings.heightMm} mm',
+                  ),
+                  const Divider(height: 24),
+                  _InfoLine(
+                    'مجلد النسخ',
+                    widget.snapshot.backupStatus.directory ?? 'لم يتم اختياره',
+                  ),
+                  _InfoLine(
+                    'آخر نسخة تلقائية',
+                    widget.snapshot.backupStatus.lastDate ?? 'لا يوجد',
+                  ),
+                  _InfoLine(
+                    'آخر ملف',
+                    widget.snapshot.backupStatus.latestBackupPath == null
+                        ? 'لا يوجد'
+                        : _fileName(
+                            widget.snapshot.backupStatus.latestBackupPath!,
+                          ),
+                  ),
+                  _InfoLine(
+                    'الاحتفاظ',
+                    '${widget.snapshot.backupStatus.backupCount}/${widget.snapshot.backupStatus.retentionCopies} نسخة',
+                  ),
+                  const Divider(height: 24),
+                  Text(
+                    'تهيئة محل قائم',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'أدخل أرصدة دفاترك القديمة قبل بدء العمل على الحساب. يرفض التطبيق الرصيد المكرر أو الحساب الذي عليه نشاط سابق.',
+                    style: TextStyle(color: _mutedInk),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _openingBalanceSubmitting
+                        ? null
+                        : _openOpeningBalance,
+                    icon: const Icon(Icons.account_balance_wallet_outlined),
+                    label: Text(
+                      _openingBalanceSubmitting
+                          ? 'جاري التسجيل...'
+                          : 'إدخال رصيد افتتاحي',
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
 
           if (constraints.maxWidth < 860) {
             return SingleChildScrollView(
+              key: const ValueKey('settings-page-scroll'),
               child: Column(
                 children: [form, const SizedBox(height: 14), summary],
               ),
@@ -557,6 +584,82 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
     _showResult(context, result, success: 'تم حفظ الإعدادات');
     setState(() => _saving = false);
     _refresh(ref);
+  }
+
+  Future<void> _openOpeningBalance() async {
+    final data = await showDialog<_OpeningBalanceFormData>(
+      context: context,
+      builder: (_) => _OpeningBalanceDialog(
+        customers: widget.snapshot.customers,
+        suppliers: widget.snapshot.suppliers,
+      ),
+    );
+    if (!mounted || data == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تأكيد الرصيد الافتتاحي'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _InfoLine('النوع', data.type.label),
+              if (data.partyName != null) _InfoLine('الطرف', data.partyName!),
+              _InfoLine('القيمة', Money(data.amountMinor).format()),
+              if (data.dueDate != null)
+                _InfoLine('الاستحقاق', _date(data.dueDate!)),
+              if (data.note != null) _InfoLine('التوضيح', data.note!),
+              const SizedBox(height: 8),
+              const Text(
+                'بعد الاعتماد لا يمكن إدخال رصيد افتتاحي آخر لنفس الحساب. راجع القيمة والطرف من دفاترك القديمة.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('العودة للتعديل'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('اعتماد الرصيد'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _openingBalanceSubmitting = true);
+    final useCases = ref.read(useCasesProvider);
+    try {
+      final result = await _submitPendingFinancialOperation(
+        useCases,
+        PendingFinancialOperation.openingBalance(
+          operationKey: useCases.newOpeningBalanceOperationKey(),
+          type: data.type,
+          partyId: data.partyId,
+          amountMinor: data.amountMinor,
+          dueDate: data.dueDate,
+          note: data.note,
+        ),
+        allowNegativeBalance: false,
+      );
+      if (!mounted) return;
+      _showResult(context, result, success: 'تم تسجيل الرصيد الافتتاحي');
+      _refresh(ref);
+    } on Object {
+      if (!mounted) return;
+      _showSnack(
+        context,
+        'تعذر تسجيل الرصيد. لم نكرر العملية؛ أعد فتح التطبيق للتحقق من الطلب السابق.',
+      );
+    } finally {
+      if (mounted) setState(() => _openingBalanceSubmitting = false);
+    }
   }
 
   int? _barcodeDimension(String value) {

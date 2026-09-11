@@ -1,0 +1,11 @@
+dart analyze lib/v2 lib/main.dart test/v2
+No issues found.
+
+flutter test --no-pub test/v2
+03:10 +160: All tests passed!
+
+flutter build linux --release --no-pub
+Built build/linux/x64/release/bundle/alikhlas_pos
+
+git diff --check
+Succeeded.

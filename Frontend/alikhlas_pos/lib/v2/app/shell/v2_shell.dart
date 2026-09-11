@@ -372,6 +372,7 @@ class _SideNav extends StatelessWidget {
           const SizedBox(height: 18),
           Expanded(
             child: ListView(
+              key: const ValueKey('side-navigation-scroll'),
               children: [
                 for (final item in items)
                   _NavButton(
