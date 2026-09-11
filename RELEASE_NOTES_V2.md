@@ -37,6 +37,7 @@
 - Sale and purchase drafts survive restart without posting financial records and warn before leaving unsaved edits.
 - Financial mutations use durable operation receipts and recoverable pending requests to prevent duplicate posting after rapid taps or a lost reply.
 - Opening balances use the same receipt, payload-conflict, rollback, and pending-recovery contract as the other financial mutations.
+- Existing shops can enter reviewed customer, supplier, cash, or wallet opening balances from Settings; customer and supplier balances create one collectible/payable installment, while cash and wallet remain separate from the physical opening-shift count.
 - Inventory reconciliation records the counted quantity, reason, stock movement, ledger variance, and idempotency receipt in one transaction.
 
 ## Verification
