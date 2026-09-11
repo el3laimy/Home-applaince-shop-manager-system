@@ -1,13 +1,20 @@
 part of '../v2_app.dart';
 
-class _DailyView extends ConsumerWidget {
+class _DailyView extends ConsumerStatefulWidget {
   const _DailyView({required this.snapshot});
   final WorkbenchSnapshot snapshot;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dashboard = snapshot.dashboard;
-    final summary = snapshot.dailySummary;
+  ConsumerState<_DailyView> createState() => _DailyViewState();
+}
+
+class _DailyViewState extends ConsumerState<_DailyView> {
+  bool _shiftSubmitting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final dashboard = widget.snapshot.dashboard;
+    final summary = widget.snapshot.dailySummary;
     return _Screen(
       title: 'يومية المحل',
       subtitle: dashboard.openShift == null
@@ -17,14 +24,14 @@ class _DailyView extends ConsumerWidget {
         spacing: 8,
         children: [
           FilledButton.icon(
-            onPressed: dashboard.openShift == null
+            onPressed: dashboard.openShift == null && !_shiftSubmitting
                 ? () => _openShift(context, ref)
                 : null,
             icon: const Icon(Icons.lock_open),
             label: const Text('فتح وردية'),
           ),
           OutlinedButton.icon(
-            onPressed: dashboard.openShift == null
+            onPressed: dashboard.openShift == null || _shiftSubmitting
                 ? null
                 : () => _closeShift(context, ref, dashboard.cashMinor),
             icon: const Icon(Icons.lock),
@@ -54,7 +61,7 @@ class _DailyView extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 14),
-            _DailyAlertsPanel(snapshot: snapshot),
+            _DailyAlertsPanel(snapshot: widget.snapshot),
             const SizedBox(height: 14),
             _DailySummaryPanel(summary: summary),
             const SizedBox(height: 14),
@@ -64,13 +71,15 @@ class _DailyView extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: _GlassPane(
-                      child: _RecentLedger(entries: snapshot.recentLedger),
+                      child: _RecentLedger(
+                        entries: widget.snapshot.recentLedger,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: _GlassPane(
-                      child: _LowStockList(products: snapshot.products),
+                      child: _LowStockList(products: widget.snapshot.products),
                     ),
                   ),
                 ],
@@ -83,12 +92,26 @@ class _DailyView extends ConsumerWidget {
   }
 
   Future<void> _openShift(BuildContext context, WidgetRef ref) async {
-    final amount = await _askMoney(context, title: 'رصيد افتتاحي');
-    if (amount == null || !context.mounted) return;
-    final result = await ref.read(useCasesProvider).openShift(amount);
-    if (!context.mounted) return;
-    _showResult(context, result, success: 'تم فتح الوردية');
-    _refresh(ref);
+    if (_shiftSubmitting) return;
+    setState(() => _shiftSubmitting = true);
+    try {
+      final amount = await _askMoney(context, title: 'رصيد افتتاحي');
+      if (amount == null || !context.mounted) return;
+      final useCases = ref.read(useCasesProvider);
+      final result = await _submitPendingFinancialOperation(
+        useCases,
+        PendingFinancialOperation.openShift(
+          operationKey: useCases.newShiftOperationKey(),
+          openingCashMinor: amount,
+        ),
+        allowNegativeBalance: false,
+      );
+      if (!context.mounted) return;
+      _showResult(context, result, success: 'تم فتح الوردية');
+      _refresh(ref);
+    } finally {
+      if (mounted) setState(() => _shiftSubmitting = false);
+    }
   }
 
   Future<void> _closeShift(
@@ -96,15 +119,29 @@ class _DailyView extends ConsumerWidget {
     WidgetRef ref,
     int expectedCash,
   ) async {
-    final amount = await _askMoney(
-      context,
-      title: 'الكاش الفعلي في الدرج',
-      initialMinor: expectedCash,
-    );
-    if (amount == null || !context.mounted) return;
-    final result = await ref.read(useCasesProvider).closeShift(amount);
-    if (!context.mounted) return;
-    _showResult(context, result, success: 'تم إغلاق الوردية');
-    _refresh(ref);
+    if (_shiftSubmitting) return;
+    setState(() => _shiftSubmitting = true);
+    try {
+      final amount = await _askMoney(
+        context,
+        title: 'الكاش الفعلي في الدرج',
+        initialMinor: expectedCash,
+      );
+      if (amount == null || !context.mounted) return;
+      final useCases = ref.read(useCasesProvider);
+      final result = await _submitPendingFinancialOperation(
+        useCases,
+        PendingFinancialOperation.closeShift(
+          operationKey: useCases.newShiftOperationKey(),
+          actualCashMinor: amount,
+        ),
+        allowNegativeBalance: false,
+      );
+      if (!context.mounted) return;
+      _showResult(context, result, success: 'تم إغلاق الوردية');
+      _refresh(ref);
+    } finally {
+      if (mounted) setState(() => _shiftSubmitting = false);
+    }
   }
 }

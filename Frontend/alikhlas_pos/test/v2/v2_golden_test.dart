@@ -25,7 +25,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          appClockProvider.overrideWithValue(() => DateTime(2026, 6, 29)),
+        ],
         child: const ALIkhlasV2App(),
       ),
     );
@@ -52,7 +55,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          appClockProvider.overrideWithValue(() => DateTime(2026, 6, 29)),
+        ],
         child: const ALIkhlasV2App(),
       ),
     );
@@ -85,9 +91,12 @@ void main() {
     await useCases.bootstrap();
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
-    await _success(useCases.openShift(0));
+    await _success(
+      useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+    );
     await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'خلاط زجاجي',
         barcode: 'POS-GLASS-001',
         salePriceMinor: 24500,
@@ -98,7 +107,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          appClockProvider.overrideWithValue(() => DateTime(2026, 6, 29)),
+        ],
         child: const ALIkhlasV2App(),
       ),
     );
@@ -136,7 +148,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          appClockProvider.overrideWithValue(() => DateTime(2026, 6, 29)),
+        ],
         child: const ALIkhlasV2App(),
       ),
     );
@@ -154,6 +169,48 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/reports_liquid_glass.png'),
+    );
+  });
+
+  testWidgets('help surface explains support without exposing shop data', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap();
+    final owner = await _success(useCases.login('owner', 'owner123'));
+    await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          appVersionProvider.overrideWith((ref) async => '1.0.0+1'),
+          appClockProvider.overrideWithValue(() => DateTime(2026, 6, 29)),
+        ],
+        child: const ALIkhlasV2App(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+      'new-owner-pass',
+    );
+    await tester.tap(find.text('دخول'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المساعدة'));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/help_support.png'),
     );
   });
 }

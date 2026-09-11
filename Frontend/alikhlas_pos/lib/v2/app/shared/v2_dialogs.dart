@@ -93,16 +93,18 @@ class _QuickInstallmentDialogState extends State<_QuickInstallmentDialog> {
   }
 }
 
-class _SaleReceiptDialog extends StatefulWidget {
-  const _SaleReceiptDialog({required this.receipt});
+class _SaleReceiptDialog extends ConsumerStatefulWidget {
+  const _SaleReceiptDialog({required this.receipt, this.currentStatus});
+  final SaleReturnPreview? currentStatus;
   final SaleReceiptSnapshot receipt;
 
   @override
-  State<_SaleReceiptDialog> createState() => _SaleReceiptDialogState();
+  ConsumerState<_SaleReceiptDialog> createState() => _SaleReceiptDialogState();
 }
 
-class _SaleReceiptDialogState extends State<_SaleReceiptDialog> {
+class _SaleReceiptDialogState extends ConsumerState<_SaleReceiptDialog> {
   bool _printing = false;
+  String? _printError;
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +214,34 @@ class _SaleReceiptDialogState extends State<_SaleReceiptDialog> {
                 ),
               ],
             ),
+            if (widget.currentStatus case final status?) ...[
+              const Divider(),
+              _AmountRow(
+                'تحصيل أقساط بعد البيع',
+                status.collectedInstallmentsMinor,
+              ),
+              _AmountRow(
+                'إجمالي المرتجع حتى الآن',
+                status.lines.fold<int>(
+                  0,
+                  (sum, line) => sum + line.refundedMinor,
+                ),
+              ),
+              if (status.remainingDebtMinor != null)
+                _AmountRow(
+                  'المديونية الحالية',
+                  status.remainingDebtMinor!,
+                  strong: true,
+                ),
+              const Text(
+                'مبالغ الفاتورة المطبوعة تخص وقت البيع؛ التحصيل والمرتجعات موضحة هنا بشكل منفصل.',
+              ),
+            ],
+            if (_printError != null)
+              Text(
+                _printError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             if (receipt.shopSettings.receiptFooter != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -228,6 +258,14 @@ class _SaleReceiptDialogState extends State<_SaleReceiptDialog> {
           onPressed: _printing ? null : () => Navigator.pop(context),
           child: const Text('إغلاق'),
         ),
+        if (widget.currentStatus case final status?)
+          TextButton(
+            onPressed:
+                _printing || !status.lines.any((line) => line.returnableQty > 0)
+                ? null
+                : () => Navigator.pop(context, true),
+            child: const Text('إنشاء مرتجع'),
+          ),
         FilledButton.icon(
           onPressed: _printing ? null : _print,
           icon: const Icon(Icons.print),
@@ -238,9 +276,20 @@ class _SaleReceiptDialogState extends State<_SaleReceiptDialog> {
   }
 
   Future<void> _print() async {
-    setState(() => _printing = true);
+    if (_printing) return;
+    setState(() {
+      _printing = true;
+      _printError = null;
+    });
     try {
-      await SaleReceiptPdf.printReceipt(widget.receipt);
+      await ref.read(saleReceiptPrinterProvider)(widget.receipt);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _printError =
+              'الفاتورة محفوظة، لكن تعذرت الطباعة. يمكنك إعادة المحاولة.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -423,6 +472,7 @@ class _ReturnDialogState extends State<_ReturnDialog> {
     for (final line in widget.preview.lines) line.saleItemId: 0,
   };
   PaymentMethod _method = PaymentMethod.cash;
+  PaymentMethod? _overflowMethod;
 
   @override
   Widget build(BuildContext context) {
@@ -432,8 +482,13 @@ class _ReturnDialogState extends State<_ReturnDialog> {
     final refund = widget.preview.lines.fold<int>(
       0,
       (sum, line) =>
-          sum + ((_quantities[line.saleItemId] ?? 0) * line.unitPriceMinor),
+          sum + line.refundForQuantity(_quantities[line.saleItemId] ?? 0),
     );
+    final debt = widget.preview.remainingDebtMinor ?? 0;
+    final settlement = refund < debt ? refund : debt;
+    final overflow = _method == PaymentMethod.installment
+        ? refund - settlement
+        : 0;
     return AlertDialog(
       title: const Text('إنشاء مرتجع'),
       content: SizedBox(
@@ -504,7 +559,7 @@ class _ReturnDialogState extends State<_ReturnDialog> {
                   value: PaymentMethod.wallet,
                   child: Text('محفظة'),
                 ),
-                if (widget.preview.receipt.invoice.customerId != null)
+                if (widget.preview.remainingDebtMinor != null)
                   const DropdownMenuItem(
                     value: PaymentMethod.installment,
                     child: Text('خصم من العميل'),
@@ -513,6 +568,28 @@ class _ReturnDialogState extends State<_ReturnDialog> {
               onChanged: (value) => setState(() => _method = value ?? _method),
             ),
             const SizedBox(height: 12),
+            if (_method == PaymentMethod.installment)
+              _AmountRow('خصم من المديونية', settlement),
+            if (overflow > 0) ...[
+              _AmountRow('فائض يُرد للعميل', overflow),
+              DropdownButtonFormField<PaymentMethod>(
+                initialValue: _overflowMethod,
+                decoration: const InputDecoration(
+                  labelText: 'اختر طريقة رد الفائض',
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: PaymentMethod.cash,
+                    child: Text('رد الفائض كاش'),
+                  ),
+                  DropdownMenuItem(
+                    value: PaymentMethod.wallet,
+                    child: Text('رد الفائض بالمحفظة'),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _overflowMethod = value),
+              ),
+            ],
             _InfoLine('عدد القطع المختارة', selected.toString()),
             _AmountRow('قيمة المرتجع', refund, strong: true),
           ],
@@ -524,13 +601,16 @@ class _ReturnDialogState extends State<_ReturnDialog> {
           child: const Text('إلغاء'),
         ),
         FilledButton(
-          onPressed: selected == 0
+          onPressed: selected == 0 || (overflow > 0 && _overflowMethod == null)
               ? null
               : () => Navigator.pop(context, (
                   quantities: Map<int, int>.fromEntries(
                     _quantities.entries.where((entry) => entry.value > 0),
                   ),
                   method: _method,
+                  overflowMethod: _method == PaymentMethod.installment
+                      ? _overflowMethod
+                      : null,
                 )),
           child: const Text('تسجيل'),
         ),

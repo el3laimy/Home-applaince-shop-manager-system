@@ -2,6 +2,32 @@ part of '../v2_use_cases.dart';
 
 enum PaymentMethod { cash, wallet, installment }
 
+enum InventoryAdjustmentReason {
+  physicalCount('جرد فعلي'),
+  damage('تالف'),
+  loss('فقد أو سرقة'),
+  found('بضاعة وُجدت'),
+  dataCorrection('تصحيح إدخال');
+
+  const InventoryAdjustmentReason(this.label);
+
+  final String label;
+}
+
+enum OpeningBalanceType {
+  customerReceivable('رصيد على عميل'),
+  supplierPayable('رصيد لمورد'),
+  cash('رصيد الخزينة'),
+  wallet('رصيد المحفظة');
+
+  const OpeningBalanceType(this.label);
+
+  final String label;
+
+  bool get requiresParty =>
+      this == customerReceivable || this == supplierPayable;
+}
+
 class PaymentInput {
   const PaymentInput(this.method, this.amountMinor, {this.note});
 
@@ -30,6 +56,23 @@ class NegativeBalanceConfirmation {
   const NegativeBalanceConfirmation({required this.impacts});
 
   final List<NegativeBalanceImpact> impacts;
+}
+
+/// Shown once to the shop owner after the first setup. The code itself is
+/// never persisted; only a password-strength verifier is stored locally.
+class InitialOwnerSetup {
+  const InitialOwnerSetup({required this.owner, required this.recoveryCode});
+
+  final User owner;
+  final String recoveryCode;
+}
+
+/// A successful recovery rotates the old recovery code before returning it.
+class OwnerRecovery {
+  const OwnerRecovery({required this.owner, required this.recoveryCode});
+
+  final User owner;
+  final String recoveryCode;
 }
 
 class SaleLineInput {
@@ -82,6 +125,7 @@ class DashboardSnapshot {
     required this.salesMinor,
     required this.cogsMinor,
     required this.expensesMinor,
+    this.inventoryVarianceMinor = 0,
     required this.lowStockCount,
     required this.openShift,
   });
@@ -94,10 +138,12 @@ class DashboardSnapshot {
   final int salesMinor;
   final int cogsMinor;
   final int expensesMinor;
+  final int inventoryVarianceMinor;
   final int lowStockCount;
   final Shift? openShift;
 
-  int get grossProfitMinor => salesMinor - cogsMinor - expensesMinor;
+  int get grossProfitMinor =>
+      salesMinor - cogsMinor - expensesMinor - inventoryVarianceMinor;
 }
 
 class DailySummarySnapshot {
@@ -106,6 +152,7 @@ class DailySummarySnapshot {
     required this.salesMinor,
     required this.cogsMinor,
     required this.expensesMinor,
+    this.inventoryVarianceMinor = 0,
     required this.interestMinor,
     required this.cashNetMinor,
     required this.walletNetMinor,
@@ -119,6 +166,7 @@ class DailySummarySnapshot {
   final int salesMinor;
   final int cogsMinor;
   final int expensesMinor;
+  final int inventoryVarianceMinor;
   final int interestMinor;
   final int cashNetMinor;
   final int walletNetMinor;
@@ -127,7 +175,43 @@ class DailySummarySnapshot {
   final int purchaseCount;
   final int returnCount;
 
-  int get profitMinor => salesMinor + interestMinor - cogsMinor - expensesMinor;
+  int get profitMinor =>
+      salesMinor +
+      interestMinor -
+      cogsMinor -
+      expensesMinor -
+      inventoryVarianceMinor;
+}
+
+/// Read-only result for a consistency check; it never changes historical data.
+class DataIntegrityAudit {
+  const DataIntegrityAudit({
+    required this.checkedAt,
+    required this.ledgerEntryCount,
+    required this.productCount,
+    required this.installmentPlanCount,
+    required this.issues,
+  });
+
+  final DateTime checkedAt;
+  final int ledgerEntryCount;
+  final int productCount;
+  final int installmentPlanCount;
+  final List<DataIntegrityIssue> issues;
+
+  bool get isConsistent => issues.isEmpty;
+}
+
+class DataIntegrityIssue {
+  const DataIntegrityIssue({
+    required this.code,
+    required this.record,
+    required this.message,
+  });
+
+  final String code;
+  final String record;
+  final String message;
 }
 
 class PeriodReportSnapshot {
@@ -137,6 +221,7 @@ class PeriodReportSnapshot {
     required this.salesMinor,
     required this.cogsMinor,
     required this.expensesMinor,
+    this.inventoryVarianceMinor = 0,
     required this.interestMinor,
     required this.cashNetMinor,
     required this.walletNetMinor,
@@ -151,6 +236,7 @@ class PeriodReportSnapshot {
   final int salesMinor;
   final int cogsMinor;
   final int expensesMinor;
+  final int inventoryVarianceMinor;
   final int interestMinor;
   final int cashNetMinor;
   final int walletNetMinor;
@@ -159,7 +245,12 @@ class PeriodReportSnapshot {
   final int purchaseCount;
   final int returnCount;
 
-  int get profitMinor => salesMinor + interestMinor - cogsMinor - expensesMinor;
+  int get profitMinor =>
+      salesMinor +
+      interestMinor -
+      cogsMinor -
+      expensesMinor -
+      inventoryVarianceMinor;
 }
 
 class PartyBalance {
@@ -330,6 +421,8 @@ class SaleReturnLinePreview {
     required this.returnableQty,
     required this.unitPriceMinor,
     required this.lineTotalMinor,
+    required this.netLineMinor,
+    required this.refundedMinor,
   });
 
   final int saleItemId;
@@ -339,10 +432,49 @@ class SaleReturnLinePreview {
   final int returnableQty;
   final int unitPriceMinor;
   final int lineTotalMinor;
+  final int netLineMinor;
+  final int refundedMinor;
+
+  int refundForQuantity(int quantity) => _refundForQuantity(
+    netLineMinor,
+    soldQty,
+    returnedQty,
+    refundedMinor,
+    quantity,
+  );
+}
+
+int _refundForQuantity(
+  int netLineMinor,
+  int soldQty,
+  int returnedQty,
+  int refundedMinor,
+  int quantity,
+) {
+  if (quantity < 0 || quantity > soldQty - returnedQty) {
+    throw RangeError('Invalid return quantity');
+  }
+  if (quantity == 0) return 0;
+  final cumulative =
+      (BigInt.from(netLineMinor) *
+              BigInt.from(returnedQty + quantity) ~/
+              BigInt.from(soldQty))
+          .toInt();
+  // Never issue more money to compensate for an over-refund in legacy data.
+  return math.max(0, cumulative - refundedMinor);
 }
 
 class SaleReturnPreview {
-  const SaleReturnPreview({required this.receipt, required this.lines});
+  const SaleReturnPreview({
+    required this.receipt,
+    required this.lines,
+    this.remainingDebtMinor,
+    this.collectedInstallmentsMinor = 0,
+  });
+
+  /// Current plan debt; null when this invoice has no installment plan.
+  final int? remainingDebtMinor;
+  final int collectedInstallmentsMinor;
 
   final SaleReceiptSnapshot receipt;
   final List<SaleReturnLinePreview> lines;
@@ -393,6 +525,7 @@ class BackupStatus {
     this.latestBackupPath,
     this.backupCount = 0,
     this.retentionCopies = 30,
+    this.warning,
   });
 
   final String? directory;
@@ -400,6 +533,7 @@ class BackupStatus {
   final String? latestBackupPath;
   final int backupCount;
   final int retentionCopies;
+  final String? warning;
 }
 
 class InstallmentDuePreview {

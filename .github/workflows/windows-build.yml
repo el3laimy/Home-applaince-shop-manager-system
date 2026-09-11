@@ -2,6 +2,10 @@ name: Desktop Release Build
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-build.yml"
+      - "Frontend/alikhlas_pos/**"
   push:
     branches:
       - fix/v2-installment-returns
@@ -10,7 +14,27 @@ on:
       - "Frontend/alikhlas_pos/**"
 
 jobs:
+  verify:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/alikhlas_pos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.2"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart analyze lib test
+      - run: flutter test
+      - name: Verify process lock
+        run: python3 tool/check_application_lock.py "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+
   build-windows:
+    needs: verify
     name: Build Windows release
     runs-on: windows-latest
 
@@ -35,8 +59,40 @@ jobs:
       - name: Analyze v2
         run: dart analyze lib/v2 lib/main.dart test/v2
 
+      - name: Verify process lock on Windows
+        run: python tool/check_application_lock.py "$env:FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart.exe"
+
       - name: Build Windows
         run: flutter build windows --release
+
+      - name: Install NSIS compiler
+        shell: pwsh
+        run: >
+          winget install --id NSIS.NSIS --exact --version 3.12 --source winget
+          --silent --accept-package-agreements --accept-source-agreements
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Could not read application version" }
+          $source = (Resolve-Path 'build\windows\x64\runner\Release').Path
+          $output = Join-Path (Get-Location) 'build\windows\x64\runner\Installer'
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          $compiler = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'),
+            (Join-Path $env:ProgramFiles 'NSIS\makensis.exe')
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($null -eq $compiler) { throw "NSIS compiler was not installed" }
+          & $compiler "/DSOURCE_DIR=$source" "/DOUTPUT_DIR=$output" "/DAPP_VERSION=$version" 'tool\alikhlas_pos.nsi'
+          if ($LASTEXITCODE -ne 0) { throw "NSIS failed with exit code $LASTEXITCODE" }
+
+      - name: Verify Windows installer artifact
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'build\windows\x64\runner\Installer\ALIkhlasPOS-Setup-*-x64.exe' | Select-Object -First 1
+          if ($null -eq $installer -or $installer.Length -lt 1MB) { throw "Windows installer was not produced" }
+          Write-Host "Windows installer: $($installer.FullName) ($($installer.Length) bytes)"
 
       - name: Upload Windows bundle
         uses: actions/upload-artifact@v4
@@ -45,7 +101,15 @@ jobs:
           path: Frontend/alikhlas_pos/build/windows/x64/runner/Release
           if-no-files-found: error
 
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: alikhlas-pos-windows-installer
+          path: Frontend/alikhlas_pos/build/windows/x64/runner/Installer/ALIkhlasPOS-Setup-*-x64.exe
+          if-no-files-found: error
+
   build-linux:
+    needs: verify
     name: Build Linux release
     runs-on: ubuntu-latest
 
@@ -75,9 +139,30 @@ jobs:
       - name: Build Linux
         run: flutter build linux --release
 
+      - name: Build Debian installer
+        run: |
+          version="$(awk '/^version:/ {split($2, parts, "+"); print parts[1]; exit}' pubspec.yaml)"
+          test -n "$version"
+          bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package "$version"
+
+      - name: Verify Debian installer contents
+        run: |
+          deb="$(find build/linux/x64/release/package -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$deb"
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb" | grep -q 'opt/alikhlas-pos/alikhlas_pos'
+          dpkg-deb --contents "$deb" | grep -q 'usr/share/applications/alikhlas-pos.desktop'
+
       - name: Upload Linux bundle
         uses: actions/upload-artifact@v4
         with:
           name: alikhlas-pos-linux
           path: Frontend/alikhlas_pos/build/linux/x64/release/bundle
+          if-no-files-found: error
+
+      - name: Upload Debian installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: alikhlas-pos-linux-deb
+          path: Frontend/alikhlas_pos/build/linux/x64/release/package/*.deb
           if-no-files-found: error

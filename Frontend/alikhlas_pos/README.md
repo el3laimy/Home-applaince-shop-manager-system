@@ -46,13 +46,13 @@ flutter build windows
 - drift يفعّل:
   - `PRAGMA foreign_keys = ON`
   - `PRAGMA journal_mode = WAL`
-  - `PRAGMA synchronous = NORMAL`
-- `schemaVersion` الحالي: 5.
-- v5 أضاف `products.imagePath` لتخزين مسار صورة المنتج الداخلية.
+  - `PRAGMA synchronous = FULL`
+- `schemaVersion` الحالي: 7.
+- v5 أضاف `products.imagePath` لتخزين مسار صورة المنتج الداخلية، وv6 أضاف مستندات تسوية الجرد، وv7 يضيف مستندات الأرصدة الافتتاحية مع حماية مفتاح العملية.
 
 ## الاختبارات المهمة
 
-- `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، full owner day، backup/restore، وترقية migration من v3 إلى v5.
+- `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، full owner day، backup/restore، وترقية migration من v3 إلى v7.
 - `test/v2/v2_app_test.dart`: login، تغيير كلمة المرور، بيع POS، منع إدخال مال غير صالح، وشراء من الواجهة.
 - `test/v2/v2_theme_test.dart`: خط Cairo، التباين، منع رجوع Roboto أو w800، وحصر blur الحقيقي.
 - `test/v2/v2_golden_test.dart`: لقطات Golden لشاشة الدخول والـ dashboard وPOS والتقارير.

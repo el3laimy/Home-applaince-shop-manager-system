@@ -1,7 +1,10 @@
 part of '../v2_use_cases.dart';
 
 extension V2CatalogPartyUseCases on V2UseCases {
+  String newOpeningStockOperationKey() => newFinancialOperationKey();
+
   Future<AppResult<Product>> createProduct({
+    String? operationKey,
     required String name,
     String? barcode,
     String? category,
@@ -10,6 +13,61 @@ extension V2CatalogPartyUseCases on V2UseCases {
     required int openingQty,
     required int openingCostMinor,
     int minStockQty = 1,
+  }) async {
+    if (operationKey == null) {
+      if (openingQty > 0) {
+        return const AppFailure<Product>(
+          'معرّف عملية الرصيد الافتتاحي مطلوب لمنع تكرار المخزون والقيد المالي.',
+        );
+      }
+      return _createProduct(
+        name: name,
+        barcode: barcode,
+        category: category,
+        imagePath: imagePath,
+        salePriceMinor: salePriceMinor,
+        openingQty: openingQty,
+        openingCostMinor: openingCostMinor,
+        minStockQty: minStockQty,
+      );
+    }
+    return _runIdempotentProductOperation(
+      namespace: 'opening_stock',
+      operationKey: operationKey,
+      fingerprintPayload: [
+        name.trim(),
+        _blankToNull(barcode),
+        _blankToNull(category),
+        _blankToNull(imagePath),
+        salePriceMinor,
+        openingQty,
+        openingCostMinor,
+        minStockQty,
+      ],
+      conflictMessage:
+          'هذا الرصيد الافتتاحي محفوظ ببيانات مختلفة. راجع المخزون قبل إعادة التسجيل.',
+      execute: () => _createProduct(
+        name: name,
+        barcode: barcode,
+        category: category,
+        imagePath: imagePath,
+        salePriceMinor: salePriceMinor,
+        openingQty: openingQty,
+        openingCostMinor: openingCostMinor,
+        minStockQty: minStockQty,
+      ),
+    );
+  }
+
+  Future<AppResult<Product>> _createProduct({
+    required String name,
+    String? barcode,
+    String? category,
+    String? imagePath,
+    required int salePriceMinor,
+    required int openingQty,
+    required int openingCostMinor,
+    required int minStockQty,
   }) async {
     if (name.trim().isEmpty) return const AppFailure('اسم المنتج مطلوب');
     if (salePriceMinor <= 0 || openingQty < 0 || openingCostMinor < 0) {
@@ -27,7 +85,7 @@ extension V2CatalogPartyUseCases on V2UseCases {
       if (duplicate != null) return const AppFailure('الباركود مستخدم بالفعل');
     }
 
-    final id = await db.transaction(() async {
+    final id = await _writeTransaction(() async {
       final cleanBarcode = requestedBarcode ?? await _nextProductBarcode();
       final productId = await db
           .into(db.products)
@@ -46,6 +104,20 @@ extension V2CatalogPartyUseCases on V2UseCases {
             ),
           );
 
+      if (openingQty > 0) {
+        await db
+            .into(db.stockMovements)
+            .insert(
+              StockMovementsCompanion.insert(
+                productId: productId,
+                type: 'opening_stock',
+                qtyDelta: openingQty,
+                balanceAfter: openingQty,
+                referenceType: 'opening_stock',
+                referenceId: productId,
+              ),
+            );
+      }
       if (openingQty > 0 && openingCostMinor > 0) {
         final value = openingQty * openingCostMinor;
         await _postLedger(
@@ -94,32 +166,38 @@ extension V2CatalogPartyUseCases on V2UseCases {
     }
 
     final cleanBarcode = requestedBarcode ?? await _nextProductBarcode();
-    await (db.update(db.products)..where((p) => p.id.equals(id))).write(
-      ProductsCompanion(
-        name: Value(name.trim()),
-        barcode: Value(cleanBarcode),
-        category: Value(
-          category?.trim().isEmpty == true ? null : category?.trim(),
+    return _writeTransaction(() async {
+      await (db.update(db.products)..where((p) => p.id.equals(id))).write(
+        ProductsCompanion(
+          name: Value(name.trim()),
+          barcode: Value(cleanBarcode),
+          category: Value(
+            category?.trim().isEmpty == true ? null : category?.trim(),
+          ),
+          imagePath: Value(_blankToNull(imagePath)),
+          salePriceMinor: Value(salePriceMinor),
+          minStockQty: Value(minStockQty),
+          updatedAt: Value(DateTime.now()),
         ),
-        imagePath: Value(_blankToNull(imagePath)),
-        salePriceMinor: Value(salePriceMinor),
-        minStockQty: Value(minStockQty),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+      );
 
-    return AppSuccess(
-      await (db.select(db.products)..where((p) => p.id.equals(id))).getSingle(),
-    );
+      return AppSuccess(
+        await (db.select(
+          db.products,
+        )..where((p) => p.id.equals(id))).getSingle(),
+      );
+    });
   }
 
   Future<AppResult<void>> deactivateProduct(int id) async {
-    await (db.update(db.products)..where((p) => p.id.equals(id))).write(
-      ProductsCompanion(
-        isActive: const Value(false),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+    await _writeTransaction(() async {
+      await (db.update(db.products)..where((p) => p.id.equals(id))).write(
+        ProductsCompanion(
+          isActive: const Value(false),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
     return const AppSuccess(null);
   }
 
@@ -131,19 +209,23 @@ extension V2CatalogPartyUseCases on V2UseCases {
       return const AppFailure('اسم العميل مطلوب');
     }
 
-    final id = await db
-        .into(db.customers)
-        .insert(
-          CustomersCompanion.insert(
-            name: name.trim(),
-            phone: Value(phone?.trim().isEmpty == true ? null : phone?.trim()),
-          ),
-        );
-    return AppSuccess(
-      await (db.select(
-        db.customers,
-      )..where((c) => c.id.equals(id))).getSingle(),
-    );
+    return _writeTransaction(() async {
+      final id = await db
+          .into(db.customers)
+          .insert(
+            CustomersCompanion.insert(
+              name: name.trim(),
+              phone: Value(
+                phone?.trim().isEmpty == true ? null : phone?.trim(),
+              ),
+            ),
+          );
+      return AppSuccess(
+        await (db.select(
+          db.customers,
+        )..where((c) => c.id.equals(id))).getSingle(),
+      );
+    });
   }
 
   Future<AppResult<Customer>> updateCustomer({
@@ -152,17 +234,19 @@ extension V2CatalogPartyUseCases on V2UseCases {
     String? phone,
   }) async {
     if (name.trim().isEmpty) return const AppFailure('اسم العميل مطلوب');
-    await (db.update(db.customers)..where((c) => c.id.equals(id))).write(
-      CustomersCompanion(
-        name: Value(name.trim()),
-        phone: Value(phone?.trim().isEmpty == true ? null : phone?.trim()),
-      ),
-    );
-    return AppSuccess(
-      await (db.select(
-        db.customers,
-      )..where((c) => c.id.equals(id))).getSingle(),
-    );
+    return _writeTransaction(() async {
+      await (db.update(db.customers)..where((c) => c.id.equals(id))).write(
+        CustomersCompanion(
+          name: Value(name.trim()),
+          phone: Value(phone?.trim().isEmpty == true ? null : phone?.trim()),
+        ),
+      );
+      return AppSuccess(
+        await (db.select(
+          db.customers,
+        )..where((c) => c.id.equals(id))).getSingle(),
+      );
+    });
   }
 
   Future<AppResult<Supplier>> createSupplier({
@@ -173,19 +257,23 @@ extension V2CatalogPartyUseCases on V2UseCases {
       return const AppFailure('اسم المورد مطلوب');
     }
 
-    final id = await db
-        .into(db.suppliers)
-        .insert(
-          SuppliersCompanion.insert(
-            name: name.trim(),
-            phone: Value(phone?.trim().isEmpty == true ? null : phone?.trim()),
-          ),
-        );
-    return AppSuccess(
-      await (db.select(
-        db.suppliers,
-      )..where((s) => s.id.equals(id))).getSingle(),
-    );
+    return _writeTransaction(() async {
+      final id = await db
+          .into(db.suppliers)
+          .insert(
+            SuppliersCompanion.insert(
+              name: name.trim(),
+              phone: Value(
+                phone?.trim().isEmpty == true ? null : phone?.trim(),
+              ),
+            ),
+          );
+      return AppSuccess(
+        await (db.select(
+          db.suppliers,
+        )..where((s) => s.id.equals(id))).getSingle(),
+      );
+    });
   }
 
   Future<AppResult<Supplier>> updateSupplier({
@@ -194,16 +282,18 @@ extension V2CatalogPartyUseCases on V2UseCases {
     String? phone,
   }) async {
     if (name.trim().isEmpty) return const AppFailure('اسم المورد مطلوب');
-    await (db.update(db.suppliers)..where((s) => s.id.equals(id))).write(
-      SuppliersCompanion(
-        name: Value(name.trim()),
-        phone: Value(phone?.trim().isEmpty == true ? null : phone?.trim()),
-      ),
-    );
-    return AppSuccess(
-      await (db.select(
-        db.suppliers,
-      )..where((s) => s.id.equals(id))).getSingle(),
-    );
+    return _writeTransaction(() async {
+      await (db.update(db.suppliers)..where((s) => s.id.equals(id))).write(
+        SuppliersCompanion(
+          name: Value(name.trim()),
+          phone: Value(phone?.trim().isEmpty == true ? null : phone?.trim()),
+        ),
+      );
+      return AppSuccess(
+        await (db.select(
+          db.suppliers,
+        )..where((s) => s.id.equals(id))).getSingle(),
+      );
+    });
   }
 }

@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('login forces default password change before dashboard', (
+  testWidgets('new shop creates an owner before opening dashboard', (
     tester,
   ) async {
     final db = AppDatabase(NativeDatabase.memory());
@@ -24,35 +24,231 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('إخلاص POS'), findsOneWidget);
-    final passwordField = tester.widget<TextField>(
-      find.widgetWithText(TextField, 'كلمة المرور'),
+    expect(find.text('إعداد المحل'), findsOneWidget);
+    expect(find.text('لدي نسخة احتياطية سابقة'), findsOneWidget);
+    expect(
+      find.text(
+        'يمكنك اختيار مجلد الآن أو ضبطه لاحقًا من شاشة النسخ الاحتياطي.',
+      ),
+      findsOneWidget,
     );
-    expect(passwordField.controller?.text, isEmpty);
-
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المحل'),
+      'محل الاختبار',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المالك'),
+      'صاحب المحل',
+    );
     await tester.enterText(
       find.widgetWithText(TextField, 'كلمة المرور'),
-      'owner123',
-    );
-    await tester.tap(find.text('دخول'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('تغيير كلمة المرور'), findsOneWidget);
-    expect(find.text('يومية المحل'), findsNothing);
-
-    await tester.enterText(
-      find.widgetWithText(TextField, 'كلمة المرور الجديدة'),
       'new-owner-pass',
     );
     await tester.enterText(
       find.widgetWithText(TextField, 'تأكيد كلمة المرور'),
       'new-owner-pass',
     );
-    await tester.tap(find.text('حفظ ومتابعة'));
+    await tester.ensureVisible(find.text('ابدأ العمل'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ابدأ العمل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('احفظ رمز الاستعادة'), findsOneWidget);
+    expect(
+      find.text(
+        'لم يتم اختيار مجلد للنسخ. يمكنك ضبطه لاحقًا من شاشة النسخ الاحتياطي.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('حفظت الرمز، ابدأ العمل'));
     await tester.pumpAndSettle();
 
     expect(find.text('يومية المحل'), findsOneWidget);
   });
+
+  testWidgets('new shop can test its printer before creating the owner', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    ShopSettingsSnapshot? printedSettings;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          printerTestPageProvider.overrideWithValue((settings) async {
+            printedSettings = settings;
+            return false;
+          }),
+        ],
+        child: const ALIkhlasV2App(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('اختبار الطابعة الآن'));
+    await tester.tap(find.text('اختبار الطابعة الآن'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('أدخل اسم المحل أولًا'), findsOneWidget);
+    expect(printedSettings, isNull);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'اسم المحل'),
+      'محل تجربة الطابعة',
+    );
+    await tester.ensureVisible(find.text('اختبار الطابعة الآن'));
+    await tester.tap(find.text('اختبار الطابعة الآن'));
+    await tester.pumpAndSettle();
+    expect(printedSettings?.shopName, 'محل تجربة الطابعة');
+    expect(
+      find.textContaining('يمكنك إعادة الاختبار أو ضبط الطابعة لاحقًا'),
+      findsOneWidget,
+    );
+    expect(await V2UseCases(db).hasOwner(), isFalse);
+  });
+
+  testWidgets('owner can recover access and receives a replacement code', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final useCases = V2UseCases(db);
+    await useCases.bootstrap(createDefaultOwner: false);
+    final setup = await _success(
+      useCases.setupInitialOwner(
+        fullName: 'صاحب المحل',
+        password: 'first-owner-password',
+        shopName: 'محل الاختبار',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const ALIkhlasV2App(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('نسيت كلمة المرور؟'));
+    await tester.pumpAndSettle();
+    expect(find.text('استعادة الوصول'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'رمز الاستعادة'),
+      setup.recoveryCode,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور الجديدة'),
+      'recovered-owner-password',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'تأكيد كلمة المرور'),
+      'recovered-owner-password',
+    );
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('رمز الاستعادة الجديد'), findsOneWidget);
+    await tester.tap(find.text('حفظت الرمز، عودة للدخول'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+      'recovered-owner-password',
+    );
+    await tester.tap(find.text('دخول'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('يومية المحل'), findsOneWidget);
+  });
+
+  testWidgets(
+    'support screen previews exact report, allows cancellation and tests printer',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final useCases = V2UseCases(db);
+      await useCases.bootstrap();
+      final owner = await _success(useCases.login('owner', 'owner123'));
+      await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
+      var printerTestOpened = false;
+      String? savedReport;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            appVersionProvider.overrideWith((ref) async => '9.4.2+7'),
+            supportReportSaverProvider.overrideWithValue((report) async {
+              savedReport = report;
+              return true;
+            }),
+            printerTestPageProvider.overrideWithValue((_) async {
+              printerTestOpened = true;
+              return false;
+            }),
+          ],
+          child: const ALIkhlasV2App(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'كلمة المرور'),
+        'new-owner-pass',
+      );
+      await tester.tap(find.text('دخول'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('المساعدة'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('المساعدة وحالة التطبيق'), findsOneWidget);
+      expect(find.text('قبل طلب المساعدة'), findsOneWidget);
+      expect(find.text('9.4.2+7'), findsOneWidget);
+      expect(find.text('اختبار الطابعة'), findsNWidgets(2));
+      expect(find.text('حفظ تقرير للدعم'), findsOneWidget);
+      expect(find.textContaining('لا يتضمن قاعدة البيانات'), findsOneWidget);
+      await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, 'اختبار الطابعة'),
+      );
+      await tester.tap(find.widgetWithText(OutlinedButton, 'اختبار الطابعة'));
+      await tester.pumpAndSettle();
+      expect(printerTestOpened, isTrue);
+      expect(find.textContaining('لم تكتمل الطباعة'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('حفظ تقرير للدعم'));
+      await tester.tap(find.text('حفظ تقرير للدعم'));
+      await tester.pumpAndSettle();
+      expect(find.text('معاينة تقرير الدعم'), findsOneWidget);
+      final preview = tester
+          .widget<SelectableText>(find.byType(SelectableText))
+          .data!;
+      expect(preview, contains('نسخة التطبيق: 9.4.2+7'));
+      expect(savedReport, isNull);
+      await tester.tap(find.widgetWithText(TextButton, 'إلغاء'));
+      await tester.pumpAndSettle();
+      expect(savedReport, isNull);
+
+      await tester.tap(find.text('حفظ تقرير للدعم'));
+      await tester.pumpAndSettle();
+      final approved = tester
+          .widget<SelectableText>(find.byType(SelectableText))
+          .data!;
+      await tester.tap(find.text('اختيار مكان الحفظ'));
+      await tester.pumpAndSettle();
+      expect(savedReport, approved);
+      expect(find.textContaining('تم حفظ تقرير الدعم.'), findsOneWidget);
+    },
+  );
 
   testWidgets('desktop sale flow records a cash invoice from POS', (
     tester,
@@ -70,13 +266,16 @@ void main() {
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
     await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'غسالة اختبار',
         salePriceMinor: 10000,
         openingQty: 2,
         openingCostMinor: 7000,
       ),
     );
-    await _success(useCases.openShift(0));
+    await _success(
+      useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+    );
 
     await tester.pumpWidget(
       ProviderScope(
@@ -123,13 +322,16 @@ void main() {
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
     await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'بوتاجاز اختبار',
         salePriceMinor: 10000,
         openingQty: 1,
         openingCostMinor: 7000,
       ),
     );
-    await _success(useCases.openShift(0));
+    await _success(
+      useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+    );
 
     await tester.pumpWidget(
       ProviderScope(
@@ -174,13 +376,16 @@ void main() {
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
     final product = await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'ثلاجة شراء',
         salePriceMinor: 15000,
         openingQty: 0,
         openingCostMinor: 0,
       ),
     );
-    await _success(useCases.openShift(0));
+    await _success(
+      useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+    );
 
     await tester.pumpWidget(
       ProviderScope(
@@ -257,15 +462,19 @@ void main() {
         .insert(CustomersCompanion.insert(name: 'عميل كشف'));
     final product = await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'غسالة كشف',
         salePriceMinor: 10000,
         openingQty: 1,
         openingCostMinor: 7000,
       ),
     );
-    await _success(useCases.openShift(0));
+    await _success(
+      useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+    );
     await _success(
       useCases.createSale(
+        operationKey: useCases.newSaleOperationKey(),
         customerId: customerId,
         items: [
           SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
@@ -337,15 +546,19 @@ void main() {
       );
       final product = await _success(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'مكيف أقساط',
           salePriceMinor: 5000,
           openingQty: 2,
           openingCostMinor: 3000,
         ),
       );
-      await _success(useCases.openShift(0));
+      await _success(
+        useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+      );
       await _success(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: overdueCustomer.id,
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 5000),
@@ -360,6 +573,7 @@ void main() {
       );
       await _success(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: futureCustomer.id,
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 5000),
@@ -413,6 +627,7 @@ void main() {
     final supplier = await _success(useCases.createSupplier(name: 'مورد سريع'));
     final product = await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'شاشة مورد',
         salePriceMinor: 9000,
         openingQty: 0,
@@ -421,6 +636,7 @@ void main() {
     );
     await _success(
       useCases.createPurchase(
+        operationKey: useCases.newPurchaseOperationKey(),
         supplierId: supplier.id,
         items: [
           PurchaseLineInput(productId: product.id, qty: 1, unitCostMinor: 7000),
@@ -549,6 +765,7 @@ void main() {
       await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
       final product = await _success(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'باركود تالف',
           salePriceMinor: 35000,
           openingQty: 4,
@@ -679,7 +896,9 @@ void main() {
     await useCases.bootstrap();
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
-    await _success(useCases.openShift(10000));
+    await _success(
+      useCases.openShift(10000, operationKey: useCases.newShiftOperationKey()),
+    );
 
     await _pumpLoggedInWorkbench(tester, db);
     await tester.tap(find.text('التقارير').first);
@@ -753,7 +972,9 @@ void main() {
     await useCases.bootstrap();
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
-    await _success(useCases.openShift(10000));
+    await _success(
+      useCases.openShift(10000, operationKey: useCases.newShiftOperationKey()),
+    );
 
     await _pumpLoggedInWorkbench(tester, db);
     await tester.tap(find.text('التقارير').first);
@@ -821,9 +1042,12 @@ void main() {
     await useCases.bootstrap();
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
-    await _success(useCases.openShift(0));
+    await _success(
+      useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+    );
     final product = await _success(
       useCases.createProduct(
+        operationKey: useCases.newOpeningStockOperationKey(),
         name: 'ميكروويف ملصق',
         salePriceMinor: 9000,
         openingQty: 0,

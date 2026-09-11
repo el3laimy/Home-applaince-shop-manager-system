@@ -67,7 +67,7 @@ class MoneyInputParse {
 }
 
 MoneyInputParse parseMoneyInput(String rawInput, {bool allowNegative = false}) {
-  final input = _normalizeArabicDigits(rawInput.trim());
+  final input = normalizeArabicDigits(rawInput.trim());
   if (input.isEmpty) return const MoneyInputParse.valid(0);
 
   final negative = input.startsWith('-');
@@ -101,7 +101,7 @@ int allocateRemainderToLast(int totalMinorUnits, int count, int index) {
   return index == count - 1 ? base + remainder : base;
 }
 
-String _normalizeArabicDigits(String input) {
+String normalizeArabicDigits(String input) {
   const arabicZero = 0x0660;
   const persianZero = 0x06F0;
   final buffer = StringBuffer();

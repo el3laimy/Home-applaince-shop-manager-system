@@ -10,6 +10,7 @@ class _InstallmentsView extends ConsumerStatefulWidget {
 
 class _InstallmentsViewState extends ConsumerState<_InstallmentsView> {
   final _search = TextEditingController();
+  final _settlingPlanIds = <int>{};
   _InstallmentTab _tab = _InstallmentTab.customers;
 
   @override
@@ -134,36 +135,48 @@ class _InstallmentsViewState extends ConsumerState<_InstallmentsView> {
     InstallmentPlan plan,
     int remaining,
   ) async {
-    final payment = await showDialog<({int amount, PaymentMethod method})>(
-      context: context,
-      builder: (_) => _InstallmentPaymentDialog(
-        title: plan.partyType == 'customer' ? 'تحصيل قسط' : 'سداد قسط',
-        initialMinor: remaining,
-      ),
-    );
-    if (payment == null || !context.mounted) return;
-    final result = await _runWithNegativeBalanceApproval(
-      context,
-      action: (allowNegativeBalance) => plan.partyType == 'customer'
-          ? ref
-                .read(useCasesProvider)
-                .collectInstallment(
-                  planId: plan.id,
-                  amountMinor: payment.amount,
-                  method: payment.method,
-                )
-          : ref
-                .read(useCasesProvider)
-                .paySupplierInstallment(
-                  planId: plan.id,
-                  amountMinor: payment.amount,
-                  method: payment.method,
-                  allowNegativeBalance: allowNegativeBalance,
-                ),
-    );
-    if (!context.mounted) return;
-    _showResult(context, result, success: 'تم تسجيل الحركة');
-    _refresh(ref);
+    if (_settlingPlanIds.contains(plan.id)) return;
+    setState(() => _settlingPlanIds.add(plan.id));
+    try {
+      final payment = await showDialog<({int amount, PaymentMethod method})>(
+        context: context,
+        builder: (_) => _InstallmentPaymentDialog(
+          title: plan.partyType == 'customer' ? 'تحصيل قسط' : 'سداد قسط',
+          initialMinor: remaining,
+        ),
+      );
+      if (payment == null || !context.mounted) return;
+      final useCases = ref.read(useCasesProvider);
+      final operationKey = useCases.newInstallmentOperationKey();
+      final request = plan.partyType == 'customer'
+          ? PendingFinancialOperation.customerInstallment(
+              operationKey: operationKey,
+              planId: plan.id,
+              amountMinor: payment.amount,
+              method: payment.method,
+            )
+          : PendingFinancialOperation.supplierInstallment(
+              operationKey: operationKey,
+              planId: plan.id,
+              amountMinor: payment.amount,
+              method: payment.method,
+            );
+      final result = await _runWithNegativeBalanceApproval(
+        context,
+        action: (allowNegativeBalance) => _submitPendingFinancialOperation(
+          useCases,
+          request,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
+        onConfirmationDeclined: () => useCases
+            .discardUncommittedPendingFinancialOperation(request.operationKey),
+      );
+      if (!context.mounted) return;
+      _showResult(context, result, success: 'تم تسجيل الحركة');
+      _refresh(ref);
+    } finally {
+      if (mounted) setState(() => _settlingPlanIds.remove(plan.id));
+    }
   }
 }
 

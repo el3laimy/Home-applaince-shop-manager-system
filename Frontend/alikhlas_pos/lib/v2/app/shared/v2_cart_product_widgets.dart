@@ -1,8 +1,10 @@
 part of '../v2_app.dart';
 
 class _CartLine {
-  _CartLine(this.product);
+  _CartLine(this.product, {int? unitPriceMinor})
+    : unitPriceMinor = unitPriceMinor ?? product.salePriceMinor;
   final Product product;
+  final int unitPriceMinor;
   int qty = 1;
 }
 
@@ -35,15 +37,14 @@ class _ProductAvatar extends StatelessWidget {
 }
 
 class _PurchaseCartLine {
-  _PurchaseCartLine(this.product) {
-    costMinor = product.avgCostMinor;
-    costInput = product.avgCostMinor == 0
-        ? ''
-        : _minorToInputText(product.avgCostMinor);
+  _PurchaseCartLine(this.product, {int? quantity, int? unitCostMinor}) {
+    qty = quantity ?? 1;
+    costMinor = unitCostMinor ?? product.avgCostMinor;
+    costInput = costMinor == 0 ? '' : _minorToInputText(costMinor);
   }
 
   final Product product;
-  int qty = 1;
+  late int qty;
   late int costMinor;
   late String costInput;
 }
@@ -186,7 +187,7 @@ class _CartList extends StatelessWidget {
         return ListTile(
           dense: true,
           title: Text(line.product.name),
-          subtitle: Text(Money(line.product.salePriceMinor).format()),
+          subtitle: Text(Money(line.unitPriceMinor).format()),
           trailing: _QtyStepper(
             qty: line.qty,
             maxQty: line.product.stockQty,

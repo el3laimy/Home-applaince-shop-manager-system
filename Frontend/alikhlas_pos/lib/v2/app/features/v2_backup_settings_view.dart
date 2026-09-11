@@ -9,13 +9,19 @@ class _BackupView extends ConsumerWidget {
     final backupStatus = snapshot.backupStatus;
     return _Screen(
       title: 'النسخ الاحتياطي',
-      subtitle: 'نسخة يدوية ويومية تلقائية عند اختيار مجلد',
+      subtitle:
+          'نسخ تلقائي كل 30 دقيقة أثناء التشغيل، مع إعادة المحاولة عند تعذر النسخ',
       child: _GlassPane(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (backupStatus.warning != null)
+              Text(
+                backupStatus.warning!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             _InfoLine('مجلد النسخ', backupStatus.directory ?? 'لم يتم اختياره'),
-            _InfoLine('آخر نسخة يومية', backupStatus.lastDate ?? 'لا يوجد'),
+            _InfoLine('آخر نسخة تلقائية', backupStatus.lastDate ?? 'لا يوجد'),
             _InfoLine(
               'آخر ملف',
               backupStatus.latestBackupPath == null
@@ -37,6 +43,11 @@ class _BackupView extends ConsumerWidget {
                   label: const Text('نسخ الآن'),
                 ),
                 OutlinedButton.icon(
+                  onPressed: () => _portableBackup(context, ref),
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('حزمة نقل تشمل الصور'),
+                ),
+                OutlinedButton.icon(
                   onPressed: () => _chooseBackupDirectory(context, ref),
                   icon: const Icon(Icons.folder_open),
                   label: const Text('اختيار المجلد'),
@@ -45,6 +56,11 @@ class _BackupView extends ConsumerWidget {
                   onPressed: () => _restoreBackup(context, ref),
                   icon: const Icon(Icons.restore),
                   label: const Text('استرجاع نسخة'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _auditData(context, ref),
+                  icon: const Icon(Icons.fact_check),
+                  label: const Text('فحص اتساق البيانات'),
                 ),
               ],
             ),
@@ -93,7 +109,7 @@ class _BackupView extends ConsumerWidget {
     final picked = await FilePicker.platform.pickFiles(
       dialogTitle: 'اختر ملف النسخة الاحتياطية',
       type: FileType.custom,
-      allowedExtensions: ['db'],
+      allowedExtensions: ['db', 'zip'],
     );
     if (!context.mounted ||
         picked == null ||
@@ -105,20 +121,157 @@ class _BackupView extends ConsumerWidget {
       context,
       title: 'استرجاع نسخة احتياطية',
       message:
-          'سيتم استبدال قاعدة البيانات الحالية بالملف ${_fileName(backupPath)}. تأكد أن لديك نسخة حديثة قبل المتابعة، ثم أعد تشغيل التطبيق بعد الاسترجاع.',
+          'سيتم استبدال البيانات الحالية بالنسخة ${_fileName(backupPath)}، وستفقد التغييرات التي تمت بعد تاريخها. سنفحص الملف أولًا ونحتفظ بنسخة رجوع. حزمة ZIP تعيد صور المنتجات أيضًا. بعد الاسترجاع ستعود إلى تسجيل الدخول.',
     );
     if (!confirmed || !context.mounted) return;
+    final useCases = ref.read(useCasesProvider);
+    final navigator = Navigator.of(context);
+    final busyRoute = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Expanded(
+                child: Text('جارٍ فحص النسخة واسترجاعها. يرجى الانتظار.'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    unawaited(navigator.push(busyRoute));
     try {
-      await ref.read(useCasesProvider).restoreFromBackup(File(backupPath));
+      final backup = File(backupPath);
+      if (backupPath.toLowerCase().endsWith('.zip')) {
+        await useCases.restoreFromPortableBackup(backup);
+      } else {
+        await useCases.restoreFromBackup(backup);
+      }
       if (!context.mounted) return;
-      _showSnack(
-        context,
-        'تم الاسترجاع. أعد تشغيل التطبيق لفتح الملف المسترجع.',
-      );
+      _showSnack(context, 'تم الاسترجاع. سجل الدخول لفتح بيانات النسخة.');
+    } on FormatException catch (error) {
+      if (!context.mounted) return;
+      _showSnack(context, error.message);
     } catch (error) {
       if (!context.mounted) return;
       _showSnack(context, 'تعذر الاسترجاع: $error');
+    } finally {
+      if (busyRoute.isActive) navigator.removeRoute(busyRoute);
+      if (context.mounted && useCases.databaseClosedForRestore) {
+        ref.read(currentOwnerProvider.notifier).setOwner(null);
+        ref.invalidate(databaseProvider);
+        ref.invalidate(bootstrapProvider);
+      }
     }
+  }
+
+  Future<void> _portableBackup(BuildContext context, WidgetRef ref) async {
+    var directoryPath = snapshot.backupStatus.directory;
+    if (directoryPath == null || directoryPath.trim().isEmpty) {
+      directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'اختر مجلد حفظ حزمة النقل',
+      );
+      if (!context.mounted || directoryPath == null) return;
+      await ref.read(useCasesProvider).setBackupDirectory(directoryPath);
+    }
+    try {
+      final bundle = await ref
+          .read(useCasesProvider)
+          .createPortableBackup(Directory(directoryPath));
+      if (!context.mounted) return;
+      _showSnack(context, 'تم إنشاء حزمة النقل: ${_fileName(bundle.path)}');
+      _refresh(ref);
+    } on FormatException catch (error) {
+      if (!context.mounted) return;
+      _showSnack(context, error.message);
+    } catch (error) {
+      if (!context.mounted) return;
+      _showSnack(context, 'تعذر إنشاء حزمة النقل: $error');
+    }
+  }
+
+  Future<void> _auditData(BuildContext context, WidgetRef ref) {
+    final audit = ref.read(useCasesProvider).dataIntegrityAudit();
+    return showDialog<void>(
+      context: context,
+      builder: (_) => _IntegrityAuditDialog(audit: audit),
+    );
+  }
+}
+
+class _IntegrityAuditDialog extends StatelessWidget {
+  const _IntegrityAuditDialog({required this.audit});
+
+  final Future<DataIntegrityAudit> audit;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('فحص اتساق البيانات'),
+      content: SizedBox(
+        width: 640,
+        child: FutureBuilder<DataIntegrityAudit>(
+          future: audit,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(
+                height: 96,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return const Text(
+                'تعذر إكمال الفحص الآن. لم تُعدّل أي بيانات؛ أعد المحاولة بعد حفظ نسخة احتياطية.',
+              );
+            }
+            final result = snapshot.data!;
+            if (result.isConsistent) {
+              return const Text(
+                'لا توجد تعارضات في القيود أو المخزون أو خطط الأقساط. الفحص للقراءة فقط ولم يغير أي بيانات.',
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'وجد الفحص ${result.issues.length} ملاحظة. لا تعدّل السجلات يدويًا؛ أنشئ نسخة احتياطية ثم راجع الدعم أو قيد تصحيح موثق.',
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: result.issues.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final issue = result.issues[index];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.warning_amber_rounded),
+                        title: Text(issue.record),
+                        subtitle: Text(issue.message),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('إغلاق'),
+        ),
+      ],
+    );
   }
 }
 
@@ -317,7 +470,7 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                   widget.snapshot.backupStatus.directory ?? 'لم يتم اختياره',
                 ),
                 _InfoLine(
-                  'آخر نسخة يومية',
+                  'آخر نسخة تلقائية',
                   widget.snapshot.backupStatus.lastDate ?? 'لا يوجد',
                 ),
                 _InfoLine(

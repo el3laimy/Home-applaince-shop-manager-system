@@ -15,6 +15,7 @@ void main() {
       expect(parseMoneyInput('125,50').minorUnits, 12550);
       expect(parseMoneyInput('١٢٥,٥٠').minorUnits, 12550);
       expect(parseMoneyInput('۱۲۵.۵۰').minorUnits, 12550);
+      expect(normalizeArabicDigits('١٢ و ۳۴'), '12 و 34');
     });
 
     test('formats plain money without hidden bidi marks for pdf output', () {

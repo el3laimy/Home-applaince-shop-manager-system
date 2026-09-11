@@ -1,14 +1,93 @@
 part of '../v2_use_cases.dart';
 
 extension V2SalesPurchaseReturnUseCases on V2UseCases {
+  String newSaleOperationKey() => newFinancialOperationKey();
+
   Future<AppResult<int>> createSale({
+    String? operationKey,
     int? customerId,
     required List<SaleLineInput> items,
     required List<PaymentInput> payments,
     InstallmentTerms? installmentTerms,
     int discountMinor = 0,
   }) async {
+    if (operationKey == null) {
+      return const AppFailure<int>(
+        'معرّف عملية البيع مطلوب لمنع تسجيل الفاتورة مرتين.',
+      );
+    }
+    final frozenItems = List<SaleLineInput>.unmodifiable(items);
+    final frozenPayments = List<PaymentInput>.unmodifiable(payments);
+    return _runIdempotentFinancialOperation(
+      namespace: 'sale',
+      operationKey: operationKey,
+      fingerprintPayload: [
+        customerId,
+        discountMinor,
+        [
+          for (final item in frozenItems)
+            [item.productId, item.qty, item.unitPriceMinor],
+        ],
+        [
+          for (final payment in frozenPayments)
+            [payment.method.name, payment.amountMinor, payment.note],
+        ],
+        if (installmentTerms == null)
+          null
+        else
+          [
+            installmentTerms.partyId,
+            installmentTerms.count,
+            installmentTerms.firstDueDate.toIso8601String(),
+            installmentTerms.interestMinor,
+            installmentTerms.periodDays,
+          ],
+      ],
+      conflictMessage: 'هذه العملية محفوظة ببيانات مختلفة. راجع سجل الفواتير.',
+      legacyIdFields: const ['saleId'],
+      legacyFingerprintPayload: [
+        customerId,
+        discountMinor,
+        [
+          for (final item in frozenItems)
+            [item.productId, item.qty, item.unitPriceMinor],
+        ],
+        [
+          for (final payment in frozenPayments)
+            [payment.method.name, payment.amountMinor],
+        ],
+        if (installmentTerms == null)
+          null
+        else
+          [
+            installmentTerms.partyId,
+            installmentTerms.count,
+            installmentTerms.firstDueDate.toIso8601String(),
+            installmentTerms.interestMinor,
+            installmentTerms.periodDays,
+          ],
+      ],
+      execute: () => _createSale(
+        customerId: customerId,
+        items: frozenItems,
+        payments: frozenPayments,
+        installmentTerms: installmentTerms,
+        discountMinor: discountMinor,
+      ),
+    );
+  }
+
+  Future<AppResult<int>> _createSale({
+    int? customerId,
+    required List<SaleLineInput> items,
+    required List<PaymentInput> payments,
+    InstallmentTerms? installmentTerms,
+    required int discountMinor,
+  }) async {
     if (items.isEmpty) return const AppFailure('أضف صنفًا واحدًا على الأقل');
+    if (items.map((item) => item.productId).toSet().length != items.length) {
+      return const AppFailure('الصنف مكرر. اجمع كميته في سطر واحد.');
+    }
     if (payments.any((payment) => payment.amountMinor < 0)) {
       return const AppFailure('المدفوعات لا يمكن أن تكون سالبة');
     }
@@ -21,7 +100,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
 
     try {
-      final saleId = await db.transaction(() async {
+      final saleId = await _writeTransaction(() async {
         var subtotal = 0;
         var cogs = 0;
         final productRows = <int, Product>{};
@@ -186,13 +265,57 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
   }
 
+  String newPurchaseOperationKey() => newFinancialOperationKey();
+
   Future<AppResult<int>> createPurchase({
+    String? operationKey,
     int? supplierId,
     required List<PurchaseLineInput> items,
     required List<PaymentInput> payments,
     bool allowNegativeBalance = false,
   }) async {
+    if (operationKey == null) {
+      return const AppFailure<int>(
+        'معرّف عملية الشراء مطلوب لمنع تسجيل الفاتورة مرتين.',
+      );
+    }
+    final frozenItems = List<PurchaseLineInput>.unmodifiable(items);
+    final frozenPayments = List<PaymentInput>.unmodifiable(payments);
+    return _runIdempotentFinancialOperation(
+      namespace: 'purchase',
+      operationKey: operationKey,
+      fingerprintPayload: [
+        supplierId,
+        [
+          for (final item in frozenItems)
+            [item.productId, item.qty, item.unitCostMinor],
+        ],
+        [
+          for (final payment in frozenPayments)
+            [payment.method.name, payment.amountMinor, payment.note],
+        ],
+      ],
+      conflictMessage: 'هذه العملية محفوظة ببيانات مختلفة. راجع فواتير الشراء.',
+      legacyIdFields: const ['purchaseId'],
+      execute: () => _createPurchase(
+        supplierId: supplierId,
+        items: frozenItems,
+        payments: frozenPayments,
+        allowNegativeBalance: allowNegativeBalance,
+      ),
+    );
+  }
+
+  Future<AppResult<int>> _createPurchase({
+    int? supplierId,
+    required List<PurchaseLineInput> items,
+    required List<PaymentInput> payments,
+    required bool allowNegativeBalance,
+  }) async {
     if (items.isEmpty) return const AppFailure('أضف صنفًا واحدًا على الأقل');
+    if (items.map((item) => item.productId).toSet().length != items.length) {
+      return const AppFailure('الصنف مكرر. اجمع كميته في سطر واحد.');
+    }
     if (payments.any((payment) => payment.amountMinor < 0)) {
       return const AppFailure('المدفوعات لا يمكن أن تكون سالبة');
     }
@@ -202,7 +325,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
 
     try {
-      final result = await db.transaction<AppResult<int>>(() async {
+      final result = await _writeTransaction<AppResult<int>>(() async {
         var total = 0;
         final products = <int, Product>{};
         for (final item in items) {
@@ -299,19 +422,21 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
 
         await _insertPayments('purchase', purchaseId, payments);
         if (remaining > 0 && supplierId != null) {
-          await db
-              .into(db.installmentPlans)
-              .insert(
-                InstallmentPlansCompanion.insert(
-                  ownerType: 'purchase',
-                  ownerId: purchaseId,
-                  partyType: 'supplier',
-                  partyId: supplierId,
-                  principalMinor: remaining,
-                  totalMinor: remaining,
-                  installmentCount: 1,
-                ),
-              );
+          // Supplier credit is one due installment. Keeping an explicit
+          // schedule makes the balance and consistency checks auditable.
+          await _createInstallmentPlan(
+            ownerType: 'purchase',
+            ownerId: purchaseId,
+            partyType: 'supplier',
+            partyId: supplierId,
+            principalMinor: remaining,
+            interestMinor: 0,
+            terms: InstallmentTerms(
+              partyId: supplierId,
+              count: 1,
+              firstDueDate: clock(),
+            ),
+          );
         }
 
         await _postLedger(
@@ -342,12 +467,52 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
   }
 
+  String newSaleReturnOperationKey() => newFinancialOperationKey();
+
   Future<AppResult<int>> createSaleReturn({
+    String? operationKey,
     required int saleId,
     required Map<int, int> saleItemQuantities,
     required PaymentMethod refundMethod,
     PaymentMethod? overflowRefundMethod,
     bool allowNegativeBalance = false,
+  }) async {
+    if (operationKey == null) {
+      return const AppFailure<int>(
+        'معرّف عملية المرتجع مطلوب لمنع رد المبلغ أو المخزون مرتين.',
+      );
+    }
+    final quantities = Map<int, int>.unmodifiable(saleItemQuantities);
+    final orderedQuantities = quantities.entries.toList()
+      ..sort((left, right) => left.key.compareTo(right.key));
+    return _runIdempotentFinancialOperation(
+      namespace: 'sale_return',
+      operationKey: operationKey,
+      fingerprintPayload: [
+        saleId,
+        [
+          for (final item in orderedQuantities) [item.key, item.value],
+        ],
+        refundMethod.name,
+        overflowRefundMethod?.name,
+      ],
+      conflictMessage: 'هذا المرتجع محفوظ ببيانات مختلفة. راجع سجل المرتجعات.',
+      execute: () => _createSaleReturn(
+        saleId: saleId,
+        saleItemQuantities: quantities,
+        refundMethod: refundMethod,
+        overflowRefundMethod: overflowRefundMethod,
+        allowNegativeBalance: allowNegativeBalance,
+      ),
+    );
+  }
+
+  Future<AppResult<int>> _createSaleReturn({
+    required int saleId,
+    required Map<int, int> saleItemQuantities,
+    required PaymentMethod refundMethod,
+    required PaymentMethod? overflowRefundMethod,
+    required bool allowNegativeBalance,
   }) async {
     if (saleItemQuantities.isEmpty) {
       return const AppFailure('اختر صنفًا واحدًا على الأقل');
@@ -362,7 +527,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
 
     try {
-      final returnId = await db.transaction(() async {
+      final returnId = await _writeTransaction(() async {
         final sale = await (db.select(
           db.saleInvoices,
         )..where((s) => s.id.equals(saleId))).getSingleOrNull();
@@ -372,16 +537,15 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           throw _BusinessError('مرتجع التقسيط يحتاج فاتورة مرتبطة بعميل');
         }
 
+        final invoiceItems = await (db.select(
+          db.saleItems,
+        )..where((item) => item.saleId.equals(saleId))).get();
+        final netTotals = _netSaleItemTotals(sale, invoiceItems);
         var refund = 0;
         var returnedCost = 0;
         final returnLines =
             <
-              ({
-                Product product,
-                SaleItem saleItem,
-                int qty,
-                int refundUnitPrice,
-              })
+              ({Product product, SaleItem saleItem, int qty, int refundMinor})
             >[];
 
         for (final entry in saleItemQuantities.entries) {
@@ -403,20 +567,30 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           if (qty <= 0 || qty > returnableQty) {
             throw _BusinessError('كمية المرتجع غير صحيحة');
           }
-          final refundUnitPrice = _netSaleItemUnitPrice(sale, saleItem);
+          final refundedMinor = priorReturns.fold<int>(
+            0,
+            (sum, row) => sum + row.qty * row.unitPriceMinor,
+          );
+          final lineRefund = _refundForQuantity(
+            netTotals[saleItem.id]!,
+            saleItem.qty,
+            alreadyReturned,
+            refundedMinor,
+            qty,
+          );
 
           final product = await (db.select(
             db.products,
           )..where((p) => p.id.equals(saleItem.productId))).getSingle();
 
-          refund += qty * refundUnitPrice;
+          refund += lineRefund;
           // Sale returns reverse inventory at the historical sold cost; current WAC is not recalculated in v2.
           returnedCost += qty * saleItem.unitCostMinor;
           returnLines.add((
             product: product,
             saleItem: saleItem,
             qty: qty,
-            refundUnitPrice: refundUnitPrice,
+            refundMinor: lineRefund,
           ));
         }
 
@@ -520,18 +694,28 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
             ),
           );
 
-          await db
-              .into(db.saleReturnItems)
-              .insert(
-                SaleReturnItemsCompanion.insert(
-                  returnId: returnId,
-                  saleItemId: line.saleItem.id,
-                  productId: line.product.id,
-                  qty: line.qty,
-                  unitPriceMinor: line.refundUnitPrice,
-                  unitCostMinor: line.saleItem.unitCostMinor,
-                ),
-              );
+          // Split at most two unit-price groups to preserve every minor unit
+          // without changing the historical return-item schema.
+          final basePrice = line.refundMinor ~/ line.qty;
+          final extraUnits = line.refundMinor % line.qty;
+          for (final group in [
+            (line.qty - extraUnits, basePrice),
+            (extraUnits, basePrice + 1),
+          ]) {
+            if (group.$1 == 0) continue;
+            await db
+                .into(db.saleReturnItems)
+                .insert(
+                  SaleReturnItemsCompanion.insert(
+                    returnId: returnId,
+                    saleItemId: line.saleItem.id,
+                    productId: line.product.id,
+                    qty: group.$1,
+                    unitPriceMinor: group.$2,
+                    unitCostMinor: line.saleItem.unitCostMinor,
+                  ),
+                );
+          }
           await db
               .into(db.stockMovements)
               .insert(
@@ -562,15 +746,17 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           );
         }
 
-        await _postLedger(
-          referenceType: 'sale_return',
-          referenceId: returnId,
-          description: 'مرتجع بيع $returnNo',
-          lines: [
-            _LedgerLineDraft(AccountCodes.sales, debitMinor: refund),
-            ...creditLines,
-          ],
-        );
+        if (refund > 0) {
+          await _postLedger(
+            referenceType: 'sale_return',
+            referenceId: returnId,
+            description: 'مرتجع بيع $returnNo',
+            lines: [
+              _LedgerLineDraft(AccountCodes.sales, debitMinor: refund),
+              ...creditLines,
+            ],
+          );
+        }
 
         if (returnedCost > 0) {
           await _postLedger(
@@ -659,13 +845,43 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
   }
 
+  String newExpenseOperationKey() => newFinancialOperationKey();
+
   Future<AppResult<int>> recordExpense({
+    String? operationKey,
     required String description,
     required int amountMinor,
     required PaymentMethod method,
     bool allowNegativeBalance = false,
   }) async {
-    if (description.trim().isEmpty) {
+    final normalizedDescription = description.trim();
+    if (operationKey == null) {
+      return const AppFailure<int>(
+        'معرّف عملية المصروف مطلوب لمنع تسجيله مرتين.',
+      );
+    }
+    return _runIdempotentFinancialOperation(
+      namespace: 'expense',
+      operationKey: operationKey,
+      fingerprintPayload: [normalizedDescription, amountMinor, method.name],
+      conflictMessage: 'هذا المصروف محفوظ ببيانات مختلفة. راجع سجل المصروفات.',
+      execute: () => _recordExpense(
+        description: normalizedDescription,
+        amountMinor: amountMinor,
+        method: method,
+        allowNegativeBalance: allowNegativeBalance,
+      ),
+    );
+  }
+
+  Future<AppResult<int>> _recordExpense({
+    required String description,
+    required int amountMinor,
+    required PaymentMethod method,
+    required bool allowNegativeBalance,
+  }) async {
+    final normalizedDescription = description.trim();
+    if (normalizedDescription.isEmpty) {
       return const AppFailure('وصف المصروف مطلوب');
     }
     if (amountMinor <= 0) {
@@ -691,7 +907,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
       if (confirmation != null) return confirmation;
     }
 
-    final expenseId = await db.transaction(() async {
+    final expenseId = await _writeTransaction(() async {
       final expenseId = await db
           .into(db.expenses)
           .insert(
@@ -704,7 +920,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
       await _postLedger(
         referenceType: 'expense',
         referenceId: expenseId,
-        description: 'مصروف: ${description.trim()}',
+        description: 'مصروف: $normalizedDescription',
         lines: [
           _LedgerLineDraft(AccountCodes.expenses, debitMinor: amountMinor),
           _LedgerLineDraft(
@@ -721,11 +937,19 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     return AppSuccess(expenseId);
   }
 
-  int _netSaleItemUnitPrice(SaleInvoice sale, SaleItem saleItem) {
-    if (sale.discountMinor == 0 || sale.subtotalMinor == 0) {
-      return saleItem.unitPriceMinor;
+  Map<int, int> _netSaleItemTotals(SaleInvoice sale, List<SaleItem> items) {
+    final ordered = [...items]..sort((a, b) => a.id.compareTo(b.id));
+    final result = <int, int>{};
+    var prefix = BigInt.zero;
+    final net = BigInt.from(sale.subtotalMinor - sale.discountMinor);
+    final subtotal = BigInt.from(sale.subtotalMinor);
+    for (final item in ordered) {
+      final before = prefix;
+      prefix += BigInt.from(item.lineTotalMinor);
+      result[item.id] = subtotal == BigInt.zero
+          ? 0
+          : ((prefix * net ~/ subtotal) - (before * net ~/ subtotal)).toInt();
     }
-    final netSubtotal = sale.subtotalMinor - sale.discountMinor;
-    return (saleItem.unitPriceMinor * netSubtotal / sale.subtotalMinor).round();
+    return result;
   }
 }

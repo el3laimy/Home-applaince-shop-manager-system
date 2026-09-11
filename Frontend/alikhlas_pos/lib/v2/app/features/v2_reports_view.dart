@@ -179,7 +179,7 @@ class _ReportsViewState extends ConsumerState<_ReportsView> {
   }
 
   (DateTime, DateTime) _rangeBounds(_ReportRange range) {
-    final now = DateTime.now();
+    final now = ref.read(appClockProvider)();
     final today = DateTime(now.year, now.month, now.day);
     return switch (range) {
       _ReportRange.today => (today, today),

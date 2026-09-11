@@ -75,6 +75,7 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                 Expanded(
                   child: DropdownButtonFormField<_InventoryFilter>(
                     initialValue: _filter,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'فلتر'),
                     items: const [
                       DropdownMenuItem(
@@ -102,6 +103,7 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                 Expanded(
                   child: DropdownButtonFormField<_InventorySort>(
                     initialValue: _sort,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'ترتيب'),
                     items: const [
                       DropdownMenuItem(
@@ -161,31 +163,55 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                                 icon: const Icon(Icons.qr_code_2),
                               ),
                               IconButton(
-                                tooltip: 'تعديل',
-                                onPressed: () => _openProductDialog(
+                                tooltip: 'جرد وتسوية الرصيد',
+                                onPressed: () => _openInventoryAdjustment(
                                   context,
                                   ref,
-                                  product: product,
+                                  product,
                                 ),
-                                icon: const Icon(Icons.edit),
+                                icon: const Icon(Icons.fact_check_outlined),
                               ),
-                              IconButton(
-                                tooltip: 'تعطيل',
-                                onPressed: product.isActive
-                                    ? () async {
-                                        final result = await ref
-                                            .read(useCasesProvider)
-                                            .deactivateProduct(product.id);
-                                        if (!context.mounted) return;
-                                        _showResult(
-                                          context,
-                                          result,
-                                          success: 'تم تعطيل المنتج',
-                                        );
-                                        _refresh(ref);
-                                      }
-                                    : null,
-                                icon: const Icon(Icons.power_settings_new),
+                              PopupMenuButton<String>(
+                                tooltip: 'إجراءات المنتج',
+                                onSelected: (action) async {
+                                  if (action == 'edit') {
+                                    await _openProductDialog(
+                                      context,
+                                      ref,
+                                      product: product,
+                                    );
+                                    return;
+                                  }
+                                  if (action == 'deactivate') {
+                                    final result = await ref
+                                        .read(useCasesProvider)
+                                        .deactivateProduct(product.id);
+                                    if (!context.mounted) return;
+                                    _showResult(
+                                      context,
+                                      result,
+                                      success: 'تم تعطيل المنتج',
+                                    );
+                                    _refresh(ref);
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(
+                                    value: 'edit',
+                                    child: ListTile(
+                                      leading: Icon(Icons.edit),
+                                      title: Text('تعديل بيانات المنتج'),
+                                    ),
+                                  ),
+                                  if (product.isActive)
+                                    const PopupMenuItem(
+                                      value: 'deactivate',
+                                      child: ListTile(
+                                        leading: Icon(Icons.power_settings_new),
+                                        title: Text('تعطيل المنتج'),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -267,36 +293,137 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
       builder: (_) => _ProductDialog(product: product),
     );
     if (data == null || !context.mounted) return;
+    final useCases = ref.read(useCasesProvider);
+    if (product == null && data.openingQty > 0) {
+      final result = await _submitPendingFinancialOperation(
+        useCases,
+        PendingFinancialOperation.openingStock(
+          operationKey: useCases.newOpeningStockOperationKey(),
+          name: data.name,
+          barcode: data.barcode,
+          category: data.category,
+          imagePath: data.imagePath,
+          salePriceMinor: data.salePriceMinor,
+          openingQty: data.openingQty,
+          openingCostMinor: data.openingCostMinor,
+          minStockQty: data.minStockQty,
+        ),
+        allowNegativeBalance: false,
+      );
+      if (!context.mounted) return;
+      _showResult(
+        context,
+        result,
+        success: 'تمت إضافة المنتج ورصيده الافتتاحي',
+      );
+      _refresh(ref);
+      return;
+    }
     final result = product == null
-        ? await ref
-              .read(useCasesProvider)
-              .createProduct(
-                name: data.name,
-                barcode: data.barcode,
-                category: data.category,
-                imagePath: data.imagePath,
-                salePriceMinor: data.salePriceMinor,
-                openingQty: data.openingQty,
-                openingCostMinor: data.openingCostMinor,
-                minStockQty: data.minStockQty,
-              )
-        : await ref
-              .read(useCasesProvider)
-              .updateProduct(
-                id: product.id,
-                name: data.name,
-                barcode: data.barcode,
-                category: data.category,
-                imagePath: data.imagePath,
-                salePriceMinor: data.salePriceMinor,
-                minStockQty: data.minStockQty,
-              );
+        ? await useCases.createProduct(
+            name: data.name,
+            barcode: data.barcode,
+            category: data.category,
+            imagePath: data.imagePath,
+            salePriceMinor: data.salePriceMinor,
+            openingQty: data.openingQty,
+            openingCostMinor: data.openingCostMinor,
+            minStockQty: data.minStockQty,
+          )
+        : await useCases.updateProduct(
+            id: product.id,
+            name: data.name,
+            barcode: data.barcode,
+            category: data.category,
+            imagePath: data.imagePath,
+            salePriceMinor: data.salePriceMinor,
+            minStockQty: data.minStockQty,
+          );
     if (!context.mounted) return;
     _showResult(
       context,
       result,
       success: product == null ? 'تمت إضافة المنتج' : 'تم تحديث المنتج',
     );
+    _refresh(ref);
+  }
+
+  Future<void> _openInventoryAdjustment(
+    BuildContext context,
+    WidgetRef ref,
+    Product product,
+  ) async {
+    final data = await showDialog<_InventoryAdjustmentFormData>(
+      context: context,
+      builder: (_) => _InventoryAdjustmentDialog(product: product),
+    );
+    if (data == null || !context.mounted) return;
+
+    final difference = data.countedQty - product.stockQty;
+    final valueDifference = difference * data.unitCostMinor;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تأكيد تسوية الجرد'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                product.name,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              Text('الرصيد المسجل: ${product.stockQty}'),
+              Text('الكمية الفعلية: ${data.countedQty}'),
+              Text('الفرق: ${difference > 0 ? '+' : ''}$difference'),
+              Text('السبب: ${data.reason.label}'),
+              if (data.note != null) Text('التوضيح: ${data.note}'),
+              const SizedBox(height: 10),
+              Text(
+                'تغير قيمة المخزون: ${Money(valueDifference).format()}',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'سيُحفظ مستند تسوية وحركة مخزون وقيد متزن. لا يمكن حذف أثر العملية بعد اعتمادها.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('رجوع للمراجعة'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('اعتماد التسوية'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final useCases = ref.read(useCasesProvider);
+    final result = await _submitPendingFinancialOperation(
+      useCases,
+      PendingFinancialOperation.inventoryAdjustment(
+        operationKey: useCases.newInventoryAdjustmentOperationKey(),
+        productId: product.id,
+        expectedStockQty: product.stockQty,
+        countedQty: data.countedQty,
+        reason: data.reason,
+        note: data.note,
+        unitCostMinor: data.unitCostMinor,
+      ),
+      allowNegativeBalance: false,
+    );
+    if (!context.mounted) return;
+    _showResult(context, result, success: 'تم تسجيل تسوية الجرد');
     _refresh(ref);
   }
 }

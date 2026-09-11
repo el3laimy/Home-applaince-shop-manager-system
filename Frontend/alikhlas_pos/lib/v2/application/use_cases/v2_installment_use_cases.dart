@@ -1,41 +1,68 @@
 part of '../v2_use_cases.dart';
 
 extension V2InstallmentUseCases on V2UseCases {
+  String newInstallmentOperationKey() => newFinancialOperationKey();
+
   Future<AppResult<int>> collectInstallment({
+    String? operationKey,
     required int planId,
     required int amountMinor,
     required PaymentMethod method,
   }) async {
-    return _settleInstallment(
-      planId: planId,
-      amountMinor: amountMinor,
-      method: method,
-      expectedPartyType: 'customer',
-      debitAccount: method == PaymentMethod.cash
-          ? AccountCodes.cash
-          : AccountCodes.wallet,
-      creditAccount: AccountCodes.receivables,
-      description: 'تحصيل قسط عميل',
+    if (operationKey == null) {
+      return const AppFailure<int>(
+        'معرّف عملية التحصيل مطلوب لمنع تسجيل القسط مرتين.',
+      );
+    }
+    return _runIdempotentFinancialOperation(
+      namespace: 'installment.customer',
+      operationKey: operationKey,
+      fingerprintPayload: ['customer', planId, amountMinor, method.name],
+      conflictMessage:
+          'هذا التحصيل محفوظ ببيانات مختلفة. راجع كشف حساب العميل.',
+      execute: () => _settleInstallment(
+        planId: planId,
+        amountMinor: amountMinor,
+        method: method,
+        expectedPartyType: 'customer',
+        debitAccount: method == PaymentMethod.cash
+            ? AccountCodes.cash
+            : AccountCodes.wallet,
+        creditAccount: AccountCodes.receivables,
+        description: 'تحصيل قسط عميل',
+      ),
     );
   }
 
   Future<AppResult<int>> paySupplierInstallment({
+    String? operationKey,
     required int planId,
     required int amountMinor,
     required PaymentMethod method,
     bool allowNegativeBalance = false,
   }) async {
-    return _settleInstallment(
-      planId: planId,
-      amountMinor: amountMinor,
-      method: method,
-      expectedPartyType: 'supplier',
-      debitAccount: AccountCodes.payables,
-      creditAccount: method == PaymentMethod.cash
-          ? AccountCodes.cash
-          : AccountCodes.wallet,
-      description: 'سداد قسط مورد',
-      allowNegativeBalance: allowNegativeBalance,
+    if (operationKey == null) {
+      return const AppFailure<int>(
+        'معرّف عملية السداد مطلوب لمنع تسجيل قسط المورد مرتين.',
+      );
+    }
+    return _runIdempotentFinancialOperation(
+      namespace: 'installment.supplier',
+      operationKey: operationKey,
+      fingerprintPayload: ['supplier', planId, amountMinor, method.name],
+      conflictMessage: 'هذا السداد محفوظ ببيانات مختلفة. راجع كشف حساب المورد.',
+      execute: () => _settleInstallment(
+        planId: planId,
+        amountMinor: amountMinor,
+        method: method,
+        expectedPartyType: 'supplier',
+        debitAccount: AccountCodes.payables,
+        creditAccount: method == PaymentMethod.cash
+            ? AccountCodes.cash
+            : AccountCodes.wallet,
+        description: 'سداد قسط مورد',
+        allowNegativeBalance: allowNegativeBalance,
+      ),
     );
   }
 
@@ -101,7 +128,7 @@ extension V2InstallmentUseCases on V2UseCases {
     }
 
     try {
-      final ledgerId = await db.transaction(() async {
+      final ledgerId = await _writeTransaction(() async {
         final plan = await (db.select(
           db.installmentPlans,
         )..where((p) => p.id.equals(planId))).getSingleOrNull();
@@ -185,7 +212,10 @@ extension V2InstallmentUseCases on V2UseCases {
   }
 
   Future<void> _allocateInstallmentPayment(int planId, int amountMinor) async {
-    var remaining = amountMinor;
+    final plan = await (db.select(
+      db.installmentPlans,
+    )..where((p) => p.id.equals(planId))).getSingle();
+    var remaining = plan.paidMinor + amountMinor;
     final installments =
         await (db.select(db.installmentPayments)
               ..where((p) => p.planId.equals(planId))
@@ -197,7 +227,7 @@ extension V2InstallmentUseCases on V2UseCases {
 
     for (final installment in installments) {
       if (remaining == 0) break;
-      if (installment.status == 'paid') continue;
+
       if (remaining < installment.amountMinor) {
         await (db.update(
           db.installmentPayments,
@@ -211,7 +241,7 @@ extension V2InstallmentUseCases on V2UseCases {
       )..where((p) => p.id.equals(installment.id))).write(
         InstallmentPaymentsCompanion(
           status: const Value('paid'),
-          paidAt: Value(DateTime.now()),
+          paidAt: Value(installment.paidAt ?? DateTime.now()),
         ),
       );
       remaining -= installment.amountMinor;

@@ -1,0 +1,12 @@
+dart analyze lib/v2 lib/main.dart test/v2
+Analyzing v2, main.dart, v2...
+No issues found!
+
+flutter test --no-pub test/v2
+02:28 +143: All tests passed!
+
+flutter build linux --release --no-pub
+See ../implementation-batch-24/linux-build.log for the rebuilt final bundle.
+
+bash tool/build_linux_deb.sh build/linux/x64/release/bundle ../../reports/2026-09-11/implementation-batch-24 1.0.0
+../../reports/2026-09-11/implementation-batch-24/alikhlas-pos_1.0.0_amd64.deb

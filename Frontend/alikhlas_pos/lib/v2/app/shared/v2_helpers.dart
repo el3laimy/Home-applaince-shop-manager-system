@@ -169,6 +169,7 @@ void _showResult<T>(
 Future<AppResult<int>> _runWithNegativeBalanceApproval(
   BuildContext context, {
   required Future<AppResult<int>> Function(bool allowNegativeBalance) action,
+  Future<void> Function()? onConfirmationDeclined,
 }) async {
   final firstResult = await action(false);
   if (!context.mounted) return firstResult;
@@ -177,10 +178,48 @@ Future<AppResult<int>> _runWithNegativeBalanceApproval(
     payload: final NegativeBalanceConfirmation confirmation,
   )) {
     final confirmed = await _confirmNegativeBalance(context, confirmation);
-    if (!confirmed || !context.mounted) return firstResult;
+    if (!confirmed || !context.mounted) {
+      await onConfirmationDeclined?.call();
+      return firstResult;
+    }
     return action(true);
   }
   return firstResult;
+}
+
+/// Persists the exact request before it can alter money, stock, or a shift.
+/// Unknown failures intentionally leave it in place so a later explicit retry
+/// can read the durable operation receipt instead of posting twice.
+Future<AppResult<int>> _submitPendingFinancialOperation(
+  V2UseCases useCases,
+  PendingFinancialOperation request, {
+  required bool allowNegativeBalance,
+}) async {
+  final staged = await useCases.stagePendingFinancialOperation(request);
+  if (staged.encode() != request.encode()) {
+    return const AppFailure<int>(
+      'يوجد طلب مالي سابق يحتاج تحققًا. أكمله أو ألغِه من رسالة الاستعادة.',
+    );
+  }
+  final result = await useCases.submitPendingFinancialOperation(
+    staged,
+    allowNegativeBalance: allowNegativeBalance,
+  );
+  if (result is AppSuccess<int>) {
+    final acknowledged = await useCases.acknowledgePendingFinancialOperation(
+      staged.operationKey,
+    );
+    if (!acknowledged) {
+      return const AppFailure<int>(
+        'تم الحفظ لكن تعذر تأكيد النتيجة. أعد فتح التطبيق للتحقق دون تسجيل جديد.',
+      );
+    }
+  } else if (result is! AppConfirmationRequired<int>) {
+    await useCases.discardUncommittedPendingFinancialOperation(
+      staged.operationKey,
+    );
+  }
+  return result;
 }
 
 Future<bool> _confirmNegativeBalance(

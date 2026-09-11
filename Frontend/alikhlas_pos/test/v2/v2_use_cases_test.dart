@@ -107,6 +107,8 @@ void main() {
                 'idx_ledger_entries_reference',
                 'idx_stock_movements_product_id',
                 'idx_stock_movements_reference',
+                'idx_inventory_adjustments_product_created',
+                'idx_opening_balances_target',
                 'idx_payments_owner',
                 'idx_installment_payments_plan_due',
                 'idx_sale_items_sale_id'
@@ -124,6 +126,8 @@ void main() {
           'idx_ledger_entries_reference',
           'idx_stock_movements_product_id',
           'idx_stock_movements_reference',
+          'idx_inventory_adjustments_product_created',
+          'idx_opening_balances_target',
           'idx_payments_owner',
           'idx_installment_payments_plan_due',
           'idx_sale_items_sale_id',
@@ -132,7 +136,7 @@ void main() {
     });
 
     test(
-      'database migrates a v3 file to v5 expenses, product images, and indexes',
+      'database migrates a v3 file to v7 including opening balances and indexes',
       () async {
         await db.close();
 
@@ -156,7 +160,7 @@ void main() {
             SELECT name
             FROM sqlite_master
             WHERE type = 'table'
-              AND name = 'expenses'
+              AND name IN ('expenses', 'inventory_adjustments', 'opening_balances')
             ''').get();
         final productColumns = await db.customSelect('''
             PRAGMA table_info(products);
@@ -173,19 +177,28 @@ void main() {
                 'idx_ledger_entries_reference',
                 'idx_stock_movements_product_id',
                 'idx_stock_movements_reference',
+                'idx_inventory_adjustments_product_created',
+                'idx_opening_balances_target',
                 'idx_payments_owner',
                 'idx_installment_payments_plan_due',
                 'idx_sale_items_sale_id'
               )
             ''').get();
 
-        expect(userVersion.data['user_version'], 5);
-        expect(tables.map((row) => row.data['name']), ['expenses']);
+        expect(userVersion.data['user_version'], 7);
+        expect(
+          tables.map((row) => row.data['name']),
+          containsAll([
+            'expenses',
+            'inventory_adjustments',
+            'opening_balances',
+          ]),
+        );
         expect(
           productColumns.map((row) => row.data['name']),
           contains('image_path'),
         );
-        expect(indexes, hasLength(10));
+        expect(indexes, hasLength(12));
       },
     );
 
@@ -194,6 +207,7 @@ void main() {
       () async {
         final first = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'غسالة بصورة',
             imagePath: '/tmp/washer.png',
             salePriceMinor: 10000,
@@ -203,6 +217,7 @@ void main() {
         );
         final second = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'ثلاجة بباركود تلقائي',
             salePriceMinor: 20000,
             openingQty: 1,
@@ -247,13 +262,19 @@ void main() {
       () async {
         final product = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'ثلاجة 14 قدم',
             salePriceMinor: 100000,
             openingQty: 3,
             openingCostMinor: 70000,
           ),
         );
-        await successOf(useCases.openShift(50000));
+        await successOf(
+          useCases.openShift(
+            50000,
+            operationKey: useCases.newShiftOperationKey(),
+          ),
+        );
         await successOf(
           useCases.updateShopSettings(
             shopName: 'محل الإخلاص',
@@ -265,6 +286,7 @@ void main() {
 
         final saleId = await successOf(
           useCases.createSale(
+            operationKey: useCases.newSaleOperationKey(),
             items: [
               SaleLineInput(
                 productId: product.id,
@@ -286,7 +308,12 @@ void main() {
         )..where((item) => item.saleId.equals(saleId))).getSingle();
         final receipt = await useCases.saleReceipt(saleId);
         final snapshot = await useCases.dashboardSnapshot();
-        final closedShift = await successOf(useCases.closeShift(100000));
+        final closedShift = await successOf(
+          useCases.closeShift(
+            100000,
+            operationKey: useCases.newShiftOperationKey(),
+          ),
+        );
 
         expect(storedProduct.stockQty, 2);
         expect(saleItem.unitCostMinor, 70000);
@@ -317,6 +344,7 @@ void main() {
     test('purchase updates weighted average cost', () async {
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'غسالة',
           salePriceMinor: 35000,
           openingQty: 2,
@@ -326,6 +354,7 @@ void main() {
 
       await successOf(
         useCases.createPurchase(
+          operationKey: useCases.newPurchaseOperationKey(),
           items: [
             PurchaseLineInput(
               productId: product.id,
@@ -348,6 +377,7 @@ void main() {
     test('purchase rejects zero unit cost at the use-case boundary', () async {
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'منتج تكلفة صفر',
           salePriceMinor: 12000,
           openingQty: 0,
@@ -356,6 +386,7 @@ void main() {
       );
 
       final purchase = await useCases.createPurchase(
+        operationKey: useCases.newPurchaseOperationKey(),
         items: [
           PurchaseLineInput(productId: product.id, qty: 1, unitCostMinor: 0),
         ],
@@ -375,6 +406,7 @@ void main() {
       () async {
         final product = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'خلاط',
             salePriceMinor: 15000,
             openingQty: 0,
@@ -384,6 +416,7 @@ void main() {
 
         final warning = await confirmationOf(
           useCases.createPurchase(
+            operationKey: useCases.newPurchaseOperationKey(),
             items: [
               PurchaseLineInput(
                 productId: product.id,
@@ -407,6 +440,7 @@ void main() {
 
         await successOf(
           useCases.createPurchase(
+            operationKey: useCases.newPurchaseOperationKey(),
             items: [
               PurchaseLineInput(
                 productId: product.id,
@@ -432,6 +466,7 @@ void main() {
           .insert(CustomersCompanion.insert(name: 'عميل أرصدة'));
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'ميكروويف',
           salePriceMinor: 10000,
           openingQty: 2,
@@ -440,6 +475,7 @@ void main() {
       );
       await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: customerId,
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
@@ -527,16 +563,20 @@ void main() {
             .insert(CustomersCompanion.insert(name: 'عميل تقسيط'));
         final product = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'بوتاجاز',
             salePriceMinor: 10000,
             openingQty: 1,
             openingCostMinor: 5000,
           ),
         );
-        await successOf(useCases.openShift(0));
+        await successOf(
+          useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+        );
 
         await successOf(
           useCases.createSale(
+            operationKey: useCases.newSaleOperationKey(),
             customerId: customerId,
             items: [
               SaleLineInput(
@@ -585,6 +625,7 @@ void main() {
           .insert(CustomersCompanion.insert(name: 'عميل مواعيد'));
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'تكييف',
           salePriceMinor: 12000,
           openingQty: 1,
@@ -593,6 +634,7 @@ void main() {
       );
 
       final invalid = await useCases.createSale(
+        operationKey: useCases.newSaleOperationKey(),
         customerId: customerId,
         items: [
           SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 12000),
@@ -612,6 +654,7 @@ void main() {
 
       await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: customerId,
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 12000),
@@ -641,15 +684,19 @@ void main() {
           .insert(CustomersCompanion.insert(name: 'عميل تحصيل'));
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'سخان',
           salePriceMinor: 10000,
           openingQty: 1,
           openingCostMinor: 5000,
         ),
       );
-      await successOf(useCases.openShift(0));
+      await successOf(
+        useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+      );
       await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: customerId,
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
@@ -667,6 +714,7 @@ void main() {
 
       await successOf(
         useCases.collectInstallment(
+          operationKey: useCases.newInstallmentOperationKey(),
           planId: plan.id,
           amountMinor: 1500,
           method: PaymentMethod.cash,
@@ -708,16 +756,20 @@ void main() {
             .insert(CustomersCompanion.insert(name: 'عميل تقرير'));
         final product = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'تكييف',
             salePriceMinor: 10000,
             openingQty: 3,
             openingCostMinor: 5000,
           ),
         );
-        await successOf(useCases.openShift(0));
+        await successOf(
+          useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+        );
 
         await successOf(
           useCases.createSale(
+            operationKey: useCases.newSaleOperationKey(),
             customerId: customerId,
             items: [
               SaleLineInput(
@@ -737,6 +789,7 @@ void main() {
         );
         await successOf(
           useCases.recordExpense(
+            operationKey: useCases.newExpenseOperationKey(),
             description: 'مصروف تشغيل',
             amountMinor: 500,
             method: PaymentMethod.cash,
@@ -744,6 +797,7 @@ void main() {
         );
         await successOf(
           useCases.createPurchase(
+            operationKey: useCases.newPurchaseOperationKey(),
             items: [
               PurchaseLineInput(
                 productId: product.id,
@@ -824,6 +878,7 @@ void main() {
           .insert(SuppliersCompanion.insert(name: 'مورد'));
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'شفاط',
           salePriceMinor: 20000,
           openingQty: 0,
@@ -833,6 +888,7 @@ void main() {
 
       await successOf(
         useCases.createPurchase(
+          operationKey: useCases.newPurchaseOperationKey(),
           supplierId: supplierId,
           items: [
             PurchaseLineInput(
@@ -848,6 +904,7 @@ void main() {
 
       final supplierPaymentWarning = await confirmationOf(
         useCases.paySupplierInstallment(
+          operationKey: useCases.newInstallmentOperationKey(),
           planId: plan.id,
           amountMinor: 20000,
           method: PaymentMethod.wallet,
@@ -862,6 +919,7 @@ void main() {
       );
       await successOf(
         useCases.paySupplierInstallment(
+          operationKey: useCases.newInstallmentOperationKey(),
           planId: plan.id,
           amountMinor: 20000,
           method: PaymentMethod.wallet,
@@ -869,13 +927,17 @@ void main() {
         ),
       );
       final rejectedCashExpense = await useCases.recordExpense(
+        operationKey: useCases.newExpenseOperationKey(),
         description: 'مصروف قبل الوردية',
         amountMinor: 500,
         method: PaymentMethod.cash,
       );
-      await successOf(useCases.openShift(0));
+      await successOf(
+        useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+      );
       final cashExpenseWarning = await confirmationOf(
         useCases.recordExpense(
+          operationKey: useCases.newExpenseOperationKey(),
           description: 'نقل بضاعة',
           amountMinor: 1500,
           method: PaymentMethod.cash,
@@ -890,6 +952,7 @@ void main() {
       );
       final expenseId = await successOf(
         useCases.recordExpense(
+          operationKey: useCases.newExpenseOperationKey(),
           description: 'نقل بضاعة',
           amountMinor: 1500,
           method: PaymentMethod.cash,
@@ -931,7 +994,12 @@ void main() {
         'شفاط',
       );
       expect(supplierStatement.first.invoiceDetails?.items.single.qty, 2);
-      expect(supplierStatement.first.invoiceDetails?.installments, isEmpty);
+      final supplierInstallment =
+          supplierStatement.first.invoiceDetails!.installments.single;
+      expect(supplierInstallment.amountMinor, 20000);
+      expect(supplierInstallment.paidMinor, 20000);
+      expect(supplierInstallment.remainingMinor, 0);
+      expect(supplierInstallment.status, 'paid');
       expect(
         supplierStatement.last.invoiceDetails?.invoiceNo,
         supplierStatement.first.invoiceDetails?.invoiceNo,
@@ -944,6 +1012,7 @@ void main() {
       () async {
         final warning = await confirmationOf(
           useCases.recordExpense(
+            operationKey: useCases.newExpenseOperationKey(),
             description: 'اشتراك محفظة',
             amountMinor: 700,
             method: PaymentMethod.wallet,
@@ -960,6 +1029,7 @@ void main() {
 
         final expenseId = await successOf(
           useCases.recordExpense(
+            operationKey: useCases.newExpenseOperationKey(),
             description: 'اشتراك محفظة',
             amountMinor: 700,
             method: PaymentMethod.wallet,
@@ -984,6 +1054,7 @@ void main() {
       () async {
         final expenseId = await successOf(
           useCases.recordExpense(
+            operationKey: useCases.newExpenseOperationKey(),
             description: 'مصروف تقرير',
             amountMinor: 900,
             method: PaymentMethod.wallet,
@@ -1011,15 +1082,19 @@ void main() {
     test('sale return restores stock and reverses sales and COGS', () async {
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'مروحة',
           salePriceMinor: 10000,
           openingQty: 2,
           openingCostMinor: 5000,
         ),
       );
-      await successOf(useCases.openShift(0));
+      await successOf(
+        useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+      );
       final saleId = await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           items: [
             SaleLineInput(productId: product.id, qty: 2, unitPriceMinor: 10000),
           ],
@@ -1035,12 +1110,14 @@ void main() {
       expect(previewBeforeReturn.lines.single.returnableQty, 2);
       await successOf(
         useCases.createSaleReturn(
+          operationKey: useCases.newSaleReturnOperationKey(),
           saleId: saleId,
           saleItemQuantities: {saleItem.id: 1},
           refundMethod: PaymentMethod.cash,
         ),
       );
       final invalidSecondReturn = await useCases.createSaleReturn(
+        operationKey: useCases.newSaleReturnOperationKey(),
         saleId: saleId,
         saleItemQuantities: {saleItem.id: 2},
         refundMethod: PaymentMethod.cash,
@@ -1064,6 +1141,7 @@ void main() {
     test('cash sale return requires an open shift', () async {
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'دفاية',
           salePriceMinor: 10000,
           openingQty: 1,
@@ -1072,6 +1150,7 @@ void main() {
       );
       final saleId = await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
           ],
@@ -1083,6 +1162,7 @@ void main() {
       )..where((item) => item.saleId.equals(saleId))).getSingle();
 
       final result = await useCases.createSaleReturn(
+        operationKey: useCases.newSaleReturnOperationKey(),
         saleId: saleId,
         saleItemQuantities: {saleItem.id: 1},
         refundMethod: PaymentMethod.cash,
@@ -1102,6 +1182,7 @@ void main() {
             .insert(CustomersCompanion.insert(name: 'عميل فائض مرتجع'));
         final product = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'مكنسة',
             salePriceMinor: 10000,
             openingQty: 1,
@@ -1110,6 +1191,7 @@ void main() {
         );
         final saleId = await successOf(
           useCases.createSale(
+            operationKey: useCases.newSaleOperationKey(),
             customerId: customerId,
             items: [
               SaleLineInput(
@@ -1129,6 +1211,7 @@ void main() {
         final plan = await db.select(db.installmentPlans).getSingle();
         await successOf(
           useCases.collectInstallment(
+            operationKey: useCases.newInstallmentOperationKey(),
             planId: plan.id,
             amountMinor: 8000,
             method: PaymentMethod.wallet,
@@ -1138,7 +1221,12 @@ void main() {
           db.saleItems,
         )..where((item) => item.saleId.equals(saleId))).getSingle();
 
+        final preview = await useCases.saleReturnPreview(saleId);
+        expect(preview.remainingDebtMinor, 2000);
+        expect(preview.receipt.invoice.remainingMinor, 10000);
+
         final cashOverflowWithoutShift = await useCases.createSaleReturn(
+          operationKey: useCases.newSaleReturnOperationKey(),
           saleId: saleId,
           saleItemQuantities: {saleItem.id: 1},
           refundMethod: PaymentMethod.installment,
@@ -1151,6 +1239,7 @@ void main() {
 
         await successOf(
           useCases.createSaleReturn(
+            operationKey: useCases.newSaleReturnOperationKey(),
             saleId: saleId,
             saleItemQuantities: {saleItem.id: 1},
             refundMethod: PaymentMethod.installment,
@@ -1227,6 +1316,7 @@ void main() {
           .insert(SuppliersCompanion.insert(name: 'مورد يوم كامل'));
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'غلاية كهرباء',
           salePriceMinor: 10000,
           openingQty: 0,
@@ -1235,9 +1325,15 @@ void main() {
         ),
       );
 
-      await successOf(useCases.openShift(10000));
+      await successOf(
+        useCases.openShift(
+          10000,
+          operationKey: useCases.newShiftOperationKey(),
+        ),
+      );
       await successOf(
         useCases.createPurchase(
+          operationKey: useCases.newPurchaseOperationKey(),
           supplierId: supplierId,
           items: [
             PurchaseLineInput(
@@ -1255,6 +1351,7 @@ void main() {
       );
       final saleId = await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: customerId,
           items: [
             SaleLineInput(productId: product.id, qty: 2, unitPriceMinor: 10000),
@@ -1277,6 +1374,7 @@ void main() {
       )..where((plan) => plan.ownerType.equals('sale'))).getSingle();
       await successOf(
         useCases.collectInstallment(
+          operationKey: useCases.newInstallmentOperationKey(),
           planId: plan.id,
           amountMinor: 1000,
           method: PaymentMethod.cash,
@@ -1287,12 +1385,18 @@ void main() {
       )..where((line) => line.saleId.equals(saleId))).getSingle();
       await successOf(
         useCases.createSaleReturn(
+          operationKey: useCases.newSaleReturnOperationKey(),
           saleId: saleId,
           saleItemQuantities: {saleItem.id: 1},
           refundMethod: PaymentMethod.installment,
         ),
       );
-      final closedShift = await successOf(useCases.closeShift(11000));
+      final closedShift = await successOf(
+        useCases.closeShift(
+          11000,
+          operationKey: useCases.newShiftOperationKey(),
+        ),
+      );
 
       final storedProduct = await productById(db, product.id);
       final dashboard = await useCases.dashboardSnapshot();
@@ -1337,6 +1441,7 @@ void main() {
       () async {
         final product = await successOf(
           useCases.createProduct(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: 'مكواة',
             salePriceMinor: 10000,
             openingQty: 1,
@@ -1345,6 +1450,7 @@ void main() {
         );
 
         final result = await useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           items: [
             SaleLineInput(productId: product.id, qty: 1, unitPriceMinor: 10000),
           ],
@@ -1361,6 +1467,7 @@ void main() {
     test('rejects selling unavailable stock atomically', () async {
       final product = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'ديب فريزر',
           salePriceMinor: 25000,
           openingQty: 1,
@@ -1369,6 +1476,7 @@ void main() {
       );
 
       final result = await useCases.createSale(
+        operationKey: useCases.newSaleOperationKey(),
         items: [
           SaleLineInput(productId: product.id, qty: 2, unitPriceMinor: 25000),
         ],
@@ -1403,15 +1511,19 @@ void main() {
 
       final backedUpProduct = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'منتج قبل النسخة',
           salePriceMinor: 1000,
           openingQty: 1,
           openingCostMinor: 700,
         ),
       );
-      await successOf(useCases.openShift(0));
+      await successOf(
+        useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+      );
       await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           items: [
             SaleLineInput(
               productId: backedUpProduct.id,
@@ -1430,6 +1542,7 @@ void main() {
       final secondDailyBackup = await useCases.runAutomaticBackupIfDue();
       await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'منتج بعد النسخة',
           salePriceMinor: 2000,
           openingQty: 1,
@@ -1486,6 +1599,7 @@ void main() {
       await useCases.bootstrap();
       await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'منتج قبل النسخة',
           salePriceMinor: 1000,
           openingQty: 1,
@@ -1497,6 +1611,7 @@ void main() {
       );
       await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'منتج الحالة الحالية',
           salePriceMinor: 2000,
           openingQty: 1,
@@ -1527,6 +1642,7 @@ void main() {
       );
       await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'منتج بعد فشل الاسترجاع',
           salePriceMinor: 3000,
           openingQty: 1,
@@ -1781,7 +1897,9 @@ class _FailingRestoreFileOperations extends RestoreFileOperations {
 
   @override
   Future<void> copyFile(File source, File target) async {
-    if (source.path == backupPath && target.path == targetDbPath) {
+    if ((source.path == backupPath ||
+            source.uri.pathSegments.last == 'candidate.db') &&
+        target.path == targetDbPath) {
       await target.writeAsString('partial restore write');
       throw FileSystemException('Simulated restore copy failure', target.path);
     }

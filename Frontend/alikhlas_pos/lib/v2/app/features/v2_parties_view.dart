@@ -12,6 +12,7 @@ class _PartiesViewState extends ConsumerState<_PartiesView> {
   final _search = TextEditingController();
   _PartyFilter _filter = _PartyFilter.all;
   String? _selectedKey;
+  bool _quickPaymentInProgress = false;
 
   @override
   void dispose() {
@@ -222,47 +223,59 @@ class _PartiesViewState extends ConsumerState<_PartiesView> {
     WidgetRef ref,
     PartyBalance party,
   ) async {
-    final plans = widget.snapshot.installmentSummaries
-        .where(
-          (item) =>
-              item.plan.partyType == party.type &&
-              item.plan.partyId == party.id,
-        )
-        .toList();
-    if (plans.isEmpty) {
-      _showSnack(context, 'لا توجد خطط أقساط مفتوحة لهذا الحساب');
-      return;
+    if (_quickPaymentInProgress) return;
+    setState(() => _quickPaymentInProgress = true);
+    try {
+      final plans = widget.snapshot.installmentSummaries
+          .where(
+            (item) =>
+                item.plan.partyType == party.type &&
+                item.plan.partyId == party.id,
+          )
+          .toList();
+      if (plans.isEmpty) {
+        _showSnack(context, 'لا توجد خطط أقساط مفتوحة لهذا الحساب');
+        return;
+      }
+      final payment =
+          await showDialog<
+            ({InstallmentPlanPreview plan, int amount, PaymentMethod method})
+          >(
+            context: context,
+            builder: (_) => _QuickInstallmentDialog(party: party, plans: plans),
+          );
+      if (payment == null || !context.mounted) return;
+      final useCases = ref.read(useCasesProvider);
+      final operationKey = useCases.newInstallmentOperationKey();
+      final request = party.type == 'customer'
+          ? PendingFinancialOperation.customerInstallment(
+              operationKey: operationKey,
+              planId: payment.plan.plan.id,
+              amountMinor: payment.amount,
+              method: payment.method,
+            )
+          : PendingFinancialOperation.supplierInstallment(
+              operationKey: operationKey,
+              planId: payment.plan.plan.id,
+              amountMinor: payment.amount,
+              method: payment.method,
+            );
+      final result = await _runWithNegativeBalanceApproval(
+        context,
+        action: (allowNegativeBalance) => _submitPendingFinancialOperation(
+          useCases,
+          request,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
+        onConfirmationDeclined: () => useCases
+            .discardUncommittedPendingFinancialOperation(request.operationKey),
+      );
+      if (!context.mounted) return;
+      _showResult(context, result, success: 'تم تسجيل الحركة');
+      _refresh(ref);
+    } finally {
+      if (mounted) setState(() => _quickPaymentInProgress = false);
     }
-    final payment =
-        await showDialog<
-          ({InstallmentPlanPreview plan, int amount, PaymentMethod method})
-        >(
-          context: context,
-          builder: (_) => _QuickInstallmentDialog(party: party, plans: plans),
-        );
-    if (payment == null || !context.mounted) return;
-    final result = await _runWithNegativeBalanceApproval(
-      context,
-      action: (allowNegativeBalance) => party.type == 'customer'
-          ? ref
-                .read(useCasesProvider)
-                .collectInstallment(
-                  planId: payment.plan.plan.id,
-                  amountMinor: payment.amount,
-                  method: payment.method,
-                )
-          : ref
-                .read(useCasesProvider)
-                .paySupplierInstallment(
-                  planId: payment.plan.plan.id,
-                  amountMinor: payment.amount,
-                  method: payment.method,
-                  allowNegativeBalance: allowNegativeBalance,
-                ),
-    );
-    if (!context.mounted) return;
-    _showResult(context, result, success: 'تم تسجيل الحركة');
-    _refresh(ref);
   }
 }
 

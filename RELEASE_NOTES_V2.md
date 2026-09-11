@@ -12,8 +12,8 @@
 
 - Local owner login with forced default password change.
 - PBKDF2-SHA256 password hashing with legacy SHA-256 upgrade on login.
-- SQLite WAL setup and drift schema version 5.
-- Schema v5 adds `products.imagePath` for product image paths.
+- SQLite WAL with `synchronous=FULL` and drift schema version 7.
+- Schema v5 adds `products.imagePath`; schema v6 adds auditable inventory-adjustment documents; schema v7 adds opening-balance documents protected by durable operation receipts.
 - Ledger-based sales, purchases, expenses, installments, returns, shifts, and reports.
 - Sale returns handle installment over-refund correctly:
   - receivable settlement is capped at remaining customer debt;
@@ -34,6 +34,10 @@
 - Partial installment payments are shown as partial in statement details and PDFs with paid/remaining amounts.
 - Money input parsing is centralized around integer minor units, accepts Arabic and English digits, and blocks invalid text before any workflow is posted.
 - A full owner operating-day test covers login/change password, shift, purchase, sale, installment collection, return, close shift, and backup.
+- Sale and purchase drafts survive restart without posting financial records and warn before leaving unsaved edits.
+- Financial mutations use durable operation receipts and recoverable pending requests to prevent duplicate posting after rapid taps or a lost reply.
+- Opening balances use the same receipt, payload-conflict, rollback, and pending-recovery contract as the other financial mutations.
+- Inventory reconciliation records the counted quantity, reason, stock movement, ledger variance, and idempotency receipt in one transaction.
 
 ## Verification
 
@@ -56,7 +60,8 @@ The v2 test suite covers:
 - installment collection and supplier payment;
 - expenses;
 - partial returns and installment return overflow;
-- backup/restore and v3 to v5 migration.
+- backup/restore and v3/v4 to v7 migration.
+- inventory-adjustment accounting, recovery, integrity checks, and minimum-window UI coverage.
 - Cairo theme, glass contrast, centralized blur, and visual golden snapshots for login/dashboard/POS/reports.
 - party statement PDF smoke coverage with invoice details.
 - local image copy coverage for product and background images.
@@ -65,4 +70,4 @@ The v2 test suite covers:
 
 - Validate Windows build on a Windows machine or Windows CI.
 - Validate printed sale receipts and party statements on the target thermal/A4 printers.
-- Package a final release bundle or installer for end-user installation.
+- Sign and field-test the Windows installer and clean-install/upgrade/remove the Debian package before end-user release.

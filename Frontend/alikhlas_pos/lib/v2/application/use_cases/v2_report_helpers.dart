@@ -12,6 +12,7 @@ extension V2ReportUseCaseHelpers on V2UseCases {
       salesMinor: report.salesMinor,
       cogsMinor: report.cogsMinor,
       expensesMinor: report.expensesMinor,
+      inventoryVarianceMinor: report.inventoryVarianceMinor,
       interestMinor: report.interestMinor,
       cashNetMinor: report.cashNetMinor,
       walletNetMinor: report.walletNetMinor,
@@ -34,6 +35,11 @@ extension V2ReportUseCaseHelpers on V2UseCases {
     final cogsMinor = await _accountNetBetween(AccountCodes.cogs, start, end);
     final expensesMinor = await _accountNetBetween(
       AccountCodes.expenses,
+      start,
+      end,
+    );
+    final inventoryVarianceMinor = await _accountNetBetween(
+      AccountCodes.inventoryVariance,
       start,
       end,
     );
@@ -80,6 +86,7 @@ extension V2ReportUseCaseHelpers on V2UseCases {
       salesMinor: salesMinor,
       cogsMinor: cogsMinor,
       expensesMinor: expensesMinor,
+      inventoryVarianceMinor: inventoryVarianceMinor,
       interestMinor: interestMinor,
       cashNetMinor: await _accountNetBetween(AccountCodes.cash, start, end),
       walletNetMinor: await _accountNetBetween(AccountCodes.wallet, start, end),

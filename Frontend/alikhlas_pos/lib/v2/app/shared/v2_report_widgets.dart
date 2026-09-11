@@ -43,6 +43,8 @@ class _PeriodReportPanel extends StatelessWidget {
           _AmountRow('المبيعات', report.salesMinor),
           _AmountRow('تكلفة المبيعات', report.cogsMinor),
           _AmountRow('المصروفات', report.expensesMinor),
+          if (report.inventoryVarianceMinor != 0)
+            _AmountRow('فروق الجرد', report.inventoryVarianceMinor),
           if (report.interestMinor > 0)
             _AmountRow('فوائد تقسيط العملاء', report.interestMinor),
           const Divider(height: 22),
@@ -206,34 +208,46 @@ class _ExpenseDialogState extends ConsumerState<_ExpenseDialog> {
   }
 
   Future<void> _save() async {
-    final description = _description.text.trim();
-    if (description.isEmpty) {
-      _showSnack(context, 'وصف المصروف مطلوب');
-      return;
-    }
-    final amount = _requireMoney(context, _amount, 'المبلغ');
-    if (amount == null) return;
-    if (amount <= 0) {
-      _showSnack(context, 'قيمة المصروف يجب أن تكون أكبر من صفر');
-      return;
-    }
-
+    if (_saving) return;
     setState(() => _saving = true);
-    final result = await _runWithNegativeBalanceApproval(
-      context,
-      action: (allowNegativeBalance) => ref
-          .read(useCasesProvider)
-          .recordExpense(
-            description: description,
-            amountMinor: amount,
-            method: _method,
-            allowNegativeBalance: allowNegativeBalance,
-          ),
-    );
-    if (!mounted) return;
-    setState(() => _saving = false);
+    late final AppResult<int> completed;
+    try {
+      final description = _description.text.trim();
+      if (description.isEmpty) {
+        _showSnack(context, 'وصف المصروف مطلوب');
+        return;
+      }
+      final amount = _requireMoney(context, _amount, 'المبلغ');
+      if (amount == null) return;
+      if (amount <= 0) {
+        _showSnack(context, 'قيمة المصروف يجب أن تكون أكبر من صفر');
+        return;
+      }
 
-    switch (result) {
+      final useCases = ref.read(useCasesProvider);
+      final request = PendingFinancialOperation.expense(
+        operationKey: useCases.newExpenseOperationKey(),
+        description: description,
+        amountMinor: amount,
+        method: _method,
+      );
+      completed = await _runWithNegativeBalanceApproval(
+        context,
+        action: (allowNegativeBalance) => _submitPendingFinancialOperation(
+          useCases,
+          request,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
+        onConfirmationDeclined: () => useCases
+            .discardUncommittedPendingFinancialOperation(request.operationKey),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+
+    if (!mounted) return;
+
+    switch (completed) {
       case AppSuccess<int>():
         _showSnack(context, 'تم تسجيل المصروف');
         Navigator.pop(context, true);

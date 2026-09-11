@@ -11,6 +11,9 @@ extension V2SnapshotReportUseCases on V2UseCases {
       salesMinor: -(await _accountBalance(AccountCodes.sales)),
       cogsMinor: await _accountBalance(AccountCodes.cogs),
       expensesMinor: await _accountBalance(AccountCodes.expenses),
+      inventoryVarianceMinor: await _accountBalance(
+        AccountCodes.inventoryVariance,
+      ),
       lowStockCount:
           await (db.select(db.products)..where(
                 (p) =>
@@ -121,11 +124,13 @@ extension V2SnapshotReportUseCases on V2UseCases {
     if (shopName.trim().isEmpty) {
       return const AppFailure('اسم المحل مطلوب');
     }
-    await _upsertSetting('shop.name', shopName.trim());
-    await _upsertSetting('shop.phone', phone?.trim() ?? '');
-    await _upsertSetting('shop.address', address?.trim() ?? '');
-    await _upsertSetting('shop.receiptFooter', receiptFooter?.trim() ?? '');
-    return AppSuccess(await shopSettings());
+    return _writeTransaction(() async {
+      await _upsertSetting('shop.name', shopName.trim());
+      await _upsertSetting('shop.phone', phone?.trim() ?? '');
+      await _upsertSetting('shop.address', address?.trim() ?? '');
+      await _upsertSetting('shop.receiptFooter', receiptFooter?.trim() ?? '');
+      return AppSuccess(await shopSettings());
+    });
   }
 
   Future<BarcodeLabelSettingsSnapshot> barcodeLabelSettings() async {
@@ -153,9 +158,11 @@ extension V2SnapshotReportUseCases on V2UseCases {
         'أبعاد ملصق الباركود يجب أن تكون ضمن الحدود المسموحة',
       );
     }
-    await _upsertSetting('barcode.labelWidthMm', widthMm.toString());
-    await _upsertSetting('barcode.labelHeightMm', heightMm.toString());
-    return AppSuccess(await barcodeLabelSettings());
+    return _writeTransaction(() async {
+      await _upsertSetting('barcode.labelWidthMm', widthMm.toString());
+      await _upsertSetting('barcode.labelHeightMm', heightMm.toString());
+      return AppSuccess(await barcodeLabelSettings());
+    });
   }
 
   Future<UiBackgroundSnapshot> uiBackground() async {
@@ -166,7 +173,7 @@ extension V2SnapshotReportUseCases on V2UseCases {
   }
 
   Future<void> updateUiBackground({required String preset, String? imagePath}) {
-    return db.transaction(() async {
+    return _writeTransaction(() async {
       await _upsertSetting('ui.backgroundPreset', preset.trim());
       await _upsertSetting('ui.backgroundImagePath', imagePath?.trim() ?? '');
     });

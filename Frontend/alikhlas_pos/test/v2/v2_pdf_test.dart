@@ -65,6 +65,7 @@ void main() {
           .insert(SuppliersCompanion.insert(name: 'مورد PDF'));
       final saleProduct = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'شاشة PDF',
           salePriceMinor: 8000,
           openingQty: 2,
@@ -73,6 +74,7 @@ void main() {
       );
       final purchaseProduct = await successOf(
         useCases.createProduct(
+          operationKey: useCases.newOpeningStockOperationKey(),
           name: 'ثلاجة PDF',
           salePriceMinor: 20000,
           openingQty: 0,
@@ -80,9 +82,12 @@ void main() {
         ),
       );
 
-      await successOf(useCases.openShift(0));
+      await successOf(
+        useCases.openShift(0, operationKey: useCases.newShiftOperationKey()),
+      );
       final saleId = await successOf(
         useCases.createSale(
+          operationKey: useCases.newSaleOperationKey(),
           customerId: customerId,
           items: [
             SaleLineInput(
@@ -105,6 +110,7 @@ void main() {
       )..where((row) => row.ownerType.equals('sale'))).getSingle();
       await successOf(
         useCases.collectInstallment(
+          operationKey: useCases.newInstallmentOperationKey(),
           planId: plan.id,
           amountMinor: 1500,
           method: PaymentMethod.cash,
@@ -115,6 +121,7 @@ void main() {
       )..where((row) => row.saleId.equals(saleId))).getSingle();
       await successOf(
         useCases.createSaleReturn(
+          operationKey: useCases.newSaleReturnOperationKey(),
           saleId: saleId,
           saleItemQuantities: {saleItem.id: 1},
           refundMethod: PaymentMethod.installment,
@@ -122,6 +129,7 @@ void main() {
       );
       await successOf(
         useCases.createPurchase(
+          operationKey: useCases.newPurchaseOperationKey(),
           supplierId: supplierId,
           items: [
             PurchaseLineInput(

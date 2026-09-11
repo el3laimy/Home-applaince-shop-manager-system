@@ -1,7 +1,22 @@
 part of '../v2_use_cases.dart';
 
+const _backupDestinationUnavailable =
+    'مجلد النسخ غير متاح. اختر مجلدًا آخر أو أعد توصيل وسيط النسخ.';
+
 extension V2BackupSettingsUseCases on V2UseCases {
   Future<File> backupToDirectory(Directory directory) async {
+    if (_backupRunning || _restoreRunning || databaseClosedForRestore) {
+      throw StateError('انتظر انتهاء النسخ أو الاسترجاع الحالي.');
+    }
+    _backupRunning = true;
+    try {
+      return await _writeBackup(directory);
+    } finally {
+      _backupRunning = false;
+    }
+  }
+
+  Future<File> _writeBackup(Directory directory) async {
     await directory.create(recursive: true);
     final keep = await _backupRetentionCopies();
     final timestamp = DateTime.now().toIso8601String().replaceAll(
@@ -9,73 +24,184 @@ extension V2BackupSettingsUseCases on V2UseCases {
       '-',
     );
     final target = File(p.join(directory.path, 'alikhlas-v2-$timestamp.db'));
-    final escaped = target.path.replaceAll("'", "''");
-    await db.customStatement("VACUUM INTO '$escaped';");
+    await _writeDatabaseSnapshot(target);
     await _pruneBackups(directory, keep: keep);
+    backupWarning = null;
     return target;
   }
 
+  Future<void> _writeDatabaseSnapshot(File target) async {
+    await target.parent.create(recursive: true);
+    final escaped = target.path.replaceAll("'", "''");
+    await db.customStatement("VACUUM INTO '$escaped';");
+  }
+
+  Future<File> _currentDatabaseFile() async {
+    final current = await db.customSelect('PRAGMA database_list;').getSingle();
+    final path = current.data['file'] as String?;
+    if (path == null || path.isEmpty) {
+      throw StateError('Cannot resolve current SQLite file path.');
+    }
+    return File(path);
+  }
+
   Future<void> setBackupDirectory(String path) async {
-    await _upsertSetting('backup.directory', path);
+    await _writeTransaction(() => _upsertSetting('backup.directory', path));
   }
 
   Future<File?> runAutomaticBackupIfDue() async {
-    final path = await _settingValue('backup.directory');
-    if (path == null || path.trim().isEmpty) return null;
+    if (_automaticBackupRunning ||
+        _backupRunning ||
+        _restoreRunning ||
+        databaseClosedForRestore) {
+      return null;
+    }
+    _automaticBackupRunning = true;
+    try {
+      final path = await _settingValue('backup.directory');
+      if (path == null || path.trim().isEmpty) return null;
+      final now = clock();
+      final last = DateTime.tryParse(
+        await _settingValue('backup.lastSuccessAt') ?? '',
+      );
+      if (last != null &&
+          !now.isBefore(last) &&
+          now.difference(last) < const Duration(minutes: 30)) {
+        // Keep destination health current even when another copy is not due.
+        await _inspectBackupDestination(Directory(path));
+        return null;
+      }
+      final backup = await backupToDirectory(Directory(path));
+      await _upsertSetting('backup.lastSuccessAt', now.toIso8601String());
+      await _upsertSetting('backup.lastDate', _dateKey(now));
+      return backup;
+    } finally {
+      _automaticBackupRunning = false;
+    }
+  }
 
-    final today = _dateKey(DateTime.now());
-    final lastBackup = await _settingValue('backup.lastDate');
-    if (lastBackup == today) return null;
-
-    final backup = await backupToDirectory(Directory(path));
-    await _upsertSetting('backup.lastDate', today);
-    return backup;
+  Future<File?> tryAutomaticBackup() async {
+    try {
+      return await runAutomaticBackupIfDue();
+    } on FileSystemException {
+      backupWarning =
+          'تعذر إنشاء النسخة الاحتياطية. تحقق من وسيط النسخ أو اختر مجلدًا آخر. سنعيد المحاولة تلقائيًا.';
+    } on sqlite.SqliteException {
+      backupWarning =
+          'لم تكتمل النسخة الاحتياطية. تحقق من المساحة المتاحة. سنعيد المحاولة تلقائيًا.';
+    }
+    return null;
   }
 
   Future<void> restoreFromBackup(File backupFile) async {
+    if (_backupRunning ||
+        _automaticBackupRunning ||
+        _restoreRunning ||
+        databaseClosedForRestore) {
+      throw StateError('انتظر انتهاء النسخ أو أعد فتح التطبيق بعد الاسترجاع.');
+    }
+    _restoreRunning = true;
+    try {
+      await _withRestoreWriteBarrier(() => _restoreBackupFile(backupFile));
+    } finally {
+      _restoreRunning = false;
+    }
+  }
+
+  Future<void> _restoreBackupFile(File backupFile) async {
     if (!await backupFile.exists()) {
       throw ArgumentError('Backup file does not exist: ${backupFile.path}');
     }
+    _validateRestoreFile(backupFile);
     await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE);');
-    final currentDir = await db
-        .customSelect('PRAGMA database_list;')
-        .getSingle();
-    final dbPath = currentDir.data['file'] as String?;
-    if (dbPath == null || dbPath.isEmpty) {
-      throw StateError('Cannot resolve current SQLite file path.');
-    }
-    final dbFile = File(dbPath);
+    final dbFile = await _currentDatabaseFile();
+    final dbPath = dbFile.path;
     final walFile = File('$dbPath-wal');
     final shmFile = File('$dbPath-shm');
-    final rollbackFile = File(
-      '$dbPath.restore-${DateTime.now().microsecondsSinceEpoch}.bak',
-    );
-    if (await dbFile.exists()) {
-      await _restoreFiles.copyFile(dbFile, rollbackFile);
+    final recovery = RestoreRecovery(dbFile);
+    final stagingDirectory = await Directory(
+      p.dirname(dbPath),
+    ).createTemp('restore-candidate-');
+    final candidate = File(p.join(stagingDirectory.path, 'candidate.db'));
+    await backupFile.copy(candidate.path);
+    _validateRestoreFile(candidate);
+    if (await recovery.marker.exists()) {
+      throw StateError('يوجد استرجاع غير مكتمل. أعد تشغيل التطبيق أولًا.');
     }
+    if (await recovery.rollback.exists()) await recovery.rollback.delete();
+    final escapedRollback = recovery.rollback.path.replaceAll("'", "''");
+    // SQLite creates a consistent snapshot, including committed WAL content.
+    await db.customStatement("VACUUM INTO '$escapedRollback';");
     await db.close();
-    var restored = false;
+    databaseClosedForRestore = true;
+    await recovery.markPending();
     try {
       await _restoreFiles.deleteFileIfExists(walFile);
       await _restoreFiles.deleteFileIfExists(shmFile);
-      await _restoreFiles.copyFile(backupFile, dbFile);
-      restored = true;
+      await _restoreFiles.copyFile(candidate, dbFile);
+      _validateRestoreFile(dbFile);
+      await recovery.commit();
     } catch (_) {
-      if (await rollbackFile.exists()) {
-        await _restoreFiles.deleteFileIfExists(walFile);
-        await _restoreFiles.deleteFileIfExists(shmFile);
-        await _restoreFiles.copyFile(rollbackFile, dbFile);
-        await _restoreFiles.deleteFileIfExists(rollbackFile);
-      }
+      await recovery.recoverIfPending();
       rethrow;
     } finally {
-      if (restored) {
-        try {
-          await _restoreFiles.deleteFileIfExists(rollbackFile);
-        } on FileSystemException {
-          // A leftover rollback copy is safer than failing a completed restore.
+      try {
+        await stagingDirectory.delete(recursive: true);
+      } on FileSystemException {
+        // Cleanup must not turn a committed restore into an apparent failure.
+      }
+    }
+  }
+
+  void _validateRestoreFile(File file) {
+    sqlite.Database? candidate;
+    try {
+      candidate = sqlite.sqlite3.open(
+        file.path,
+        mode: sqlite.OpenMode.readOnly,
+      );
+      final integrity = candidate.select('PRAGMA quick_check;');
+      if (integrity.length != 1 || integrity.single.values.single != 'ok') {
+        throw const FormatException(
+          'النسخة الاحتياطية تالفة. لم يتم اعتماد الاسترجاع.',
+        );
+      }
+      final version = candidate
+          .select('PRAGMA user_version;')
+          .single
+          .values
+          .single;
+      if (version != db.schemaVersion) {
+        throw const FormatException(
+          'إصدار النسخة غير متوافق. استخدم نسخة من نفس إصدار البيانات.',
+        );
+      }
+      for (final table in db.allTables) {
+        final columns = table.$columns
+            .map((column) => '"${column.$name}"')
+            .join(', ');
+        candidate.select(
+          'SELECT $columns FROM "${table.actualTableName}" LIMIT 0;',
+        );
+        final actualColumns = candidate
+            .select('PRAGMA table_info("${table.actualTableName}");')
+            .map((row) => row['name'])
+            .toSet();
+        if (!table.$columns.every(
+          (column) => actualColumns.contains(column.$name),
+        )) {
+          throw const FormatException(
+            'النسخة لا تحتوي بيانات التطبيق المطلوبة.',
+          );
         }
       }
+      if (candidate.select('PRAGMA foreign_key_check;').isNotEmpty) {
+        throw const FormatException('النسخة تحتوي مراجع بيانات غير سليمة.');
+      }
+    } on sqlite.SqliteException {
+      throw const FormatException('ملف النسخة غير صالح أو غير قابل للقراءة.');
+    } finally {
+      candidate?.close();
     }
   }
 
@@ -118,10 +244,10 @@ extension V2BackupSettingsUseCases on V2UseCases {
       );
     }
 
-    final directory = Directory(directoryPath);
-    final backups = await _backupFiles(directory);
+    final backups = await _inspectBackupDestination(Directory(directoryPath));
     return BackupStatus(
       directory: directoryPath,
+      warning: backupWarning,
       lastDate: await _settingValue('backup.lastDate'),
       latestBackupPath: backups.isEmpty ? null : backups.first.path,
       backupCount: backups.length,
@@ -129,14 +255,26 @@ extension V2BackupSettingsUseCases on V2UseCases {
     );
   }
 
+  Future<List<File>> _inspectBackupDestination(Directory directory) async {
+    try {
+      final backups = await _backupFiles(directory);
+      // Reconnecting clears only this warning, not a previous write failure.
+      if (backupWarning == _backupDestinationUnavailable) backupWarning = null;
+      return backups;
+    } on FileSystemException {
+      backupWarning = _backupDestinationUnavailable;
+      return [];
+    }
+  }
+
   Future<List<File>> _backupFiles(Directory directory) async {
-    if (!await directory.exists()) return [];
     final backups = await directory
         .list()
         .where(
           (entity) =>
               entity is File &&
-              p.basename(entity.path).startsWith('alikhlas-v2-'),
+              p.basename(entity.path).startsWith('alikhlas-v2-') &&
+              p.extension(entity.path) == '.db',
         )
         .cast<File>()
         .toList();

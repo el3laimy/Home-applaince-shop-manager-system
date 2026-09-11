@@ -1,11 +1,17 @@
 import 'dart:io';
 
+import 'restore_recovery.dart';
+import 'application_lock.dart';
+import 'migration_recovery.dart';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
+
+const kAppDatabaseSchemaVersion = 7;
 
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -180,6 +186,28 @@ class StockMovements extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+class InventoryAdjustments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get productId => integer().references(Products, #id)();
+  IntColumn get previousQty => integer()();
+  IntColumn get countedQty => integer()();
+  IntColumn get unitCostMinor => integer()();
+  IntColumn get valueDeltaMinor => integer()();
+  TextColumn get reason => text()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class OpeningBalances extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get balanceType => text()();
+  IntColumn get partyId => integer().nullable()();
+  IntColumn get amountMinor => integer()();
+  DateTimeColumn get dueDate => dateTime().nullable()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 class LedgerEntries extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get referenceType => text()();
@@ -202,7 +230,13 @@ LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
   return LazyDatabase(() async {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
+    await ApplicationLock.acquire(dir);
     final file = File(p.join(dir.path, fileName));
+    await RestoreRecovery(file).recoverIfPending();
+    await MigrationRecovery(
+      file,
+      targetVersion: kAppDatabaseSchemaVersion,
+    ).prepareForOpen();
     return NativeDatabase.createInBackground(file);
   });
 }
@@ -226,6 +260,8 @@ LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
     SaleReturns,
     SaleReturnItems,
     StockMovements,
+    InventoryAdjustments,
+    OpeningBalances,
     LedgerEntries,
     LedgerLines,
   ],
@@ -235,28 +271,42 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? openAppConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => kAppDatabaseSchemaVersion;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (migrator, from, to) async {
-      if (from < 2) {
-        await migrator.addColumn(saleInvoices, saleInvoices.discountMinor);
-      }
-      if (from < 3) {
-        await _createPerformanceIndexes();
-      }
-      if (from < 4) {
-        await migrator.createTable(expenses);
-      }
-      if (from < 5) {
-        await migrator.addColumn(products, products.imagePath);
+      await _markMigrationStarted(from: from, to: to);
+      try {
+        if (from < 2) {
+          await migrator.addColumn(saleInvoices, saleInvoices.discountMinor);
+        }
+        if (from < 3) {
+          await _createPerformanceIndexes();
+        }
+        if (from < 4) {
+          await migrator.createTable(expenses);
+        }
+        if (from < 5) {
+          await migrator.addColumn(products, products.imagePath);
+        }
+        if (from < 6) {
+          await migrator.createTable(inventoryAdjustments);
+        }
+        if (from < 7) {
+          await migrator.createTable(openingBalances);
+        }
+      } catch (_, stackTrace) {
+        Error.throwWithStackTrace(
+          DatabaseMigrationFailedDuringUpgrade(from: from, to: to),
+          stackTrace,
+        );
       }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON;');
       await customStatement('PRAGMA journal_mode = WAL;');
-      await customStatement('PRAGMA synchronous = NORMAL;');
+      await customStatement('PRAGMA synchronous = FULL;');
       await _createPerformanceIndexes();
     },
   );
@@ -284,6 +334,12 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_stock_movements_reference ON stock_movements(reference_type, reference_id);',
     );
     await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_inventory_adjustments_product_created ON inventory_adjustments(product_id, created_at);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_opening_balances_target ON opening_balances(balance_type, party_id);',
+    );
+    await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_payments_owner ON payments(owner_type, owner_id);',
     );
     await customStatement(
@@ -292,5 +348,41 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);',
     );
+  }
+
+  Future<void> finalizeMigrationIfReady() async {
+    final file = await _openedDatabaseFile();
+    if (file == null) return;
+    final version =
+        (await customSelect(
+              'PRAGMA user_version;',
+            ).getSingle()).data.values.single
+            as int;
+    await MigrationRecovery(
+      file,
+      targetVersion: schemaVersion,
+    ).finalizeIfSuccessful(version);
+  }
+
+  Future<void> _markMigrationStarted({
+    required int from,
+    required int to,
+  }) async {
+    final file = await _openedDatabaseFile();
+    if (file == null) return;
+    await MigrationRecovery(
+      file,
+      targetVersion: schemaVersion,
+    ).markMigrationStarted(from: from, to: to);
+  }
+
+  Future<File?> _openedDatabaseFile() async {
+    final databases = await customSelect('PRAGMA database_list;').get();
+    for (final database in databases) {
+      if (database.data['name'] != 'main') continue;
+      final path = database.data['file'] as String?;
+      if (path != null && path.isNotEmpty) return File(path);
+    }
+    return null;
   }
 }

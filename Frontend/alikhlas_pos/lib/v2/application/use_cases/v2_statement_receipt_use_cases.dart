@@ -1,6 +1,45 @@
 part of '../v2_use_cases.dart';
 
 extension V2StatementReceiptUseCases on V2UseCases {
+  Future<List<SaleInvoice>> saleInvoiceHistory({
+    String query = '',
+    DateTime? createdFrom,
+    DateTime? createdBefore,
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0 || limit < 1 || limit > 100) {
+      throw ArgumentError('Invalid page');
+    }
+    if (createdFrom != null &&
+        createdBefore != null &&
+        !createdFrom.isBefore(createdBefore)) {
+      throw ArgumentError('Invalid date range');
+    }
+    final term = query.trim();
+    final rows = await db
+        .customSelect(
+          '''
+      SELECT s.* FROM sale_invoices s
+      LEFT JOIN customers c ON c.id = s.customer_id
+      WHERE (? = '' OR instr(s.invoice_no, ?) > 0 OR instr(COALESCE(c.name, ''), ?) > 0 OR instr(COALESCE(c.phone, ''), ?) > 0)
+      ${createdFrom == null ? '' : 'AND s.created_at >= ?'}
+      ${createdBefore == null ? '' : 'AND s.created_at < ?'}
+      ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?
+      ''',
+          variables: [
+            for (var i = 0; i < 4; i++) Variable<String>(term),
+            if (createdFrom != null) Variable<DateTime>(createdFrom),
+            if (createdBefore != null) Variable<DateTime>(createdBefore),
+            Variable<int>(limit),
+            Variable<int>(offset),
+          ],
+          readsFrom: {db.saleInvoices, db.customers},
+        )
+        .get();
+    return rows.map((row) => db.saleInvoices.map(row.data)).toList();
+  }
+
   Future<StatementInvoiceDetails?> _statementInvoiceDetails(
     LedgerEntry entry,
   ) async {
@@ -294,6 +333,7 @@ extension V2StatementReceiptUseCases on V2UseCases {
               ..orderBy([(item) => OrderingTerm.asc(item.id)]))
             .get();
     final lines = <SaleReturnLinePreview>[];
+    final netTotals = _netSaleItemTotals(receipt.invoice, items);
 
     for (final item in items) {
       final product = await (db.select(
@@ -307,7 +347,11 @@ extension V2StatementReceiptUseCases on V2UseCases {
         (sum, row) => sum + row.qty,
       );
       final returnableQty = item.qty - returnedQty;
-      final refundUnitPrice = _netSaleItemUnitPrice(receipt.invoice, item);
+      final netLineMinor = netTotals[item.id]!;
+      final refundedMinor = priorReturns.fold<int>(
+        0,
+        (sum, row) => sum + row.qty * row.unitPriceMinor,
+      );
       lines.add(
         SaleReturnLinePreview(
           saleItemId: item.id,
@@ -315,13 +359,39 @@ extension V2StatementReceiptUseCases on V2UseCases {
           soldQty: item.qty,
           returnedQty: returnedQty,
           returnableQty: returnableQty,
-          unitPriceMinor: refundUnitPrice,
-          lineTotalMinor: returnableQty * refundUnitPrice,
+          unitPriceMinor: netLineMinor ~/ item.qty,
+          lineTotalMinor: _refundForQuantity(
+            netLineMinor,
+            item.qty,
+            returnedQty,
+            refundedMinor,
+            returnableQty,
+          ),
+          netLineMinor: netLineMinor,
+          refundedMinor: refundedMinor,
         ),
       );
     }
 
-    return SaleReturnPreview(receipt: receipt, lines: lines);
+    final customerId = receipt.invoice.customerId;
+    final plan = customerId == null
+        ? null
+        : await (db.select(db.installmentPlans)..where(
+                (p) =>
+                    p.ownerType.equals('sale') &
+                    p.ownerId.equals(saleId) &
+                    p.partyType.equals('customer') &
+                    p.partyId.equals(customerId),
+              ))
+              .getSingleOrNull();
+    return SaleReturnPreview(
+      receipt: receipt,
+      lines: lines,
+      collectedInstallmentsMinor: plan?.paidMinor ?? 0,
+      remainingDebtMinor: plan == null
+          ? null
+          : math.max(0, plan.totalMinor - plan.paidMinor),
+    );
   }
 
   Future<List<Product>> searchProducts(String query) async {
