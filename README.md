@@ -69,7 +69,7 @@ HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter
 
 أمر Linux build الأخير مستخدم في هذه البيئة لأن Flutter SDK موجود في `/home/el3laimy/development/flutter`.
 
-لبناء Windows أو Linux من GitHub، استخدم GitHub Actions workflow باسم `Desktop Release Build`. يرفع الـworkflow bundle لكل نظام، وحزمة تثبيت Debian باسم `alikhlas-pos-linux-deb` ومُثبّت Windows باسم `alikhlas-pos-windows-installer`.
+لبناء Windows أو Linux من GitHub، استخدم GitHub Actions workflow باسم `Desktop Release Build`. يعمل على pull requests والتحديثات إلى `main`، ويرفع bundle لكل نظام، وحزمة تثبيت Debian باسم `alikhlas-pos-linux-deb` ومُثبّت Windows باسم `alikhlas-pos-windows-installer`.
 
 الأمر المحلي من Windows:
 
@@ -85,10 +85,11 @@ flutter build windows
 ```bash
 cd Frontend/alikhlas_pos
 bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package 1.0.0
+bash tool/verify_linux_deb.sh build/linux/x64/release/package/alikhlas-pos_1.0.0_amd64.deb
 sudo apt install ./build/linux/x64/release/package/alikhlas-pos_1.0.0_amd64.deb
 ```
 
-ترفع CI الحزمة باسم artifact مستقل `alikhlas-pos-linux-deb`. الحزمة خضعت لفحص البنية محليًا، لكن اختبار تثبيت فعلي على Ubuntu/Debian نظيف ما زال مطلوبًا قبل اعتمادها كتسليم نهائي.
+يتحقق الفحص من بنية الحزمة وملف التشغيل وملف سطح المكتب والمكتبات ومن حل الاعتمادات عبر APT، مع دعم اسم GTK في Debian/Ubuntu الأقدم وUbuntu 24.04. ترفع CI الحزمة باسم artifact مستقل `alikhlas-pos-linux-deb`. يبقى تثبيت وترقية وإزالة الحزمة فعليًا على جهاز Ubuntu/Debian نظيف شرطًا قبل اعتمادها كتسليم نهائي.
 
 ## حماية تشغيل البيانات
 
@@ -138,7 +139,7 @@ sudo apt install ./build/linux/x64/release/package/alikhlas-pos_1.0.0_amd64.deb
 - تُقيّم التسوية بمتوسط التكلفة المحفوظ. الصنف الذي لا يملك تكلفة يطلب تكلفة وحدة قبل المتابعة.
 - تحفظ العملية مستندًا وحركة مخزون وقيدًا متزنًا وإيصال منع تكرار داخل معاملة واحدة. إذا تغير الرصيد أو التكلفة أثناء المراجعة يطلب التطبيق تحديث الشاشة وإعادة العد.
 - فروق الجرد تظهر في ملخصات اليوم والفترة وتؤثر في الربح. مستند التسوية لا يُحذف لتصحيح التاريخ بصمت.
-- طبقة تسجيل الأرصدة الافتتاحية وحمايتها من التكرار موجودة في قاعدة البيانات، لكن شاشة إدخالها للمستخدم النهائي لم تكتمل بعد. مرتجع المشتريات ومستند عكس عملية مالية خاطئة ما زالا غير منفذين.
+- من الإعدادات يستطيع صاحب المحل إدخال رصيد افتتاحي للعميل أو المورد أو الخزينة أو المحفظة، ثم مراجعته قبل الاعتماد. تنشئ ذمم العميل والمورد قسطًا واحدًا قابلًا للتحصيل أو السداد، ولا تضيف أرصدة الخزينة والمحفظة مبلغًا وهميًا إلى درج الوردية. مرتجع المشتريات ومستند عكس عملية مالية خاطئة ما زالا غير منفذين.
 
 ## v1 Archive
 
