@@ -81,6 +81,7 @@ jobs:
           .\tool\build_windows_installer.ps1 `
             -SourceDirectory 'build\windows\x64\runner\Release' `
             -OutputDirectory 'build\windows\x64\runner\Installer' `
+            -IconFile 'windows\runner\resources\app_icon.ico' `
             -Version $version
 
       - name: Verify Windows installer artifact

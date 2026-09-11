@@ -13,6 +13,9 @@ SetCompressor /SOLID lzma
 !ifndef APP_VERSION
   !error "APP_VERSION must be the three-part application version"
 !endif
+!ifndef ICON_FILE
+  !error "ICON_FILE must point to a valid Windows .ico file"
+!endif
 
 !define APP_NAME "إخلاص POS"
 !define APP_ID "ALIkhlasPOS-v2-5B7C2A10-59F8-4BB7-ACDA-7E3207B2A2A4"
@@ -22,8 +25,8 @@ Name "${APP_NAME}"
 OutFile "${OUTPUT_DIR}\ALIkhlasPOS-Setup-${APP_VERSION}-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\ALIkhlas POS"
 InstallDirRegKey HKCU "Software\${APP_ID}" "InstallDir"
-Icon "${SOURCE_DIR}\alikhlas_pos.exe"
-UninstallIcon "${SOURCE_DIR}\alikhlas_pos.exe"
+Icon "${ICON_FILE}"
+UninstallIcon "${ICON_FILE}"
 VIProductVersion "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1033 "ProductName" "ALIkhlas POS"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${APP_VERSION}"

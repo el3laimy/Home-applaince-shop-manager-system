@@ -5,6 +5,8 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$OutputDirectory,
   [Parameter(Mandatory = $true)]
+  [string]$IconFile,
+  [Parameter(Mandatory = $true)]
   [ValidatePattern('^\d+\.\d+\.\d+$')]
   [string]$Version
 )
@@ -14,6 +16,10 @@ $ErrorActionPreference = 'Stop'
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 if (-not (Test-Path -LiteralPath (Join-Path $source 'alikhlas_pos.exe'))) {
   throw "Flutter Windows release executable is missing from: $source"
+}
+$icon = (Resolve-Path -LiteralPath $IconFile).Path
+if ([System.IO.Path]::GetExtension($icon) -ne '.ico') {
+  throw "The Windows installer icon must be an .ico file: $icon"
 }
 
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -34,6 +40,7 @@ if ($LASTEXITCODE -ne 0) { throw "Unable to run NSIS compiler ($LASTEXITCODE)." 
 $arguments = @(
   "/DSOURCE_DIR=$source",
   "/DOUTPUT_DIR=$output",
+  "/DICON_FILE=$icon",
   "/DAPP_VERSION=$Version",
   'tool\alikhlas_pos.nsi'
 )
