@@ -22,7 +22,7 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final uc = V2UseCases(db);
-    await uc.bootstrap();
+    await uc.bootstrap(createDefaultOwner: true);
     final owner = await success(uc.login('owner', 'owner123'));
     await success(uc.changePassword(owner.id, 'new-owner-pass'));
     final supplierId = await db
@@ -123,7 +123,7 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final uc = V2UseCases(db);
-    await uc.bootstrap();
+    await uc.bootstrap(createDefaultOwner: true);
     final owner = await success(uc.login('owner', 'owner123'));
     await success(uc.changePassword(owner.id, 'new-owner-pass'));
     final customer = await db

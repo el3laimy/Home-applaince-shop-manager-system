@@ -72,7 +72,7 @@ extension V2SnapshotReportUseCases on V2UseCases {
 
     return WorkbenchSnapshot(
       dashboard: await dashboardSnapshot(),
-      dailySummary: await _dailySummary(DateTime.now()),
+      dailySummary: await _dailySummary(clock()),
       products: products,
       customers: customers,
       suppliers: suppliers,

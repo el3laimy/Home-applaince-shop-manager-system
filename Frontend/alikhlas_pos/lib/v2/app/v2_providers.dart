@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'app_build_info.dart';
 import '../application/v2_use_cases.dart';
 import '../data/app_database.dart';
 import '../core/result.dart';
@@ -25,9 +26,10 @@ final appVersionProvider = FutureProvider<String>((ref) async {
   try {
     final info = await PackageInfo.fromPlatform();
     if (info.version.isEmpty) return 'غير متاح';
-    return info.buildNumber.isEmpty
+    final version = info.buildNumber.isEmpty
         ? info.version
         : '${info.version}+${info.buildNumber}';
+    return withBuildRevision(version);
   } catch (_) {
     return 'غير متاح';
   }

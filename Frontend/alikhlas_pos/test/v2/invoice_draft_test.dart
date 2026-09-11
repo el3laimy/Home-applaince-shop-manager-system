@@ -71,7 +71,7 @@ void main() {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       final supplierId = await db
           .into(db.suppliers)
           .insert(SuppliersCompanion.insert(name: 'مورد المسودة'));

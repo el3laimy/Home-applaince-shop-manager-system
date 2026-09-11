@@ -98,7 +98,7 @@ Future<void> _openHelp(
   final db = AppDatabase(NativeDatabase.memory());
   addTearDown(db.close);
   final useCases = V2UseCases(db);
-  await useCases.bootstrap();
+  await useCases.bootstrap(createDefaultOwner: true);
   final login = await useCases.login('owner', 'owner123');
   final owner = (login as AppSuccess<User>).value;
   expect(

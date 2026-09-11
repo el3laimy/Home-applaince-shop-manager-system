@@ -19,7 +19,7 @@ void main() {
     setUp(() async {
       db = AppDatabase(NativeDatabase.memory());
       useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
     });
 
     tearDown(() async {
@@ -34,7 +34,7 @@ void main() {
 
         expect(owner.username, 'owner');
         expect(owner.mustChangePassword, isTrue);
-        expect(owner.passwordHash, startsWith(r'pbkdf2_sha256$120000$'));
+        expect(owner.passwordHash, startsWith(r'pbkdf2_sha256$600000$'));
         expect(settings.shopName, 'إخلاص للأجهزة المنزلية');
 
         final updatedOwner = await successOf(
@@ -46,7 +46,7 @@ void main() {
         );
 
         expect(updatedOwner.mustChangePassword, isFalse);
-        expect(updatedOwner.passwordHash, startsWith(r'pbkdf2_sha256$120000$'));
+        expect(updatedOwner.passwordHash, startsWith(r'pbkdf2_sha256$600000$'));
         expect(oldLogin, isA<AppFailure<User>>());
         expect(newLogin.mustChangePassword, isFalse);
       },
@@ -61,8 +61,8 @@ void main() {
         useCases.changePassword(owner.id, 'same-owner-pass'),
       );
 
-      expect(firstUpdate.passwordHash, startsWith(r'pbkdf2_sha256$120000$'));
-      expect(secondUpdate.passwordHash, startsWith(r'pbkdf2_sha256$120000$'));
+      expect(firstUpdate.passwordHash, startsWith(r'pbkdf2_sha256$600000$'));
+      expect(secondUpdate.passwordHash, startsWith(r'pbkdf2_sha256$600000$'));
       expect(firstUpdate.passwordHash, isNot(secondUpdate.passwordHash));
       await successOf(useCases.login('owner', 'same-owner-pass'));
     });
@@ -89,7 +89,7 @@ void main() {
       )..where((user) => user.id.equals(legacyUser.id))).getSingle();
       final wrongLogin = await useCases.login('legacy', 'wrong-pass');
 
-      expect(storedUser.passwordHash, startsWith(r'pbkdf2_sha256$120000$'));
+      expect(storedUser.passwordHash, startsWith(r'pbkdf2_sha256$600000$'));
       expect(storedUser.passwordHash, isNot(legacyHash));
       expect(wrongLogin, isA<AppFailure<User>>());
     });
@@ -142,7 +142,7 @@ void main() {
     });
 
     test(
-      'database migrates a v3 file to v9 including corrections and indexes',
+      'database migrates a v3 file to v10 including exact inventory cost fields and indexes',
       () async {
         await db.close();
 
@@ -178,6 +178,12 @@ void main() {
         final productColumns = await db.customSelect('''
             PRAGMA table_info(products);
             ''').get();
+        final saleItemColumns = await db.customSelect('''
+            PRAGMA table_info(sale_items);
+            ''').get();
+        final saleReturnItemColumns = await db.customSelect('''
+            PRAGMA table_info(sale_return_items);
+            ''').get();
         final indexes = await db.customSelect('''
             SELECT name
             FROM sqlite_master
@@ -201,7 +207,7 @@ void main() {
               )
             ''').get();
 
-        expect(userVersion.data['user_version'], 9);
+        expect(userVersion.data['user_version'], 10);
         expect(
           tables.map((row) => row.data['name']),
           containsAll([
@@ -215,7 +221,15 @@ void main() {
         );
         expect(
           productColumns.map((row) => row.data['name']),
-          contains('image_path'),
+          containsAll(['image_path', 'inventory_value_minor']),
+        );
+        expect(
+          saleItemColumns.map((row) => row.data['name']),
+          contains('cost_minor'),
+        );
+        expect(
+          saleReturnItemColumns.map((row) => row.data['name']),
+          contains('cost_minor'),
         );
         expect(indexes, hasLength(15));
       },
@@ -1323,7 +1337,7 @@ void main() {
 
       db = AppDatabase(NativeDatabase(File('${tempDir.path}/app.db')));
       useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       final owner = await successOf(useCases.login('owner', 'owner123'));
       await successOf(useCases.changePassword(owner.id, 'new-owner-pass'));
 
@@ -1523,7 +1537,7 @@ void main() {
       final dbFile = File('${tempDir.path}/app.db');
       db = AppDatabase(NativeDatabase(dbFile));
       useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       final autoBackupBeforeDirectory = await useCases
           .runAutomaticBackupIfDue();
       expect(autoBackupBeforeDirectory, isNull);
@@ -1615,7 +1629,7 @@ void main() {
       final dbFile = File('${tempDir.path}/app.db');
       db = AppDatabase(NativeDatabase(dbFile));
       useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       await successOf(
         useCases.createProduct(
           operationKey: useCases.newOpeningStockOperationKey(),
@@ -1897,6 +1911,26 @@ Future<void> createMinimalV3Database(File file) async {
           unit_price_minor INTEGER NOT NULL,
           unit_cost_minor INTEGER NOT NULL,
           line_total_minor INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE sale_returns (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          sale_id INTEGER NOT NULL,
+          return_no TEXT NOT NULL UNIQUE,
+          refund_minor INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE sale_return_items (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          return_id INTEGER NOT NULL,
+          sale_item_id INTEGER NOT NULL,
+          product_id INTEGER NOT NULL,
+          qty INTEGER NOT NULL,
+          unit_price_minor INTEGER NOT NULL,
+          unit_cost_minor INTEGER NOT NULL
         );
       ''')
       ..execute('PRAGMA user_version = 3;');

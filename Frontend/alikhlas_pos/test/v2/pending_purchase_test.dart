@@ -18,7 +18,7 @@ void main() {
         dir.deleteSync(recursive: true);
       });
       var uc = V2UseCases(db);
-      await uc.bootstrap();
+      await uc.bootstrap(createDefaultOwner: true);
       final product = await success(
         uc.createProduct(
           operationKey: uc.newOpeningStockOperationKey(),

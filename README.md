@@ -69,7 +69,7 @@ HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter
 
 أمر Linux build الأخير مستخدم في هذه البيئة لأن Flutter SDK موجود في `/home/el3laimy/development/flutter`.
 
-لبناء Windows أو Linux من GitHub، استخدم GitHub Actions workflow باسم `Desktop Release Build`. يعمل على pull requests والتحديثات إلى `main`، ويرفع bundle لكل نظام، وحزمة تثبيت Debian باسم `alikhlas-pos-linux-deb` ومُثبّت Windows باسم `alikhlas-pos-windows-installer`.
+لبناء Windows أو Linux من GitHub، استخدم GitHub Actions workflow باسم `Desktop Release Build`. يعمل على pull requests والتحديثات إلى `main` أو فروع `codex/**`، ويرفع bundle لكل نظام، وحزمة تثبيت Debian باسم `alikhlas-pos-linux-deb` ومُثبّت Windows باسم `alikhlas-pos-windows-installer`.
 
 الأمر المحلي من Windows:
 
@@ -84,9 +84,9 @@ flutter build windows
 
 ```bash
 cd Frontend/alikhlas_pos
-bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package 1.0.0
-bash tool/verify_linux_deb.sh build/linux/x64/release/package/alikhlas-pos_1.0.0_amd64.deb
-sudo apt install ./build/linux/x64/release/package/alikhlas-pos_1.0.0_amd64.deb
+bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package 1.1.0
+bash tool/verify_linux_deb.sh build/linux/x64/release/package/alikhlas-pos_1.1.0_amd64.deb
+sudo apt install ./build/linux/x64/release/package/alikhlas-pos_1.1.0_amd64.deb
 ```
 
 يتحقق الفحص من بنية الحزمة وملف التشغيل وملف سطح المكتب والمكتبات ومن حل الاعتمادات عبر APT، مع دعم اسم GTK في Debian/Ubuntu الأقدم وUbuntu 24.04. ترفع CI الحزمة باسم artifact مستقل `alikhlas-pos-linux-deb`. يبقى تثبيت وترقية وإزالة الحزمة فعليًا على جهاز Ubuntu/Debian نظيف شرطًا قبل اعتمادها كتسليم نهائي.
@@ -128,7 +128,7 @@ sudo apt install ./build/linux/x64/release/package/alikhlas-pos_1.0.0_amd64.deb
 - مرتجع البيع ومرتجع الشراء مرتبطان دائمًا بفاتورتهما الأصلية، ويمكن إرجاع كمية جزئية من السطر.
 - مرتجع الكاش يحتاج وردية مفتوحة.
 - مرتجع التقسيط يقفل ذمة العميل حتى الرصيد المتبقي فقط، وأي فائض يرد كاش أو محفظة.
-- تكلفة المرتجع تعكس `SaleItem.unitCostMinor` التاريخية ولا تعيد حساب WAC الحالي.
+- تكلفة مرتجع البيع تعكس التخصيص التاريخي الدقيق في `SaleItem.costMinor` وتعيد احتساب أساس قيمة المخزون، فلا تختلط تكلفة البيع القديمة بمتوسط تكلفة شراء لاحق.
 - مرتجع الشراء يمنع تجاوز كمية الشراء أو المخزون المتاح، ويخفض ذمة المورد حتى المتبقي فقط؛ فائض ائتمان المورد يُستلم كاش أو محفظة.
 - يحتفظ مرتجع الشراء بتكلفة المورد الأصلية، ويخفض المخزون بمتوسط التكلفة الحالي؛ الفرق بين القيمتين يُسجل في حساب فروق المخزون كي يظل الدفتر وتقييم المخزون متزنين.
 - فائدة التقسيط لا تُرد تلقائيًا عند المرتجع؛ أي رد للفائدة يحتاج تسوية يدوية منفصلة لاحقًا.

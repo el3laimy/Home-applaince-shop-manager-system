@@ -25,9 +25,9 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
     final active = widget.snapshot.products.where((p) => p.isActive).toList();
     final lowStock = active.where((p) => p.stockQty <= p.minStockQty).length;
     final inactive = widget.snapshot.products.where((p) => !p.isActive).length;
-    final inventoryValue = active.fold<int>(
+    final inventoryValue = widget.snapshot.products.fold<int>(
       0,
-      (sum, product) => sum + product.stockQty * product.avgCostMinor,
+      (sum, product) => sum + product.inventoryValueMinor,
     );
 
     return _Screen(
@@ -193,6 +193,19 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                                       success: 'تم تعطيل المنتج',
                                     );
                                     _refresh(ref);
+                                    return;
+                                  }
+                                  if (action == 'reactivate') {
+                                    final result = await ref
+                                        .read(useCasesProvider)
+                                        .reactivateProduct(product.id);
+                                    if (!context.mounted) return;
+                                    _showResult(
+                                      context,
+                                      result,
+                                      success: 'تم تفعيل المنتج',
+                                    );
+                                    _refresh(ref);
                                   }
                                 },
                                 itemBuilder: (_) => [
@@ -209,6 +222,14 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
                                       child: ListTile(
                                         leading: Icon(Icons.power_settings_new),
                                         title: Text('تعطيل المنتج'),
+                                      ),
+                                    ),
+                                  if (!product.isActive)
+                                    const PopupMenuItem(
+                                      value: 'reactivate',
+                                      child: ListTile(
+                                        leading: Icon(Icons.restart_alt),
+                                        title: Text('إعادة تفعيل المنتج'),
                                       ),
                                     ),
                                 ],

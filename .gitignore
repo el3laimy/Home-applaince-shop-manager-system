@@ -39,3 +39,4 @@ archives/*.tar.gz
 
 # Agent configs
 .agents/
+.codex/

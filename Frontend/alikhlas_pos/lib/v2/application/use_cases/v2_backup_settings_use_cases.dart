@@ -19,14 +19,16 @@ extension V2BackupSettingsUseCases on V2UseCases {
   Future<File> _writeBackup(Directory directory) async {
     await directory.create(recursive: true);
     final keep = await _backupRetentionCopies();
-    final timestamp = DateTime.now().toIso8601String().replaceAll(
+    final timestamp = clock().toIso8601String().replaceAll(
       RegExp(r'[:.]'),
       '-',
     );
     final target = File(p.join(directory.path, 'alikhlas-v2-$timestamp.db'));
     await _writeDatabaseSnapshot(target);
-    await _pruneBackups(directory, keep: keep);
-    backupWarning = null;
+    final pruneFailures = await _pruneBackups(directory, keep: keep);
+    backupWarning = pruneFailures.isEmpty
+        ? null
+        : 'تم إنشاء النسخة الاحتياطية، لكن تعذر حذف ${pruneFailures.length} نسخة قديمة. راجع مساحة التخزين.';
     return target;
   }
 
@@ -227,11 +229,20 @@ extension V2BackupSettingsUseCases on V2UseCases {
     return setting?.value;
   }
 
-  Future<void> _pruneBackups(Directory directory, {required int keep}) async {
+  Future<List<File>> _pruneBackups(
+    Directory directory, {
+    required int keep,
+  }) async {
     final backups = await _backupFiles(directory);
+    final failures = <File>[];
     for (final backup in backups.skip(keep)) {
-      await backup.delete();
+      try {
+        await _backupFileOperations.deleteFile(backup);
+      } on FileSystemException {
+        failures.add(backup);
+      }
     }
+    return failures;
   }
 
   Future<BackupStatus> _backupStatus() async {

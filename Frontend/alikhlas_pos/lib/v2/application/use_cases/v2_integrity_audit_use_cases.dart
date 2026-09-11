@@ -67,7 +67,19 @@ extension V2IntegrityAuditUseCases on V2UseCases {
       movements,
       (movement) => movement.productId,
     );
+    var productInventoryValue = 0;
     for (final product in products) {
+      productInventoryValue += product.inventoryValueMinor;
+      if (product.inventoryValueMinor < 0 ||
+          (product.stockQty == 0 && product.inventoryValueMinor != 0)) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'inventory_product_value',
+            record: 'الصنف ${product.name}',
+            message: 'قيمة المخزون لا تتفق مع رصيد الصنف الحالي.',
+          ),
+        );
+      }
       final productMovements = [...(movementsByProduct[product.id] ?? const [])]
         // The auto-increment id is the committed movement sequence. A device
         // clock can move backwards and must not make a healthy chain look
@@ -110,6 +122,19 @@ extension V2IntegrityAuditUseCases on V2UseCases {
       }
     }
 
+    final ledgerInventoryValue = lines
+        .where((line) => line.accountCode == AccountCodes.inventory)
+        .fold<int>(0, (sum, line) => sum + line.debitMinor - line.creditMinor);
+    if (productInventoryValue != ledgerInventoryValue) {
+      issues.add(
+        DataIntegrityIssue(
+          code: 'inventory_ledger_reconciliation',
+          record: 'قيمة المخزون',
+          message: 'قيمة أرصدة الأصناف لا تطابق حساب المخزون في دفتر الأستاذ.',
+        ),
+      );
+    }
+
     final productById = {for (final product in products) product.id: product};
     final adjustmentById = {
       for (final adjustment in adjustments) adjustment.id: adjustment,
@@ -133,7 +158,8 @@ extension V2IntegrityAuditUseCases on V2UseCases {
           adjustment.previousQty < 0 ||
           adjustment.countedQty < 0 ||
           adjustment.unitCostMinor <= 0 ||
-          adjustment.valueDeltaMinor != delta * adjustment.unitCostMinor ||
+          adjustment.valueDeltaMinor == 0 ||
+          adjustment.valueDeltaMinor.sign != delta.sign ||
           !adjustmentReasonNames.contains(adjustment.reason)) {
         issues.add(
           DataIntegrityIssue(

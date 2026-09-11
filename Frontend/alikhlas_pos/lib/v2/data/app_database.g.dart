@@ -734,6 +734,17 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _inventoryValueMinorMeta =
+      const VerificationMeta('inventoryValueMinor');
+  @override
+  late final GeneratedColumn<int> inventoryValueMinor = GeneratedColumn<int>(
+    'inventory_value_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _isActiveMeta = const VerificationMeta(
     'isActive',
   );
@@ -783,6 +794,7 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     minStockQty,
     salePriceMinor,
     avgCostMinor,
+    inventoryValueMinor,
     isActive,
     createdAt,
     updatedAt,
@@ -863,6 +875,15 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         ),
       );
     }
+    if (data.containsKey('inventory_value_minor')) {
+      context.handle(
+        _inventoryValueMinorMeta,
+        inventoryValueMinor.isAcceptableOrUnknown(
+          data['inventory_value_minor']!,
+          _inventoryValueMinorMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_active')) {
       context.handle(
         _isActiveMeta,
@@ -926,6 +947,10 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         DriftSqlType.int,
         data['${effectivePrefix}avg_cost_minor'],
       )!,
+      inventoryValueMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}inventory_value_minor'],
+      )!,
       isActive: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_active'],
@@ -957,6 +982,10 @@ class Product extends DataClass implements Insertable<Product> {
   final int minStockQty;
   final int salePriceMinor;
   final int avgCostMinor;
+
+  /// Exact cost basis for the units currently held. `avgCostMinor` is only a
+  /// rounded display value; financial postings use this value.
+  final int inventoryValueMinor;
   final bool isActive;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -970,6 +999,7 @@ class Product extends DataClass implements Insertable<Product> {
     required this.minStockQty,
     required this.salePriceMinor,
     required this.avgCostMinor,
+    required this.inventoryValueMinor,
     required this.isActive,
     required this.createdAt,
     this.updatedAt,
@@ -992,6 +1022,7 @@ class Product extends DataClass implements Insertable<Product> {
     map['min_stock_qty'] = Variable<int>(minStockQty);
     map['sale_price_minor'] = Variable<int>(salePriceMinor);
     map['avg_cost_minor'] = Variable<int>(avgCostMinor);
+    map['inventory_value_minor'] = Variable<int>(inventoryValueMinor);
     map['is_active'] = Variable<bool>(isActive);
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || updatedAt != null) {
@@ -1017,6 +1048,7 @@ class Product extends DataClass implements Insertable<Product> {
       minStockQty: Value(minStockQty),
       salePriceMinor: Value(salePriceMinor),
       avgCostMinor: Value(avgCostMinor),
+      inventoryValueMinor: Value(inventoryValueMinor),
       isActive: Value(isActive),
       createdAt: Value(createdAt),
       updatedAt: updatedAt == null && nullToAbsent
@@ -1040,6 +1072,9 @@ class Product extends DataClass implements Insertable<Product> {
       minStockQty: serializer.fromJson<int>(json['minStockQty']),
       salePriceMinor: serializer.fromJson<int>(json['salePriceMinor']),
       avgCostMinor: serializer.fromJson<int>(json['avgCostMinor']),
+      inventoryValueMinor: serializer.fromJson<int>(
+        json['inventoryValueMinor'],
+      ),
       isActive: serializer.fromJson<bool>(json['isActive']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
@@ -1058,6 +1093,7 @@ class Product extends DataClass implements Insertable<Product> {
       'minStockQty': serializer.toJson<int>(minStockQty),
       'salePriceMinor': serializer.toJson<int>(salePriceMinor),
       'avgCostMinor': serializer.toJson<int>(avgCostMinor),
+      'inventoryValueMinor': serializer.toJson<int>(inventoryValueMinor),
       'isActive': serializer.toJson<bool>(isActive),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime?>(updatedAt),
@@ -1074,6 +1110,7 @@ class Product extends DataClass implements Insertable<Product> {
     int? minStockQty,
     int? salePriceMinor,
     int? avgCostMinor,
+    int? inventoryValueMinor,
     bool? isActive,
     DateTime? createdAt,
     Value<DateTime?> updatedAt = const Value.absent(),
@@ -1087,6 +1124,7 @@ class Product extends DataClass implements Insertable<Product> {
     minStockQty: minStockQty ?? this.minStockQty,
     salePriceMinor: salePriceMinor ?? this.salePriceMinor,
     avgCostMinor: avgCostMinor ?? this.avgCostMinor,
+    inventoryValueMinor: inventoryValueMinor ?? this.inventoryValueMinor,
     isActive: isActive ?? this.isActive,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
@@ -1108,6 +1146,9 @@ class Product extends DataClass implements Insertable<Product> {
       avgCostMinor: data.avgCostMinor.present
           ? data.avgCostMinor.value
           : this.avgCostMinor,
+      inventoryValueMinor: data.inventoryValueMinor.present
+          ? data.inventoryValueMinor.value
+          : this.inventoryValueMinor,
       isActive: data.isActive.present ? data.isActive.value : this.isActive,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1126,6 +1167,7 @@ class Product extends DataClass implements Insertable<Product> {
           ..write('minStockQty: $minStockQty, ')
           ..write('salePriceMinor: $salePriceMinor, ')
           ..write('avgCostMinor: $avgCostMinor, ')
+          ..write('inventoryValueMinor: $inventoryValueMinor, ')
           ..write('isActive: $isActive, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -1144,6 +1186,7 @@ class Product extends DataClass implements Insertable<Product> {
     minStockQty,
     salePriceMinor,
     avgCostMinor,
+    inventoryValueMinor,
     isActive,
     createdAt,
     updatedAt,
@@ -1161,6 +1204,7 @@ class Product extends DataClass implements Insertable<Product> {
           other.minStockQty == this.minStockQty &&
           other.salePriceMinor == this.salePriceMinor &&
           other.avgCostMinor == this.avgCostMinor &&
+          other.inventoryValueMinor == this.inventoryValueMinor &&
           other.isActive == this.isActive &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -1176,6 +1220,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   final Value<int> minStockQty;
   final Value<int> salePriceMinor;
   final Value<int> avgCostMinor;
+  final Value<int> inventoryValueMinor;
   final Value<bool> isActive;
   final Value<DateTime> createdAt;
   final Value<DateTime?> updatedAt;
@@ -1189,6 +1234,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     this.minStockQty = const Value.absent(),
     this.salePriceMinor = const Value.absent(),
     this.avgCostMinor = const Value.absent(),
+    this.inventoryValueMinor = const Value.absent(),
     this.isActive = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1203,6 +1249,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     this.minStockQty = const Value.absent(),
     required int salePriceMinor,
     this.avgCostMinor = const Value.absent(),
+    this.inventoryValueMinor = const Value.absent(),
     this.isActive = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1218,6 +1265,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     Expression<int>? minStockQty,
     Expression<int>? salePriceMinor,
     Expression<int>? avgCostMinor,
+    Expression<int>? inventoryValueMinor,
     Expression<bool>? isActive,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1232,6 +1280,8 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       if (minStockQty != null) 'min_stock_qty': minStockQty,
       if (salePriceMinor != null) 'sale_price_minor': salePriceMinor,
       if (avgCostMinor != null) 'avg_cost_minor': avgCostMinor,
+      if (inventoryValueMinor != null)
+        'inventory_value_minor': inventoryValueMinor,
       if (isActive != null) 'is_active': isActive,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1248,6 +1298,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     Value<int>? minStockQty,
     Value<int>? salePriceMinor,
     Value<int>? avgCostMinor,
+    Value<int>? inventoryValueMinor,
     Value<bool>? isActive,
     Value<DateTime>? createdAt,
     Value<DateTime?>? updatedAt,
@@ -1262,6 +1313,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       minStockQty: minStockQty ?? this.minStockQty,
       salePriceMinor: salePriceMinor ?? this.salePriceMinor,
       avgCostMinor: avgCostMinor ?? this.avgCostMinor,
+      inventoryValueMinor: inventoryValueMinor ?? this.inventoryValueMinor,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1298,6 +1350,9 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     if (avgCostMinor.present) {
       map['avg_cost_minor'] = Variable<int>(avgCostMinor.value);
     }
+    if (inventoryValueMinor.present) {
+      map['inventory_value_minor'] = Variable<int>(inventoryValueMinor.value);
+    }
     if (isActive.present) {
       map['is_active'] = Variable<bool>(isActive.value);
     }
@@ -1322,6 +1377,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
           ..write('minStockQty: $minStockQty, ')
           ..write('salePriceMinor: $salePriceMinor, ')
           ..write('avgCostMinor: $avgCostMinor, ')
+          ..write('inventoryValueMinor: $inventoryValueMinor, ')
           ..write('isActive: $isActive, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -3196,6 +3252,18 @@ class $SaleItemsTable extends SaleItems
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _costMinorMeta = const VerificationMeta(
+    'costMinor',
+  );
+  @override
+  late final GeneratedColumn<int> costMinor = GeneratedColumn<int>(
+    'cost_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _lineTotalMinorMeta = const VerificationMeta(
     'lineTotalMinor',
   );
@@ -3215,6 +3283,7 @@ class $SaleItemsTable extends SaleItems
     qty,
     unitPriceMinor,
     unitCostMinor,
+    costMinor,
     lineTotalMinor,
   ];
   @override
@@ -3278,6 +3347,12 @@ class $SaleItemsTable extends SaleItems
     } else if (isInserting) {
       context.missing(_unitCostMinorMeta);
     }
+    if (data.containsKey('cost_minor')) {
+      context.handle(
+        _costMinorMeta,
+        costMinor.isAcceptableOrUnknown(data['cost_minor']!, _costMinorMeta),
+      );
+    }
     if (data.containsKey('line_total_minor')) {
       context.handle(
         _lineTotalMinorMeta,
@@ -3322,6 +3397,10 @@ class $SaleItemsTable extends SaleItems
         DriftSqlType.int,
         data['${effectivePrefix}unit_cost_minor'],
       )!,
+      costMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cost_minor'],
+      )!,
       lineTotalMinor: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}line_total_minor'],
@@ -3342,6 +3421,10 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
   final int qty;
   final int unitPriceMinor;
   final int unitCostMinor;
+
+  /// Exact allocated cost for this sale line. It may not equal qty × the
+  /// rounded unit cost when a weighted-average remainder is allocated.
+  final int costMinor;
   final int lineTotalMinor;
   const SaleItem({
     required this.id,
@@ -3350,6 +3433,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     required this.qty,
     required this.unitPriceMinor,
     required this.unitCostMinor,
+    required this.costMinor,
     required this.lineTotalMinor,
   });
   @override
@@ -3361,6 +3445,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     map['qty'] = Variable<int>(qty);
     map['unit_price_minor'] = Variable<int>(unitPriceMinor);
     map['unit_cost_minor'] = Variable<int>(unitCostMinor);
+    map['cost_minor'] = Variable<int>(costMinor);
     map['line_total_minor'] = Variable<int>(lineTotalMinor);
     return map;
   }
@@ -3373,6 +3458,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       qty: Value(qty),
       unitPriceMinor: Value(unitPriceMinor),
       unitCostMinor: Value(unitCostMinor),
+      costMinor: Value(costMinor),
       lineTotalMinor: Value(lineTotalMinor),
     );
   }
@@ -3389,6 +3475,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       qty: serializer.fromJson<int>(json['qty']),
       unitPriceMinor: serializer.fromJson<int>(json['unitPriceMinor']),
       unitCostMinor: serializer.fromJson<int>(json['unitCostMinor']),
+      costMinor: serializer.fromJson<int>(json['costMinor']),
       lineTotalMinor: serializer.fromJson<int>(json['lineTotalMinor']),
     );
   }
@@ -3402,6 +3489,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       'qty': serializer.toJson<int>(qty),
       'unitPriceMinor': serializer.toJson<int>(unitPriceMinor),
       'unitCostMinor': serializer.toJson<int>(unitCostMinor),
+      'costMinor': serializer.toJson<int>(costMinor),
       'lineTotalMinor': serializer.toJson<int>(lineTotalMinor),
     };
   }
@@ -3413,6 +3501,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     int? qty,
     int? unitPriceMinor,
     int? unitCostMinor,
+    int? costMinor,
     int? lineTotalMinor,
   }) => SaleItem(
     id: id ?? this.id,
@@ -3421,6 +3510,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     qty: qty ?? this.qty,
     unitPriceMinor: unitPriceMinor ?? this.unitPriceMinor,
     unitCostMinor: unitCostMinor ?? this.unitCostMinor,
+    costMinor: costMinor ?? this.costMinor,
     lineTotalMinor: lineTotalMinor ?? this.lineTotalMinor,
   );
   SaleItem copyWithCompanion(SaleItemsCompanion data) {
@@ -3435,6 +3525,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       unitCostMinor: data.unitCostMinor.present
           ? data.unitCostMinor.value
           : this.unitCostMinor,
+      costMinor: data.costMinor.present ? data.costMinor.value : this.costMinor,
       lineTotalMinor: data.lineTotalMinor.present
           ? data.lineTotalMinor.value
           : this.lineTotalMinor,
@@ -3450,6 +3541,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
           ..write('qty: $qty, ')
           ..write('unitPriceMinor: $unitPriceMinor, ')
           ..write('unitCostMinor: $unitCostMinor, ')
+          ..write('costMinor: $costMinor, ')
           ..write('lineTotalMinor: $lineTotalMinor')
           ..write(')'))
         .toString();
@@ -3463,6 +3555,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     qty,
     unitPriceMinor,
     unitCostMinor,
+    costMinor,
     lineTotalMinor,
   );
   @override
@@ -3475,6 +3568,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
           other.qty == this.qty &&
           other.unitPriceMinor == this.unitPriceMinor &&
           other.unitCostMinor == this.unitCostMinor &&
+          other.costMinor == this.costMinor &&
           other.lineTotalMinor == this.lineTotalMinor);
 }
 
@@ -3485,6 +3579,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
   final Value<int> qty;
   final Value<int> unitPriceMinor;
   final Value<int> unitCostMinor;
+  final Value<int> costMinor;
   final Value<int> lineTotalMinor;
   const SaleItemsCompanion({
     this.id = const Value.absent(),
@@ -3493,6 +3588,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     this.qty = const Value.absent(),
     this.unitPriceMinor = const Value.absent(),
     this.unitCostMinor = const Value.absent(),
+    this.costMinor = const Value.absent(),
     this.lineTotalMinor = const Value.absent(),
   });
   SaleItemsCompanion.insert({
@@ -3502,6 +3598,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     required int qty,
     required int unitPriceMinor,
     required int unitCostMinor,
+    this.costMinor = const Value.absent(),
     required int lineTotalMinor,
   }) : saleId = Value(saleId),
        productId = Value(productId),
@@ -3516,6 +3613,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     Expression<int>? qty,
     Expression<int>? unitPriceMinor,
     Expression<int>? unitCostMinor,
+    Expression<int>? costMinor,
     Expression<int>? lineTotalMinor,
   }) {
     return RawValuesInsertable({
@@ -3525,6 +3623,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
       if (qty != null) 'qty': qty,
       if (unitPriceMinor != null) 'unit_price_minor': unitPriceMinor,
       if (unitCostMinor != null) 'unit_cost_minor': unitCostMinor,
+      if (costMinor != null) 'cost_minor': costMinor,
       if (lineTotalMinor != null) 'line_total_minor': lineTotalMinor,
     });
   }
@@ -3536,6 +3635,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     Value<int>? qty,
     Value<int>? unitPriceMinor,
     Value<int>? unitCostMinor,
+    Value<int>? costMinor,
     Value<int>? lineTotalMinor,
   }) {
     return SaleItemsCompanion(
@@ -3545,6 +3645,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
       qty: qty ?? this.qty,
       unitPriceMinor: unitPriceMinor ?? this.unitPriceMinor,
       unitCostMinor: unitCostMinor ?? this.unitCostMinor,
+      costMinor: costMinor ?? this.costMinor,
       lineTotalMinor: lineTotalMinor ?? this.lineTotalMinor,
     );
   }
@@ -3570,6 +3671,9 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     if (unitCostMinor.present) {
       map['unit_cost_minor'] = Variable<int>(unitCostMinor.value);
     }
+    if (costMinor.present) {
+      map['cost_minor'] = Variable<int>(costMinor.value);
+    }
     if (lineTotalMinor.present) {
       map['line_total_minor'] = Variable<int>(lineTotalMinor.value);
     }
@@ -3585,6 +3689,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
           ..write('qty: $qty, ')
           ..write('unitPriceMinor: $unitPriceMinor, ')
           ..write('unitCostMinor: $unitCostMinor, ')
+          ..write('costMinor: $costMinor, ')
           ..write('lineTotalMinor: $lineTotalMinor')
           ..write(')'))
         .toString();
@@ -6885,6 +6990,18 @@ class $SaleReturnItemsTable extends SaleReturnItems
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _costMinorMeta = const VerificationMeta(
+    'costMinor',
+  );
+  @override
+  late final GeneratedColumn<int> costMinor = GeneratedColumn<int>(
+    'cost_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6894,6 +7011,7 @@ class $SaleReturnItemsTable extends SaleReturnItems
     qty,
     unitPriceMinor,
     unitCostMinor,
+    costMinor,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6967,6 +7085,12 @@ class $SaleReturnItemsTable extends SaleReturnItems
     } else if (isInserting) {
       context.missing(_unitCostMinorMeta);
     }
+    if (data.containsKey('cost_minor')) {
+      context.handle(
+        _costMinorMeta,
+        costMinor.isAcceptableOrUnknown(data['cost_minor']!, _costMinorMeta),
+      );
+    }
     return context;
   }
 
@@ -7004,6 +7128,10 @@ class $SaleReturnItemsTable extends SaleReturnItems
         DriftSqlType.int,
         data['${effectivePrefix}unit_cost_minor'],
       )!,
+      costMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cost_minor'],
+      )!,
     );
   }
 
@@ -7021,6 +7149,10 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
   final int qty;
   final int unitPriceMinor;
   final int unitCostMinor;
+
+  /// Exact cost restored by this return row. It may differ from qty × the
+  /// rounded historical unit cost when a sale-line remainder is allocated.
+  final int costMinor;
   const SaleReturnItem({
     required this.id,
     required this.returnId,
@@ -7029,6 +7161,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
     required this.qty,
     required this.unitPriceMinor,
     required this.unitCostMinor,
+    required this.costMinor,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7040,6 +7173,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
     map['qty'] = Variable<int>(qty);
     map['unit_price_minor'] = Variable<int>(unitPriceMinor);
     map['unit_cost_minor'] = Variable<int>(unitCostMinor);
+    map['cost_minor'] = Variable<int>(costMinor);
     return map;
   }
 
@@ -7052,6 +7186,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
       qty: Value(qty),
       unitPriceMinor: Value(unitPriceMinor),
       unitCostMinor: Value(unitCostMinor),
+      costMinor: Value(costMinor),
     );
   }
 
@@ -7068,6 +7203,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
       qty: serializer.fromJson<int>(json['qty']),
       unitPriceMinor: serializer.fromJson<int>(json['unitPriceMinor']),
       unitCostMinor: serializer.fromJson<int>(json['unitCostMinor']),
+      costMinor: serializer.fromJson<int>(json['costMinor']),
     );
   }
   @override
@@ -7081,6 +7217,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
       'qty': serializer.toJson<int>(qty),
       'unitPriceMinor': serializer.toJson<int>(unitPriceMinor),
       'unitCostMinor': serializer.toJson<int>(unitCostMinor),
+      'costMinor': serializer.toJson<int>(costMinor),
     };
   }
 
@@ -7092,6 +7229,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
     int? qty,
     int? unitPriceMinor,
     int? unitCostMinor,
+    int? costMinor,
   }) => SaleReturnItem(
     id: id ?? this.id,
     returnId: returnId ?? this.returnId,
@@ -7100,6 +7238,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
     qty: qty ?? this.qty,
     unitPriceMinor: unitPriceMinor ?? this.unitPriceMinor,
     unitCostMinor: unitCostMinor ?? this.unitCostMinor,
+    costMinor: costMinor ?? this.costMinor,
   );
   SaleReturnItem copyWithCompanion(SaleReturnItemsCompanion data) {
     return SaleReturnItem(
@@ -7116,6 +7255,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
       unitCostMinor: data.unitCostMinor.present
           ? data.unitCostMinor.value
           : this.unitCostMinor,
+      costMinor: data.costMinor.present ? data.costMinor.value : this.costMinor,
     );
   }
 
@@ -7128,7 +7268,8 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
           ..write('productId: $productId, ')
           ..write('qty: $qty, ')
           ..write('unitPriceMinor: $unitPriceMinor, ')
-          ..write('unitCostMinor: $unitCostMinor')
+          ..write('unitCostMinor: $unitCostMinor, ')
+          ..write('costMinor: $costMinor')
           ..write(')'))
         .toString();
   }
@@ -7142,6 +7283,7 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
     qty,
     unitPriceMinor,
     unitCostMinor,
+    costMinor,
   );
   @override
   bool operator ==(Object other) =>
@@ -7153,7 +7295,8 @@ class SaleReturnItem extends DataClass implements Insertable<SaleReturnItem> {
           other.productId == this.productId &&
           other.qty == this.qty &&
           other.unitPriceMinor == this.unitPriceMinor &&
-          other.unitCostMinor == this.unitCostMinor);
+          other.unitCostMinor == this.unitCostMinor &&
+          other.costMinor == this.costMinor);
 }
 
 class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
@@ -7164,6 +7307,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
   final Value<int> qty;
   final Value<int> unitPriceMinor;
   final Value<int> unitCostMinor;
+  final Value<int> costMinor;
   const SaleReturnItemsCompanion({
     this.id = const Value.absent(),
     this.returnId = const Value.absent(),
@@ -7172,6 +7316,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
     this.qty = const Value.absent(),
     this.unitPriceMinor = const Value.absent(),
     this.unitCostMinor = const Value.absent(),
+    this.costMinor = const Value.absent(),
   });
   SaleReturnItemsCompanion.insert({
     this.id = const Value.absent(),
@@ -7181,6 +7326,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
     required int qty,
     required int unitPriceMinor,
     required int unitCostMinor,
+    this.costMinor = const Value.absent(),
   }) : returnId = Value(returnId),
        saleItemId = Value(saleItemId),
        productId = Value(productId),
@@ -7195,6 +7341,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
     Expression<int>? qty,
     Expression<int>? unitPriceMinor,
     Expression<int>? unitCostMinor,
+    Expression<int>? costMinor,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7204,6 +7351,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
       if (qty != null) 'qty': qty,
       if (unitPriceMinor != null) 'unit_price_minor': unitPriceMinor,
       if (unitCostMinor != null) 'unit_cost_minor': unitCostMinor,
+      if (costMinor != null) 'cost_minor': costMinor,
     });
   }
 
@@ -7215,6 +7363,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
     Value<int>? qty,
     Value<int>? unitPriceMinor,
     Value<int>? unitCostMinor,
+    Value<int>? costMinor,
   }) {
     return SaleReturnItemsCompanion(
       id: id ?? this.id,
@@ -7224,6 +7373,7 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
       qty: qty ?? this.qty,
       unitPriceMinor: unitPriceMinor ?? this.unitPriceMinor,
       unitCostMinor: unitCostMinor ?? this.unitCostMinor,
+      costMinor: costMinor ?? this.costMinor,
     );
   }
 
@@ -7251,6 +7401,9 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
     if (unitCostMinor.present) {
       map['unit_cost_minor'] = Variable<int>(unitCostMinor.value);
     }
+    if (costMinor.present) {
+      map['cost_minor'] = Variable<int>(costMinor.value);
+    }
     return map;
   }
 
@@ -7263,7 +7416,8 @@ class SaleReturnItemsCompanion extends UpdateCompanion<SaleReturnItem> {
           ..write('productId: $productId, ')
           ..write('qty: $qty, ')
           ..write('unitPriceMinor: $unitPriceMinor, ')
-          ..write('unitCostMinor: $unitCostMinor')
+          ..write('unitCostMinor: $unitCostMinor, ')
+          ..write('costMinor: $costMinor')
           ..write(')'))
         .toString();
   }
@@ -11317,6 +11471,7 @@ typedef $$ProductsTableCreateCompanionBuilder =
       Value<int> minStockQty,
       required int salePriceMinor,
       Value<int> avgCostMinor,
+      Value<int> inventoryValueMinor,
       Value<bool> isActive,
       Value<DateTime> createdAt,
       Value<DateTime?> updatedAt,
@@ -11332,6 +11487,7 @@ typedef $$ProductsTableUpdateCompanionBuilder =
       Value<int> minStockQty,
       Value<int> salePriceMinor,
       Value<int> avgCostMinor,
+      Value<int> inventoryValueMinor,
       Value<bool> isActive,
       Value<DateTime> createdAt,
       Value<DateTime?> updatedAt,
@@ -11516,6 +11672,11 @@ class $$ProductsTableFilterComposer
 
   ColumnFilters<int> get avgCostMinor => $composableBuilder(
     column: $table.avgCostMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get inventoryValueMinor => $composableBuilder(
+    column: $table.inventoryValueMinor,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11739,6 +11900,11 @@ class $$ProductsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get inventoryValueMinor => $composableBuilder(
+    column: $table.inventoryValueMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isActive => $composableBuilder(
     column: $table.isActive,
     builder: (column) => ColumnOrderings(column),
@@ -11794,6 +11960,11 @@ class $$ProductsTableAnnotationComposer
 
   GeneratedColumn<int> get avgCostMinor => $composableBuilder(
     column: $table.avgCostMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get inventoryValueMinor => $composableBuilder(
+    column: $table.inventoryValueMinor,
     builder: (column) => column,
   );
 
@@ -12003,6 +12174,7 @@ class $$ProductsTableTableManager
                 Value<int> minStockQty = const Value.absent(),
                 Value<int> salePriceMinor = const Value.absent(),
                 Value<int> avgCostMinor = const Value.absent(),
+                Value<int> inventoryValueMinor = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> updatedAt = const Value.absent(),
@@ -12016,6 +12188,7 @@ class $$ProductsTableTableManager
                 minStockQty: minStockQty,
                 salePriceMinor: salePriceMinor,
                 avgCostMinor: avgCostMinor,
+                inventoryValueMinor: inventoryValueMinor,
                 isActive: isActive,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -12031,6 +12204,7 @@ class $$ProductsTableTableManager
                 Value<int> minStockQty = const Value.absent(),
                 required int salePriceMinor,
                 Value<int> avgCostMinor = const Value.absent(),
+                Value<int> inventoryValueMinor = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> updatedAt = const Value.absent(),
@@ -12044,6 +12218,7 @@ class $$ProductsTableTableManager
                 minStockQty: minStockQty,
                 salePriceMinor: salePriceMinor,
                 avgCostMinor: avgCostMinor,
+                inventoryValueMinor: inventoryValueMinor,
                 isActive: isActive,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -13978,6 +14153,7 @@ typedef $$SaleItemsTableCreateCompanionBuilder =
       required int qty,
       required int unitPriceMinor,
       required int unitCostMinor,
+      Value<int> costMinor,
       required int lineTotalMinor,
     });
 typedef $$SaleItemsTableUpdateCompanionBuilder =
@@ -13988,6 +14164,7 @@ typedef $$SaleItemsTableUpdateCompanionBuilder =
       Value<int> qty,
       Value<int> unitPriceMinor,
       Value<int> unitCostMinor,
+      Value<int> costMinor,
       Value<int> lineTotalMinor,
     });
 
@@ -14076,6 +14253,11 @@ class $$SaleItemsTableFilterComposer
 
   ColumnFilters<int> get unitCostMinor => $composableBuilder(
     column: $table.unitCostMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get costMinor => $composableBuilder(
+    column: $table.costMinor,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14185,6 +14367,11 @@ class $$SaleItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get costMinor => $composableBuilder(
+    column: $table.costMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get lineTotalMinor => $composableBuilder(
     column: $table.lineTotalMinor,
     builder: (column) => ColumnOrderings(column),
@@ -14261,6 +14448,9 @@ class $$SaleItemsTableAnnotationComposer
     column: $table.unitCostMinor,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get costMinor =>
+      $composableBuilder(column: $table.costMinor, builder: (column) => column);
 
   GeneratedColumn<int> get lineTotalMinor => $composableBuilder(
     column: $table.lineTotalMinor,
@@ -14377,6 +14567,7 @@ class $$SaleItemsTableTableManager
                 Value<int> qty = const Value.absent(),
                 Value<int> unitPriceMinor = const Value.absent(),
                 Value<int> unitCostMinor = const Value.absent(),
+                Value<int> costMinor = const Value.absent(),
                 Value<int> lineTotalMinor = const Value.absent(),
               }) => SaleItemsCompanion(
                 id: id,
@@ -14385,6 +14576,7 @@ class $$SaleItemsTableTableManager
                 qty: qty,
                 unitPriceMinor: unitPriceMinor,
                 unitCostMinor: unitCostMinor,
+                costMinor: costMinor,
                 lineTotalMinor: lineTotalMinor,
               ),
           createCompanionCallback:
@@ -14395,6 +14587,7 @@ class $$SaleItemsTableTableManager
                 required int qty,
                 required int unitPriceMinor,
                 required int unitCostMinor,
+                Value<int> costMinor = const Value.absent(),
                 required int lineTotalMinor,
               }) => SaleItemsCompanion.insert(
                 id: id,
@@ -14403,6 +14596,7 @@ class $$SaleItemsTableTableManager
                 qty: qty,
                 unitPriceMinor: unitPriceMinor,
                 unitCostMinor: unitCostMinor,
+                costMinor: costMinor,
                 lineTotalMinor: lineTotalMinor,
               ),
           withReferenceMapper: (p0) => p0
@@ -17372,6 +17566,7 @@ typedef $$SaleReturnItemsTableCreateCompanionBuilder =
       required int qty,
       required int unitPriceMinor,
       required int unitCostMinor,
+      Value<int> costMinor,
     });
 typedef $$SaleReturnItemsTableUpdateCompanionBuilder =
     SaleReturnItemsCompanion Function({
@@ -17382,6 +17577,7 @@ typedef $$SaleReturnItemsTableUpdateCompanionBuilder =
       Value<int> qty,
       Value<int> unitPriceMinor,
       Value<int> unitCostMinor,
+      Value<int> costMinor,
     });
 
 final class $$SaleReturnItemsTableReferences
@@ -17471,6 +17667,11 @@ class $$SaleReturnItemsTableFilterComposer
 
   ColumnFilters<int> get unitCostMinor => $composableBuilder(
     column: $table.unitCostMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get costMinor => $composableBuilder(
+    column: $table.costMinor,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17573,6 +17774,11 @@ class $$SaleReturnItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get costMinor => $composableBuilder(
+    column: $table.costMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SaleReturnsTableOrderingComposer get returnId {
     final $$SaleReturnsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -17667,6 +17873,9 @@ class $$SaleReturnItemsTableAnnotationComposer
     column: $table.unitCostMinor,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get costMinor =>
+      $composableBuilder(column: $table.costMinor, builder: (column) => column);
 
   $$SaleReturnsTableAnnotationComposer get returnId {
     final $$SaleReturnsTableAnnotationComposer composer = $composerBuilder(
@@ -17779,6 +17988,7 @@ class $$SaleReturnItemsTableTableManager
                 Value<int> qty = const Value.absent(),
                 Value<int> unitPriceMinor = const Value.absent(),
                 Value<int> unitCostMinor = const Value.absent(),
+                Value<int> costMinor = const Value.absent(),
               }) => SaleReturnItemsCompanion(
                 id: id,
                 returnId: returnId,
@@ -17787,6 +17997,7 @@ class $$SaleReturnItemsTableTableManager
                 qty: qty,
                 unitPriceMinor: unitPriceMinor,
                 unitCostMinor: unitCostMinor,
+                costMinor: costMinor,
               ),
           createCompanionCallback:
               ({
@@ -17797,6 +18008,7 @@ class $$SaleReturnItemsTableTableManager
                 required int qty,
                 required int unitPriceMinor,
                 required int unitCostMinor,
+                Value<int> costMinor = const Value.absent(),
               }) => SaleReturnItemsCompanion.insert(
                 id: id,
                 returnId: returnId,
@@ -17805,6 +18017,7 @@ class $$SaleReturnItemsTableTableManager
                 qty: qty,
                 unitPriceMinor: unitPriceMinor,
                 unitCostMinor: unitCostMinor,
+                costMinor: costMinor,
               ),
           withReferenceMapper: (p0) => p0
               .map(

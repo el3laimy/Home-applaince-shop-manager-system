@@ -8,40 +8,48 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
-  test('a verified v4 snapshot survives the successful v9 migration', () async {
-    final directory = await Directory.systemTemp.createTemp('migration-safe-');
-    addTearDown(() => directory.delete(recursive: true));
-    final live = File('${directory.path}/shop.db');
-    await _createV4Database(live);
-    final recovery = MigrationRecovery(
-      live,
-      targetVersion: kAppDatabaseSchemaVersion,
-    );
+  test(
+    'a verified v4 snapshot survives the successful v10 migration',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'migration-safe-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final live = File('${directory.path}/shop.db');
+      await _createV4Database(live);
+      final recovery = MigrationRecovery(
+        live,
+        targetVersion: kAppDatabaseSchemaVersion,
+      );
 
-    await recovery.prepareForOpen();
+      await recovery.prepareForOpen();
 
-    final snapshot = await recovery.pendingSnapshot();
-    expect(snapshot, isNotNull);
-    expect(await snapshot!.exists(), isTrue);
-    expect(_version(snapshot), 4);
-    expect(_setting(snapshot, 'migration.evidence'), 'before-upgrade');
-    expect(await recovery.marker.exists(), isTrue);
+      final snapshot = await recovery.pendingSnapshot();
+      expect(snapshot, isNotNull);
+      expect(await snapshot!.exists(), isTrue);
+      expect(_version(snapshot), 4);
+      expect(_setting(snapshot, 'migration.evidence'), 'before-upgrade');
+      expect(await recovery.marker.exists(), isTrue);
 
-    final db = AppDatabase(NativeDatabase(live));
-    addTearDown(db.close);
-    await V2UseCases(db).bootstrap(createDefaultOwner: false);
+      final db = AppDatabase(NativeDatabase(live));
+      addTearDown(db.close);
+      await V2UseCases(db).bootstrap(createDefaultOwner: false);
 
-    expect(_version(live), kAppDatabaseSchemaVersion);
-    expect(_hasColumn(live, 'products', 'image_path'), isTrue);
-    expect(_hasTable(live, 'inventory_adjustments'), isTrue);
-    expect(_hasTable(live, 'opening_balances'), isTrue);
-    expect(_hasTable(live, 'purchase_returns'), isTrue);
-    expect(_hasTable(live, 'purchase_return_items'), isTrue);
-    expect(_hasTable(live, 'financial_corrections'), isTrue);
-    expect(_version(snapshot), 4);
-    expect(_setting(snapshot, 'migration.evidence'), 'before-upgrade');
-    expect(await recovery.marker.exists(), isFalse);
-  });
+      expect(_version(live), kAppDatabaseSchemaVersion);
+      expect(_hasColumn(live, 'products', 'image_path'), isTrue);
+      expect(_hasColumn(live, 'products', 'inventory_value_minor'), isTrue);
+      expect(_hasColumn(live, 'sale_items', 'cost_minor'), isTrue);
+      expect(_hasColumn(live, 'sale_return_items', 'cost_minor'), isTrue);
+      expect(_hasTable(live, 'inventory_adjustments'), isTrue);
+      expect(_hasTable(live, 'opening_balances'), isTrue);
+      expect(_hasTable(live, 'purchase_returns'), isTrue);
+      expect(_hasTable(live, 'purchase_return_items'), isTrue);
+      expect(_hasTable(live, 'financial_corrections'), isTrue);
+      expect(_version(snapshot), 4);
+      expect(_setting(snapshot, 'migration.evidence'), 'before-upgrade');
+      expect(await recovery.marker.exists(), isFalse);
+    },
+  );
 
   test(
     'a database written by a newer app is rejected before migration',
@@ -108,6 +116,42 @@ void main() {
       expect(await recovery.pendingSnapshot(), isNotNull);
     },
   );
+
+  test(
+    'migration state transitions publish immutable atomic marker files',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'migration-marker-atomic-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final live = File('${directory.path}/shop.db');
+      await _createV4Database(live);
+      final recovery = MigrationRecovery(
+        live,
+        targetVersion: kAppDatabaseSchemaVersion,
+      );
+
+      await recovery.prepareForOpen();
+      await recovery.markMigrationStarted(
+        from: 4,
+        to: kAppDatabaseSchemaVersion,
+      );
+
+      final migratingMarker = File('${recovery.marker.path}.migrating');
+      expect(await recovery.marker.exists(), isTrue);
+      expect(await migratingMarker.exists(), isTrue);
+      expect(await File('${recovery.marker.path}.tmp').exists(), isFalse);
+      expect(await File('${migratingMarker.path}.tmp').exists(), isFalse);
+
+      final raw = sqlite.sqlite3.open(live.path);
+      raw.execute('PRAGMA user_version = $kAppDatabaseSchemaVersion;');
+      raw.close();
+      await recovery.finalizeIfSuccessful(kAppDatabaseSchemaVersion);
+
+      expect(await recovery.marker.exists(), isFalse);
+      expect(await migratingMarker.exists(), isFalse);
+    },
+  );
 }
 
 Future<void> _createCurrentDatabase(File file) async {
@@ -124,7 +168,12 @@ Future<void> _createV4Database(File file) async {
   final raw = sqlite.sqlite3.open(file.path);
   try {
     raw
+      ..execute('DROP TRIGGER IF EXISTS products_nonnegative_insert;')
+      ..execute('DROP TRIGGER IF EXISTS products_nonnegative_update;')
       ..execute('ALTER TABLE products DROP COLUMN image_path;')
+      ..execute('ALTER TABLE products DROP COLUMN inventory_value_minor;')
+      ..execute('ALTER TABLE sale_items DROP COLUMN cost_minor;')
+      ..execute('ALTER TABLE sale_return_items DROP COLUMN cost_minor;')
       ..execute(
         "INSERT OR REPLACE INTO app_settings(key, value) VALUES ('migration.evidence', 'before-upgrade');",
       )

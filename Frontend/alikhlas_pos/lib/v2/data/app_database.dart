@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
-const kAppDatabaseSchemaVersion = 9;
+const kAppDatabaseSchemaVersion = 10;
 
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -41,6 +41,11 @@ class Products extends Table {
   IntColumn get minStockQty => integer().withDefault(const Constant(1))();
   IntColumn get salePriceMinor => integer()();
   IntColumn get avgCostMinor => integer().withDefault(const Constant(0))();
+
+  /// Exact cost basis for the units currently held. `avgCostMinor` is only a
+  /// rounded display value; financial postings use this value.
+  IntColumn get inventoryValueMinor =>
+      integer().withDefault(const Constant(0))();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().nullable()();
@@ -92,6 +97,10 @@ class SaleItems extends Table {
   IntColumn get qty => integer()();
   IntColumn get unitPriceMinor => integer()();
   IntColumn get unitCostMinor => integer()();
+
+  /// Exact allocated cost for this sale line. It may not equal qty × the
+  /// rounded unit cost when a weighted-average remainder is allocated.
+  IntColumn get costMinor => integer().withDefault(const Constant(0))();
   IntColumn get lineTotalMinor => integer()();
 }
 
@@ -173,6 +182,10 @@ class SaleReturnItems extends Table {
   IntColumn get qty => integer()();
   IntColumn get unitPriceMinor => integer()();
   IntColumn get unitCostMinor => integer()();
+
+  /// Exact cost restored by this return row. It may differ from qty × the
+  /// rounded historical unit cost when a sale-line remainder is allocated.
+  IntColumn get costMinor => integer().withDefault(const Constant(0))();
 }
 
 class StockMovements extends Table {
@@ -315,9 +328,6 @@ class AppDatabase extends _$AppDatabase {
         if (from < 2) {
           await migrator.addColumn(saleInvoices, saleInvoices.discountMinor);
         }
-        if (from < 3) {
-          await _createPerformanceIndexes();
-        }
         if (from < 4) {
           await migrator.createTable(expenses);
         }
@@ -337,6 +347,23 @@ class AppDatabase extends _$AppDatabase {
         if (from < 9) {
           await migrator.createTable(financialCorrections);
         }
+        if (from < 10) {
+          await migrator.addColumn(products, products.inventoryValueMinor);
+          await migrator.addColumn(saleItems, saleItems.costMinor);
+          await migrator.addColumn(saleReturnItems, saleReturnItems.costMinor);
+          // Historical rows had only an integer unit cost. Preserve their
+          // recorded basis as the opening value for the new exact columns;
+          // the audit will expose any legacy GL variance for explicit review.
+          await customStatement(
+            'UPDATE products SET inventory_value_minor = stock_qty * avg_cost_minor;',
+          );
+          await customStatement(
+            'UPDATE sale_items SET cost_minor = qty * unit_cost_minor;',
+          );
+          await customStatement(
+            'UPDATE sale_return_items SET cost_minor = qty * unit_cost_minor;',
+          );
+        }
       } catch (_, stackTrace) {
         Error.throwWithStackTrace(
           DatabaseMigrationFailedDuringUpgrade(from: from, to: to),
@@ -349,6 +376,7 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA journal_mode = WAL;');
       await customStatement('PRAGMA synchronous = FULL;');
       await _createPerformanceIndexes();
+      await _createDataIntegrityGuards();
     },
   );
 
@@ -398,6 +426,102 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_financial_corrections_target_created ON financial_corrections(target, created_at);',
     );
+  }
+
+  /// SQLite cannot add a CHECK constraint to an existing table without a
+  /// destructive table rebuild. These triggers enforce the same invariants
+  /// for every supported schema, including databases upgraded in place.
+  Future<void> _createDataIntegrityGuards() async {
+    const guards = [
+      '''
+      CREATE TRIGGER IF NOT EXISTS products_nonnegative_insert
+      BEFORE INSERT ON products
+      WHEN NEW.stock_qty < 0
+        OR NEW.min_stock_qty < 0
+        OR NEW.sale_price_minor <= 0
+        OR NEW.avg_cost_minor < 0
+        OR NEW.inventory_value_minor < 0
+        OR (NEW.stock_qty = 0 AND NEW.inventory_value_minor != 0)
+      BEGIN SELECT RAISE(ABORT, 'Invalid product inventory values'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS products_nonnegative_update
+      BEFORE UPDATE OF stock_qty, min_stock_qty, sale_price_minor,
+          avg_cost_minor, inventory_value_minor ON products
+      WHEN NEW.stock_qty < 0
+        OR NEW.min_stock_qty < 0
+        OR NEW.sale_price_minor <= 0
+        OR NEW.avg_cost_minor < 0
+        OR NEW.inventory_value_minor < 0
+        OR (NEW.stock_qty = 0 AND NEW.inventory_value_minor != 0)
+      BEGIN SELECT RAISE(ABORT, 'Invalid product inventory values'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS shifts_nonnegative_insert
+      BEFORE INSERT ON shifts
+      WHEN NEW.opening_cash_minor < 0
+        OR (NEW.actual_cash_minor IS NOT NULL AND NEW.actual_cash_minor < 0)
+      BEGIN SELECT RAISE(ABORT, 'Shift cash cannot be negative'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS shifts_nonnegative_update
+      BEFORE UPDATE OF opening_cash_minor, actual_cash_minor ON shifts
+      WHEN NEW.opening_cash_minor < 0
+        OR (NEW.actual_cash_minor IS NOT NULL AND NEW.actual_cash_minor < 0)
+      BEGIN SELECT RAISE(ABORT, 'Shift cash cannot be negative'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS sale_items_positive_quantity
+      BEFORE INSERT ON sale_items
+      WHEN NEW.qty <= 0
+      BEGIN SELECT RAISE(ABORT, 'Sale item quantity must be positive'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS purchase_items_positive_quantity
+      BEFORE INSERT ON purchase_items
+      WHEN NEW.qty <= 0
+      BEGIN SELECT RAISE(ABORT, 'Purchase item quantity must be positive'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS sale_return_items_positive_quantity
+      BEFORE INSERT ON sale_return_items
+      WHEN NEW.qty <= 0
+      BEGIN SELECT RAISE(ABORT, 'Sale return item quantity must be positive'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS purchase_return_items_positive_quantity
+      BEFORE INSERT ON purchase_return_items
+      WHEN NEW.qty <= 0
+      BEGIN SELECT RAISE(ABORT, 'Purchase return item quantity must be positive'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS ledger_lines_valid_insert
+      BEFORE INSERT ON ledger_lines
+      WHEN NEW.debit_minor < 0
+        OR NEW.credit_minor < 0
+        OR (NEW.debit_minor > 0 AND NEW.credit_minor > 0)
+      BEGIN SELECT RAISE(ABORT, 'Invalid ledger line values'); END;
+      ''',
+      '''
+      CREATE TRIGGER IF NOT EXISTS ledger_lines_valid_update
+      BEFORE UPDATE OF debit_minor, credit_minor ON ledger_lines
+      WHEN NEW.debit_minor < 0
+        OR NEW.credit_minor < 0
+        OR (NEW.debit_minor > 0 AND NEW.credit_minor > 0)
+      BEGIN SELECT RAISE(ABORT, 'Invalid ledger line values'); END;
+      ''',
+    ];
+    final existingTables = (await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table';",
+    ).get()).map((row) => row.read<String>('name')).toSet();
+    for (final guard in guards) {
+      final table = RegExp(
+        r'\bON\s+([a-z_]+)',
+        caseSensitive: false,
+      ).firstMatch(guard)?.group(1);
+      if (table == null || !existingTables.contains(table)) continue;
+      await customStatement(guard);
+    }
   }
 
   Future<void> finalizeMigrationIfReady() async {

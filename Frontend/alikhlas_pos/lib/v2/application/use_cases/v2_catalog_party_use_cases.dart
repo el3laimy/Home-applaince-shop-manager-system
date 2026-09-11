@@ -75,6 +75,11 @@ extension V2CatalogPartyUseCases on V2UseCases {
         'سعر البيع يجب أن يكون أكبر من صفر والقيم لا يمكن أن تكون سالبة',
       );
     }
+    if (openingQty > 0 && openingCostMinor == 0) {
+      return const AppFailure(
+        'أدخل تكلفة افتتاحية أكبر من صفر للصنف الذي له رصيد.',
+      );
+    }
 
     final requestedBarcode = _blankToNull(barcode);
     final cleanImagePath = _blankToNull(imagePath);
@@ -100,6 +105,7 @@ extension V2CatalogPartyUseCases on V2UseCases {
               salePriceMinor: salePriceMinor,
               stockQty: Value(openingQty),
               avgCostMinor: Value(openingCostMinor),
+              inventoryValueMinor: Value(openingQty * openingCostMinor),
               minStockQty: Value(minStockQty),
             ),
           );
@@ -177,7 +183,7 @@ extension V2CatalogPartyUseCases on V2UseCases {
           imagePath: Value(_blankToNull(imagePath)),
           salePriceMinor: Value(salePriceMinor),
           minStockQty: Value(minStockQty),
-          updatedAt: Value(DateTime.now()),
+          updatedAt: Value(clock()),
         ),
       );
 
@@ -190,15 +196,41 @@ extension V2CatalogPartyUseCases on V2UseCases {
   }
 
   Future<AppResult<void>> deactivateProduct(int id) async {
-    await _writeTransaction(() async {
+    return _writeTransaction(() async {
+      final product = await (db.select(
+        db.products,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      if (product == null) return const AppFailure<void>('المنتج غير موجود.');
+      if (product.stockQty != 0 || product.inventoryValueMinor != 0) {
+        return const AppFailure<void>(
+          'لا يمكن تعطيل منتج له مخزون أو قيمة مخزون. سوِّ الرصيد أولًا.',
+        );
+      }
       await (db.update(db.products)..where((p) => p.id.equals(id))).write(
         ProductsCompanion(
           isActive: const Value(false),
-          updatedAt: Value(DateTime.now()),
+          updatedAt: Value(clock()),
         ),
       );
+      return const AppSuccess<void>(null);
     });
-    return const AppSuccess(null);
+  }
+
+  Future<AppResult<void>> reactivateProduct(int id) {
+    return _writeTransaction(() async {
+      final changed =
+          await (db.update(
+            db.products,
+          )..where((row) => row.id.equals(id))).write(
+            ProductsCompanion(
+              isActive: const Value(true),
+              updatedAt: Value(clock()),
+            ),
+          );
+      return changed == 1
+          ? const AppSuccess<void>(null)
+          : const AppFailure<void>('المنتج غير موجود.');
+    });
   }
 
   Future<AppResult<Customer>> createCustomer({

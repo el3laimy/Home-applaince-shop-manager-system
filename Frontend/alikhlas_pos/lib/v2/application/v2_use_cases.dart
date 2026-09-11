@@ -14,6 +14,7 @@ import '../core/money.dart';
 import '../core/result.dart';
 import '../data/app_database.dart';
 import '../data/restore_recovery.dart';
+import 'backup_file_operations.dart';
 
 part 'use_cases/v2_models.dart';
 part 'use_cases/v2_invoice_draft_use_cases.dart';
@@ -85,14 +86,17 @@ class V2UseCases {
   V2UseCases(
     this.db, {
     RestoreFileOperations? restoreFileOperations,
+    BackupFileOperations? backupFileOperations,
     DateTime Function()? clock,
     V2WriteBarrier? writeBarrier,
   }) : clock = clock ?? DateTime.now,
        _restoreFiles = restoreFileOperations ?? const RestoreFileOperations(),
+       _backupFileOperations =
+           backupFileOperations ?? const BackupFileOperations(),
        _writeBarrier = writeBarrier ?? V2WriteBarrier();
 
   static const _passwordHashPrefix = 'pbkdf2_sha256';
-  static const _passwordIterations = 120000;
+  static const _passwordIterations = 600000;
   static const _passwordSaltLength = 16;
   static const _passwordKeyLength = 32;
 
@@ -105,6 +109,7 @@ class V2UseCases {
 
   final AppDatabase db;
   final RestoreFileOperations _restoreFiles;
+  final BackupFileOperations _backupFileOperations;
   final V2WriteBarrier _writeBarrier;
 
   Future<T> _write<T>(Future<T> Function() action) {

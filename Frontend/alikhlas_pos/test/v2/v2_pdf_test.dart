@@ -55,7 +55,7 @@ void main() {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
 
       final customerId = await db
           .into(db.customers)

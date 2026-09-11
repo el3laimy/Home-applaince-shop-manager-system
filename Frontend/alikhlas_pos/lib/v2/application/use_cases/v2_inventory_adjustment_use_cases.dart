@@ -92,7 +92,14 @@ extension V2InventoryAdjustmentUseCases on V2UseCases {
       }
 
       final qtyDelta = countedQty - product.stockQty;
-      final valueDeltaMinor = qtyDelta * unitCostMinor;
+      final valueDeltaMinor = qtyDelta > 0
+          ? qtyDelta * unitCostMinor
+          : -_allocateInventoryValue(
+              inventoryValueMinor: product.inventoryValueMinor,
+              stockQty: product.stockQty,
+              qty: -qtyDelta,
+            );
+      final newInventoryValue = product.inventoryValueMinor + valueDeltaMinor;
       final now = clock();
       final adjustmentId = await db
           .into(db.inventoryAdjustments)
@@ -114,9 +121,10 @@ extension V2InventoryAdjustmentUseCases on V2UseCases {
       )..where((row) => row.id.equals(product.id))).write(
         ProductsCompanion(
           stockQty: Value(countedQty),
-          avgCostMinor: product.avgCostMinor > 0
-              ? const Value.absent()
-              : Value(unitCostMinor),
+          avgCostMinor: Value(
+            _roundedAverageCost(newInventoryValue, countedQty),
+          ),
+          inventoryValueMinor: Value(newInventoryValue),
           updatedAt: Value(now),
         ),
       );

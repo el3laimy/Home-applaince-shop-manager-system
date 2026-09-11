@@ -104,6 +104,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
         var subtotal = 0;
         var cogs = 0;
         final productRows = <int, Product>{};
+        final saleCosts = <int, int>{};
 
         for (final item in items) {
           if (item.qty <= 0 || item.unitPriceMinor < 0) {
@@ -121,7 +122,13 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           }
           productRows[item.productId] = product;
           subtotal += item.qty * item.unitPriceMinor;
-          cogs += item.qty * product.avgCostMinor;
+          final exactCost = _allocateInventoryValue(
+            inventoryValueMinor: product.inventoryValueMinor,
+            stockQty: product.stockQty,
+            qty: item.qty,
+          );
+          saleCosts[item.productId] = exactCost;
+          cogs += exactCost;
         }
 
         final cashPaid = _sumPayments(payments, PaymentMethod.cash);
@@ -170,6 +177,9 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
 
         for (final item in items) {
           final product = productRows[item.productId]!;
+          final exactCost = saleCosts[item.productId]!;
+          final newQty = product.stockQty - item.qty;
+          final newValue = product.inventoryValueMinor - exactCost;
           await db
               .into(db.saleItems)
               .insert(
@@ -179,17 +189,19 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
                   qty: item.qty,
                   unitPriceMinor: item.unitPriceMinor,
                   unitCostMinor: product.avgCostMinor,
+                  costMinor: Value(exactCost),
                   lineTotalMinor: item.qty * item.unitPriceMinor,
                 ),
               );
 
-          final newQty = product.stockQty - item.qty;
           await (db.update(
             db.products,
           )..where((p) => p.id.equals(product.id))).write(
             ProductsCompanion(
               stockQty: Value(newQty),
-              updatedAt: Value(DateTime.now()),
+              inventoryValueMinor: Value(newValue),
+              avgCostMinor: Value(_roundedAverageCost(newValue, newQty)),
+              updatedAt: Value(clock()),
             ),
           );
           await db
@@ -335,10 +347,15 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           if (item.unitCostMinor <= 0) {
             throw _BusinessError('أدخل سعر شراء صحيح للصنف');
           }
-          final product = await (db.select(
-            db.products,
-          )..where((p) => p.id.equals(item.productId))).getSingleOrNull();
-          if (product == null) throw _BusinessError('منتج غير موجود');
+          final product =
+              await (db.select(db.products)..where(
+                    (p) =>
+                        p.id.equals(item.productId) & p.isActive.equals(true),
+                  ))
+                  .getSingleOrNull();
+          if (product == null) {
+            throw _BusinessError('المنتج غير موجود أو معطل. فعّله قبل الشراء.');
+          }
           products[item.productId] = product;
           total += item.qty * item.unitCostMinor;
         }
@@ -379,7 +396,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
 
         for (final item in items) {
           final product = products[item.productId]!;
-          final oldValue = product.stockQty * product.avgCostMinor;
+          final oldValue = product.inventoryValueMinor;
           final newQty = product.stockQty + item.qty;
           final newValue = oldValue + (item.qty * item.unitCostMinor);
           final newAvg = newQty == 0
@@ -403,7 +420,8 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
             ProductsCompanion(
               stockQty: Value(newQty),
               avgCostMinor: Value(newAvg),
-              updatedAt: Value(DateTime.now()),
+              inventoryValueMinor: Value(newValue),
+              updatedAt: Value(clock()),
             ),
           );
           await db
@@ -538,6 +556,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
         var supplierCredit = 0;
         var inventoryValue = 0;
         final productBalances = <int, int>{};
+        final productValues = <int, int>{};
         final returnLines =
             <
               ({
@@ -576,20 +595,28 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
                     ..where((item) => item.id.equals(purchaseItem.productId)))
                   .getSingle();
           final currentQty = productBalances[product.id] ?? product.stockQty;
+          final currentValue =
+              productValues[product.id] ?? product.inventoryValueMinor;
           if (currentQty < qty) {
             throw _BusinessError(
               'لا يمكن رد $qty من ${product.name} لأن المخزون الحالي أقل من الكمية.',
             );
           }
           final balanceAfter = currentQty - qty;
+          final inventoryLineValue = _allocateInventoryValue(
+            inventoryValueMinor: currentValue,
+            stockQty: currentQty,
+            qty: qty,
+          );
           productBalances[product.id] = balanceAfter;
+          productValues[product.id] = currentValue - inventoryLineValue;
           supplierCredit += qty * purchaseItem.unitCostMinor;
-          inventoryValue += qty * product.avgCostMinor;
+          inventoryValue += inventoryLineValue;
           returnLines.add((
             product: product,
             purchaseItem: purchaseItem,
             qty: qty,
-            inventoryUnitCostMinor: product.avgCostMinor,
+            inventoryUnitCostMinor: qty == 0 ? 0 : inventoryLineValue ~/ qty,
             balanceAfter: balanceAfter,
           ));
         }
@@ -649,7 +676,11 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           )..where((product) => product.id.equals(entry.key))).write(
             ProductsCompanion(
               stockQty: Value(entry.value),
-              updatedAt: Value(DateTime.now()),
+              inventoryValueMinor: Value(productValues[entry.key]!),
+              avgCostMinor: Value(
+                _roundedAverageCost(productValues[entry.key]!, entry.value),
+              ),
+              updatedAt: Value(clock()),
             ),
           );
         }
@@ -811,7 +842,13 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
         var returnedCost = 0;
         final returnLines =
             <
-              ({Product product, SaleItem saleItem, int qty, int refundMinor})
+              ({
+                Product product,
+                SaleItem saleItem,
+                int qty,
+                int refundMinor,
+                int costMinor,
+              })
             >[];
 
         for (final entry in saleItemQuantities.entries) {
@@ -844,19 +881,29 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
             refundedMinor,
             qty,
           );
+          final returnedLineCost = _returnCostForQuantity(
+            totalCostMinor: saleItem.costMinor,
+            totalQty: saleItem.qty,
+            alreadyReturnedQty: alreadyReturned,
+            alreadyReturnedCostMinor: priorReturns.fold<int>(
+              0,
+              (sum, row) => sum + row.costMinor,
+            ),
+            qty: qty,
+          );
 
           final product = await (db.select(
             db.products,
           )..where((p) => p.id.equals(saleItem.productId))).getSingle();
 
           refund += lineRefund;
-          // Sale returns reverse inventory at the historical sold cost; current WAC is not recalculated in v2.
-          returnedCost += qty * saleItem.unitCostMinor;
+          returnedCost += returnedLineCost;
           returnLines.add((
             product: product,
             saleItem: saleItem,
             qty: qty,
             refundMinor: lineRefund,
+            costMinor: returnedLineCost,
           ));
         }
 
@@ -946,17 +993,25 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
             );
 
         final productBalances = <int, int>{};
+        final productValues = <int, int>{};
         for (final line in returnLines) {
           final currentQty =
               productBalances[line.product.id] ?? line.product.stockQty;
+          final currentValue =
+              productValues[line.product.id] ??
+              line.product.inventoryValueMinor;
           final newQty = currentQty + line.qty;
+          final newValue = currentValue + line.costMinor;
           productBalances[line.product.id] = newQty;
+          productValues[line.product.id] = newValue;
           await (db.update(
             db.products,
           )..where((p) => p.id.equals(line.product.id))).write(
             ProductsCompanion(
               stockQty: Value(newQty),
-              updatedAt: Value(DateTime.now()),
+              inventoryValueMinor: Value(newValue),
+              avgCostMinor: Value(_roundedAverageCost(newValue, newQty)),
+              updatedAt: Value(clock()),
             ),
           );
 
@@ -964,11 +1019,22 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
           // without changing the historical return-item schema.
           final basePrice = line.refundMinor ~/ line.qty;
           final extraUnits = line.refundMinor % line.qty;
+          var allocatedGroupQty = 0;
+          var allocatedGroupCost = 0;
           for (final group in [
             (line.qty - extraUnits, basePrice),
             (extraUnits, basePrice + 1),
           ]) {
             if (group.$1 == 0) continue;
+            final groupCost = _returnCostForQuantity(
+              totalCostMinor: line.costMinor,
+              totalQty: line.qty,
+              alreadyReturnedQty: allocatedGroupQty,
+              alreadyReturnedCostMinor: allocatedGroupCost,
+              qty: group.$1,
+            );
+            allocatedGroupQty += group.$1;
+            allocatedGroupCost += groupCost;
             await db
                 .into(db.saleReturnItems)
                 .insert(
@@ -979,6 +1045,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
                     qty: group.$1,
                     unitPriceMinor: group.$2,
                     unitCostMinor: line.saleItem.unitCostMinor,
+                    costMinor: Value(groupCost),
                   ),
                 );
           }
@@ -1105,7 +1172,7 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
             ),
           ),
           status: Value(newRemaining == 0 ? 'paid' : 'pending'),
-          paidAt: Value(newRemaining == 0 ? DateTime.now() : null),
+          paidAt: Value(newRemaining == 0 ? clock() : null),
         ),
       );
     }
@@ -1218,4 +1285,38 @@ extension V2SalesPurchaseReturnUseCases on V2UseCases {
     }
     return result;
   }
+}
+
+int _allocateInventoryValue({
+  required int inventoryValueMinor,
+  required int stockQty,
+  required int qty,
+}) {
+  if (qty <= 0 || stockQty <= 0 || qty > stockQty) {
+    throw StateError('Invalid inventory cost allocation.');
+  }
+  if (qty == stockQty) return inventoryValueMinor;
+  return inventoryValueMinor * qty ~/ stockQty;
+}
+
+int _roundedAverageCost(int inventoryValueMinor, int stockQty) {
+  if (stockQty == 0) return 0;
+  return (inventoryValueMinor / stockQty).round();
+}
+
+int _returnCostForQuantity({
+  required int totalCostMinor,
+  required int totalQty,
+  required int alreadyReturnedQty,
+  required int alreadyReturnedCostMinor,
+  required int qty,
+}) {
+  final remainingQty = totalQty - alreadyReturnedQty;
+  if (totalQty <= 0 || qty <= 0 || qty > remainingQty) {
+    throw StateError('Invalid return cost allocation.');
+  }
+  if (qty == remainingQty) return totalCostMinor - alreadyReturnedCostMinor;
+  final before = totalCostMinor * alreadyReturnedQty ~/ totalQty;
+  final after = totalCostMinor * (alreadyReturnedQty + qty) ~/ totalQty;
+  return after - before;
 }

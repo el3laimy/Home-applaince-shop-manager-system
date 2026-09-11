@@ -121,7 +121,7 @@ extension V2ReportUseCaseHelpers on V2UseCases {
     final supplierNames = {
       for (final supplier in suppliers) supplier.id: supplier.name,
     };
-    final now = DateTime.now();
+    final now = clock();
     final horizon = now.add(const Duration(days: 7));
     final payments = await (db.select(
       db.installmentPayments,
@@ -171,7 +171,7 @@ extension V2ReportUseCaseHelpers on V2UseCases {
       paymentsByPlan.putIfAbsent(payment.planId, () => []).add(payment);
     }
 
-    final today = _dayStart(DateTime.now());
+    final today = _dayStart(clock());
     final horizon = today.add(const Duration(days: 8));
     final previews = <InstallmentPlanPreview>[];
 

@@ -16,6 +16,17 @@ class MigrationRecovery {
   final int targetVersion;
 
   File get marker => File('${live.path}.migration-pending');
+  File get _migratingMarker => File('${marker.path}.migrating');
+  File get _failedMarker => File('${marker.path}.failed');
+
+  /// The initial marker is never overwritten. State transitions publish a
+  /// separate, immutable marker through temp -> flush -> rename. This avoids
+  /// replacing an open file, which is not reliably atomic on Windows.
+  List<(File, _MigrationState)> get _markerFiles => [
+    (_failedMarker, _MigrationState.failed),
+    (_migratingMarker, _MigrationState.migrating),
+    (marker, _MigrationState.prepared),
+  ];
 
   /// Creates the pre-upgrade copy or refuses a database from a newer build.
   Future<void> prepareForOpen() async {
@@ -75,7 +86,7 @@ class MigrationRecovery {
       return;
     }
     await _verifiedSnapshot(record);
-    await marker.delete();
+    await _deleteMarkers();
   }
 
   /// Exposed for narrow tests and diagnostics; the app never displays its path.
@@ -91,14 +102,14 @@ class MigrationRecovery {
         currentVersion == record.from) {
       // The process ended before Drift began the migration. Start again with a
       // fresh snapshot instead of treating that harmless interruption as loss.
-      await marker.delete();
+      await _deleteMarkers();
       return;
     }
     if (record.state == _MigrationState.migrating &&
         currentVersion == record.to &&
         record.target == targetVersion) {
       // Drift writes user_version only after all migration callbacks succeed.
-      await marker.delete();
+      await _deleteMarkers();
       return;
     }
     if (record.state != _MigrationState.failed) {
@@ -201,30 +212,76 @@ class MigrationRecovery {
   }
 
   Future<_MigrationMarker?> _readMarker() async {
-    if (!await marker.exists()) return null;
-    try {
-      return _MigrationMarker.fromJson(jsonDecode(await marker.readAsString()));
-    } on Object {
+    final records = <_MigrationMarker>[];
+    for (final (file, expectedState) in _markerFiles) {
+      if (!await file.exists()) continue;
+      try {
+        final record = _MigrationMarker.fromJson(
+          jsonDecode(await file.readAsString()),
+        );
+        if (record.state != expectedState) throw const FormatException();
+        records.add(record);
+      } on Object {
+        throw const DatabaseMigrationFailed(
+          'ملف حماية تحديث قاعدة البيانات غير قابل للقراءة. لم يتم فتح بيانات المحل.',
+        );
+      }
+    }
+    if (records.isEmpty) return null;
+
+    final first = records.first;
+    if (records.any(
+      (record) =>
+          record.from != first.from ||
+          record.to != first.to ||
+          record.target != first.target ||
+          record.snapshotPath != first.snapshotPath ||
+          record.snapshotSha256 != first.snapshotSha256,
+    )) {
       throw const DatabaseMigrationFailed(
-        'ملف حماية تحديث قاعدة البيانات غير قابل للقراءة. لم يتم فتح بيانات المحل.',
+        'ملفات حماية تحديث قاعدة البيانات متعارضة. لم يتم فتح بيانات المحل.',
       );
     }
+    // The ordering above deliberately makes failed win over migrating, and
+    // migrating win over prepared after an interrupted state transition.
+    return first;
   }
 
   Future<void> _createMarker(_MigrationMarker record) async {
-    if (await marker.exists()) {
+    if ((await Future.wait(
+      _markerFiles.map((entry) => entry.$1.exists()),
+    )).any((exists) => exists)) {
       throw const DatabaseMigrationFailed(
         'يوجد تحديث سابق لقاعدة البيانات يحتاج معالجة قبل المتابعة.',
       );
     }
-    final temporary = File('${marker.path}.tmp');
-    if (await temporary.exists()) await temporary.delete();
-    await temporary.writeAsString(jsonEncode(record.toJson()), flush: true);
-    await temporary.rename(marker.path);
+    await _publishMarker(marker, record);
   }
 
-  Future<void> _writeMarker(_MigrationMarker record) {
-    return marker.writeAsString(jsonEncode(record.toJson()), flush: true);
+  Future<void> _writeMarker(_MigrationMarker record) async {
+    final destination = switch (record.state) {
+      _MigrationState.prepared => marker,
+      _MigrationState.migrating => _migratingMarker,
+      _MigrationState.failed => _failedMarker,
+    };
+    if (record.state == _MigrationState.prepared) {
+      throw StateError('The prepared migration marker is immutable.');
+    }
+    if (await destination.exists()) return;
+    await _publishMarker(destination, record);
+  }
+
+  Future<void> _publishMarker(File destination, _MigrationMarker record) async {
+    final temporary = File('${destination.path}.tmp');
+    if (await temporary.exists()) await temporary.delete();
+    await temporary.writeAsString(jsonEncode(record.toJson()), flush: true);
+    await temporary.rename(destination.path);
+  }
+
+  Future<void> _deleteMarkers() async {
+    for (final (file, _) in _markerFiles) {
+      if (await file.exists()) await file.delete();
+    }
   }
 
   bool _safeSnapshotPath(String source) {

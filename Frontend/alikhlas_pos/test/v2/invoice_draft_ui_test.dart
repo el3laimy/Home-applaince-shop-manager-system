@@ -23,7 +23,7 @@ void main() {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       final owner = await _success(useCases.login('owner', 'owner123'));
       await _success(useCases.changePassword(owner.id, 'draft-owner-pass'));
       await _success(
@@ -104,7 +104,7 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final useCases = V2UseCases(db);
-    await useCases.bootstrap();
+    await useCases.bootstrap(createDefaultOwner: true);
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'draft-owner-pass'));
     await _success(
@@ -175,7 +175,7 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final useCases = V2UseCases(db);
-    await useCases.bootstrap();
+    await useCases.bootstrap(createDefaultOwner: true);
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'draft-owner-pass'));
     await db
@@ -223,7 +223,7 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final useCases = V2UseCases(db);
-    await useCases.bootstrap();
+    await useCases.bootstrap(createDefaultOwner: true);
     final owner = await _success(useCases.login('owner', 'owner123'));
     await _success(useCases.changePassword(owner.id, 'draft-owner-pass'));
     final product = await _success(

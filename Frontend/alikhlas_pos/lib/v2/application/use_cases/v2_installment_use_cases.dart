@@ -241,7 +241,7 @@ extension V2InstallmentUseCases on V2UseCases {
       )..where((p) => p.id.equals(installment.id))).write(
         InstallmentPaymentsCompanion(
           status: const Value('paid'),
-          paidAt: Value(installment.paidAt ?? DateTime.now()),
+          paidAt: Value(installment.paidAt ?? clock()),
         ),
       );
       remaining -= installment.amountMinor;

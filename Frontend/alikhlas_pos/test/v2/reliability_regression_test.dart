@@ -165,7 +165,7 @@ void main() {
       final db = AppDatabase(NativeDatabase(File('${dir.path}/live.db')));
       addTearDown(db.close);
       final uc = V2UseCases(db);
-      await uc.bootstrap();
+      await uc.bootstrap(createDefaultOwner: true);
       final backup = await uc.backupToDirectory(
         Directory('${dir.path}/backups'),
       );
@@ -198,11 +198,11 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final uc = V2UseCases(db);
-    await uc.bootstrap();
+    await uc.bootstrap(createDefaultOwner: true);
     final file = File('${dir.path}/regular-file');
     await file.writeAsString('audit');
     await uc.setBackupDirectory('${file.path}/backups');
-    await uc.bootstrap();
+    await uc.bootstrap(createDefaultOwner: true);
     expect(await uc.login('owner', 'owner123'), isA<AppSuccess<User>>());
     final failedStatus = (await uc.workbenchSnapshot()).backupStatus;
     expect(failedStatus.warning, isNotNull);

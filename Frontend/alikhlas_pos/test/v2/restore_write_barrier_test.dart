@@ -19,7 +19,7 @@ void main() {
       addTearDown(db.close);
       final barrier = V2WriteBarrier();
       final useCases = V2UseCases(db, writeBarrier: barrier);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       final backup = await useCases.backupToDirectory(
         Directory('${directory.path}/backups'),
       );

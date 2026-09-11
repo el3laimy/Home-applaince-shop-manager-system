@@ -47,7 +47,7 @@ class _HeldWriteBarrier extends V2WriteBarrier {
 }
 
 Future<void> _prepareOwnerAndShift(V2UseCases useCases) async {
-  await useCases.bootstrap();
+  await useCases.bootstrap(createDefaultOwner: true);
   final owner = await _success(useCases.login('owner', 'owner123'));
   await _success(useCases.changePassword(owner.id, 'new-owner-pass'));
   await _success(

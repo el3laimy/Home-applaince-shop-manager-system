@@ -6,12 +6,14 @@ extension V2AuthShiftUseCases on V2UseCases {
   static const _recoveryLockedUntilKey = 'security.recovery.owner.lockedUntil';
   static const _recoveryCreatedAtKey = 'security.recovery.owner.createdAt';
   static const _recoveryUsedAtKey = 'security.recovery.owner.usedAt';
+  static const _loginAttemptKey = 'security.login.failedAttempts';
+  static const _loginLockedUntilKey = 'security.login.lockedUntil';
   static const _recoveryMaxAttempts = 5;
   static const _recoveryLockDuration = Duration(minutes: 15);
 
   String newShiftOperationKey() => newFinancialOperationKey();
 
-  Future<void> bootstrap({bool createDefaultOwner = true}) async {
+  Future<void> bootstrap({bool createDefaultOwner = false}) async {
     await db.finalizeMigrationIfReady();
     await _write(() async {
       final hasOwner = await db.select(db.users).getSingleOrNull();
@@ -212,29 +214,60 @@ extension V2AuthShiftUseCases on V2UseCases {
   }
 
   Future<AppResult<User>> login(String username, String password) async {
-    final user = await (db.select(
-      db.users,
-    )..where((u) => u.username.equals(username.trim()))).getSingleOrNull();
-    if (user == null) {
-      return const AppFailure('اسم المستخدم أو كلمة المرور غير صحيحة');
-    }
-    final verification = _verifyPassword(password, user.passwordHash);
-    if (!verification.isValid) {
-      return const AppFailure('اسم المستخدم أو كلمة المرور غير صحيحة');
-    }
-    if (!verification.needsRehash) return AppSuccess(user);
-
-    final upgradedHash = _hashPassword(password);
     return _writeTransaction(() async {
-      await (db.update(db.users)..where((u) => u.id.equals(user.id))).write(
-        UsersCompanion(passwordHash: Value(upgradedHash)),
+      final lockedUntil = DateTime.tryParse(
+        await _settingValue(_loginLockedUntilKey) ?? '',
       );
+      if (lockedUntil != null && lockedUntil.isAfter(clock())) {
+        return AppFailure(
+          'تم إيقاف محاولات الدخول مؤقتًا حتى ${lockedUntil.toLocal()}.',
+        );
+      }
+      if (lockedUntil != null) await _clearLoginAttempts();
+
+      final user = await (db.select(
+        db.users,
+      )..where((u) => u.username.equals(username.trim()))).getSingleOrNull();
+      final verification = user == null
+          ? (isValid: false, needsRehash: false)
+          : _verifyPassword(password, user.passwordHash);
+      if (!verification.isValid) {
+        await _recordLoginFailure();
+        return const AppFailure('اسم المستخدم أو كلمة المرور غير صحيحة');
+      }
+
+      final authenticatedUser = user!;
+      await _clearLoginAttempts();
+      if (!verification.needsRehash) return AppSuccess(authenticatedUser);
+      await (db.update(db.users)
+            ..where((u) => u.id.equals(authenticatedUser.id)))
+          .write(UsersCompanion(passwordHash: Value(_hashPassword(password))));
       return AppSuccess(
         await (db.select(
           db.users,
-        )..where((u) => u.id.equals(user.id))).getSingle(),
+        )..where((u) => u.id.equals(authenticatedUser.id))).getSingle(),
       );
     });
+  }
+
+  Future<void> _recordLoginFailure() async {
+    final attempts =
+        (int.tryParse(await _settingValue(_loginAttemptKey) ?? '') ?? 0) + 1;
+    if (attempts < _recoveryMaxAttempts) {
+      await _upsertSetting(_loginAttemptKey, attempts.toString());
+      return;
+    }
+    final retryAt = clock().add(_recoveryLockDuration);
+    await _upsertSetting(_loginAttemptKey, '0');
+    await _upsertSetting(_loginLockedUntilKey, retryAt.toIso8601String());
+  }
+
+  Future<void> _clearLoginAttempts() async {
+    for (final key in [_loginAttemptKey, _loginLockedUntilKey]) {
+      await (db.delete(
+        db.appSettings,
+      )..where((setting) => setting.key.equals(key))).go();
+    }
   }
 
   Future<AppResult<User>> changePassword(int userId, String newPassword) async {
@@ -311,6 +344,9 @@ extension V2AuthShiftUseCases on V2UseCases {
   }
 
   Future<AppResult<Shift>> _openShift(int openingCashMinor) async {
+    if (openingCashMinor < 0) {
+      return const AppFailure('رصيد فتح الوردية لا يمكن أن يكون سالبًا.');
+    }
     final open = await currentShift();
     if (open != null) {
       return const AppFailure('توجد وردية مفتوحة بالفعل');
@@ -321,7 +357,7 @@ extension V2AuthShiftUseCases on V2UseCases {
           .into(db.shifts)
           .insert(
             ShiftsCompanion.insert(
-              openedAt: DateTime.now(),
+              openedAt: clock(),
               openingCashMinor: openingCashMinor,
             ),
           );
@@ -358,6 +394,11 @@ extension V2AuthShiftUseCases on V2UseCases {
   }
 
   Future<AppResult<Shift>> _closeShift(int actualCashMinor) async {
+    if (actualCashMinor < 0) {
+      return const AppFailure(
+        'النقد الفعلي عند الإغلاق لا يمكن أن يكون سالبًا.',
+      );
+    }
     final shift = await currentShift();
     if (shift == null) {
       return const AppFailure('لا توجد وردية مفتوحة');
@@ -366,7 +407,7 @@ extension V2AuthShiftUseCases on V2UseCases {
     final cashDelta = await _accountNetSince(AccountCodes.cash, shift.openedAt);
     final expected = shift.openingCashMinor + cashDelta;
     final difference = actualCashMinor - expected;
-    final closedAt = DateTime.now();
+    final closedAt = clock();
 
     return _writeTransaction(() async {
       await (db.update(db.shifts)..where((s) => s.id.equals(shift.id))).write(

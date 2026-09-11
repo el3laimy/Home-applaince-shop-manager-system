@@ -18,7 +18,7 @@ extension V2CoreUseCaseHelpers on V2UseCases {
     )..where((s) => s.key.equals(key))).getSingleOrNull();
     final next = int.parse(current?.value ?? '0') + 1;
     await _upsertSetting(key, next.toString());
-    return '$prefix-${DateTime.now().year}-${next.toString().padLeft(5, '0')}';
+    return '$prefix-${clock().year}-${next.toString().padLeft(5, '0')}';
   }
 
   Future<String> _nextProductBarcode() {

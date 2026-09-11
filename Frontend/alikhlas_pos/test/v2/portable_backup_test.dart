@@ -23,7 +23,7 @@ void main() {
       );
       addTearDown(sourceDb.close);
       final source = V2UseCases(sourceDb);
-      await source.bootstrap();
+      await source.bootstrap(createDefaultOwner: true);
       final productImage = File(
         p.join(sourceDirectory.path, 'product-images', 'washing.png'),
       );
@@ -58,7 +58,7 @@ void main() {
       );
       addTearDown(() => targetDb.close());
       final target = V2UseCases(targetDb);
-      await target.bootstrap();
+      await target.bootstrap(createDefaultOwner: true);
       await target.restoreFromPortableBackup(bundle);
       await targetDb.close();
 

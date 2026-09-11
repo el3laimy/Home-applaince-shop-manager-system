@@ -303,10 +303,13 @@ class _InventoryValuationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = products.where((product) => product.isActive).toList();
-    final units = active.fold<int>(0, (sum, product) => sum + product.stockQty);
-    final calculatedValue = active.fold<int>(
+    final units = products.fold<int>(
       0,
-      (sum, product) => sum + (product.stockQty * product.avgCostMinor),
+      (sum, product) => sum + product.stockQty,
+    );
+    final calculatedValue = products.fold<int>(
+      0,
+      (sum, product) => sum + product.inventoryValueMinor,
     );
     final lowStock = active
         .where((product) => product.stockQty <= product.minStockQty)
@@ -329,7 +332,7 @@ class _InventoryValuationPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              _CountBadge(label: 'أصناف', count: active.length),
+              _CountBadge(label: 'أصناف', count: products.length),
             ],
           ),
           const SizedBox(height: 14),
@@ -340,22 +343,20 @@ class _InventoryValuationPanel extends StatelessWidget {
           _InfoLine('أصناف تحت الحد', lowStock.toString()),
           const SizedBox(height: 4),
           Expanded(
-            child: active.isEmpty
-                ? const Center(child: Text('لا توجد منتجات نشطة'))
+            child: products.isEmpty
+                ? const Center(child: Text('لا توجد منتجات'))
                 : ListView.separated(
-                    itemCount: active.take(5).length,
+                    itemCount: products.take(5).length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final product = active[index];
+                      final product = products[index];
                       return ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(product.name),
                         subtitle: Text('الرصيد ${product.stockQty}'),
                         trailing: Text(
-                          Money(
-                            product.stockQty * product.avgCostMinor,
-                          ).format(),
+                          Money(product.inventoryValueMinor).format(),
                         ),
                       );
                     },

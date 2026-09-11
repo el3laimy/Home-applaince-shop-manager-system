@@ -30,7 +30,7 @@ void main() {
               ))
               .getSingle();
       expect(stored.value, isNot(contains(setup.recoveryCode)));
-      expect(stored.value, startsWith(r'pbkdf2_sha256$120000$'));
+      expect(stored.value, startsWith(r'pbkdf2_sha256$600000$'));
 
       expect(
         await useCases.recoverOwnerAccess(
@@ -113,7 +113,7 @@ void main() {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final useCases = V2UseCases(db);
-      await useCases.bootstrap();
+      await useCases.bootstrap(createDefaultOwner: true);
       final owner = await _success(useCases.login('owner', 'owner123'));
 
       final changed = await _success(
