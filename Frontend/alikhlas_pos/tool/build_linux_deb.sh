@@ -51,7 +51,7 @@ Section: office
 Priority: optional
 Architecture: amd64
 Maintainer: ALIkhlasPOS
-Depends: libgtk-3-0, libstdc++6, liblzma5
+Depends: libgtk-3-0 | libgtk-3-0t64, libstdc++6, liblzma5
 Description: تطبيق إخلاص لإدارة متجر الأجهزة المنزلية
  تطبيق سطح مكتب يعمل دون اتصال لإدارة المبيعات والمخزون والحسابات.
 EOF

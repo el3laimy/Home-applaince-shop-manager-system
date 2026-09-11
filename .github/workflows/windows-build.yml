@@ -8,6 +8,7 @@ on:
       - "Frontend/alikhlas_pos/**"
   push:
     branches:
+      - main
       - fix/v2-installment-returns
     paths:
       - ".github/workflows/windows-build.yml"
@@ -145,13 +146,11 @@ jobs:
           test -n "$version"
           bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package "$version"
 
-      - name: Verify Debian installer contents
+      - name: Verify Debian installer
         run: |
           deb="$(find build/linux/x64/release/package -maxdepth 1 -name '*.deb' -print -quit)"
           test -n "$deb"
-          dpkg-deb --info "$deb"
-          dpkg-deb --contents "$deb" | grep -q 'opt/alikhlas-pos/alikhlas_pos'
-          dpkg-deb --contents "$deb" | grep -q 'usr/share/applications/alikhlas-pos.desktop'
+          bash tool/verify_linux_deb.sh "$deb"
 
       - name: Upload Linux bundle
         uses: actions/upload-artifact@v4

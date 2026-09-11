@@ -1,0 +1,9 @@
+bash -n tool/build_linux_deb.sh tool/verify_linux_deb.sh
+Succeeded.
+
+bash tool/build_linux_deb.sh build/linux/x64/release/bundle /tmp/alikhlas-pos-package-check 1.0.0
+bash tool/verify_linux_deb.sh /tmp/alikhlas-pos-package-check/alikhlas-pos_1.0.0_amd64.deb
+Debian package verified.
+
+bash tool/verify_linux_deb.sh ../../reports/2026-09-11/implementation-batch-28/alikhlas-pos_1.0.0_amd64.deb
+Rejected as expected: exit 69 (old GTK package dependency).

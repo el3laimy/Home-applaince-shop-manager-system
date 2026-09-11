@@ -29,6 +29,7 @@
 - Party statement invoice details now derive current paid/remaining values from direct payments, installment-plan payments, and sale returns instead of stale invoice snapshots.
 - Barcode label printing defaults to 40x30mm, can be adjusted from Settings, and supports both incoming-stock labels and reprinting an existing product label from Inventory.
 - Windows and Linux release bundles can be produced from the `Desktop Release Build` GitHub Actions workflow.
+- Debian artifacts now validate their runtime dependencies, extracted launcher, desktop entry, icon, and shared-library resolution before upload; GTK is compatible with both the pre-24.04 and Ubuntu 24.04 package names.
 - Sale returns keep installment interest as non-refundable by default; any interest refund must be posted later as an explicit manual settlement.
 - Purchases reject zero unit cost at the use-case boundary, not only in the UI.
 - Partial installment payments are shown as partial in statement details and PDFs with paid/remaining amounts.
