@@ -12,6 +12,107 @@ Future<T> success<T>(Future<AppResult<T>> result) async =>
     (await result as AppSuccess<T>).value;
 
 void main() {
+  testWidgets('purchase return selects an invoice and reduces supplier debt', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final uc = V2UseCases(db);
+    await uc.bootstrap();
+    final owner = await success(uc.login('owner', 'owner123'));
+    await success(uc.changePassword(owner.id, 'new-owner-pass'));
+    final supplierId = await db
+        .into(db.suppliers)
+        .insert(SuppliersCompanion.insert(name: 'مورد مرتجع الواجهة'));
+    final product = await success(
+      uc.createProduct(
+        operationKey: uc.newOpeningStockOperationKey(),
+        name: 'ثلاجة مرتجع الواجهة',
+        salePriceMinor: 40000,
+        openingQty: 0,
+        openingCostMinor: 0,
+      ),
+    );
+    final purchaseId = await success(
+      uc.createPurchase(
+        operationKey: uc.newPurchaseOperationKey(),
+        supplierId: supplierId,
+        items: [
+          PurchaseLineInput(
+            productId: product.id,
+            qty: 2,
+            unitCostMinor: 10000,
+          ),
+        ],
+        payments: const [],
+      ),
+    );
+    final invoice = await (db.select(
+      db.purchaseInvoices,
+    )..where((row) => row.id.equals(purchaseId))).getSingle();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const ALIkhlasV2App(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'كلمة المرور'),
+      'new-owner-pass',
+    );
+    await tester.tap(find.text('دخول'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المرتجعات').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('مرتجع شراء'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(
+        TextField,
+        'رقم فاتورة الشراء أو اسم المورد أو هاتفه',
+      ),
+      'مورد مرتجع الواجهة',
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'بحث'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(invoice.invoiceNo), findsOneWidget);
+    await tester.tap(find.text('اختيار'));
+    await tester.pumpAndSettle();
+    expect(find.text('ثلاجة مرتجع الواجهة'), findsOneWidget);
+    await tester.tap(find.byTooltip('زيادة').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(
+        DropdownButtonFormField<PaymentMethod>,
+        'تسوية مرتجع المورد',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('خصم من مديونية المورد').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تسجيل مرتجع الشراء'));
+    await tester.pumpAndSettle();
+    expect(find.text('تم تسجيل مرتجع الشراء'), findsOneWidget);
+    expect(await db.select(db.purchaseReturns).get(), hasLength(1));
+    expect((await db.select(db.products).getSingle()).stockQty, 1);
+    final plan = (await db.select(db.installmentPlans).get()).singleWhere(
+      (row) => row.ownerType == 'purchase' && row.ownerId == purchaseId,
+    );
+    expect(plan.totalMinor, 10000);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('old invoice search and explicit installment overflow refund', (
     tester,
   ) async {

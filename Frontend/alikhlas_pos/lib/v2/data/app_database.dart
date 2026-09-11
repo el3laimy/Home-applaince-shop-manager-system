@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
-const kAppDatabaseSchemaVersion = 7;
+const kAppDatabaseSchemaVersion = 8;
 
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -226,6 +226,24 @@ class LedgerLines extends Table {
   IntColumn get partyId => integer().nullable()();
 }
 
+class PurchaseReturns extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get purchaseId => integer().references(PurchaseInvoices, #id)();
+  TextColumn get returnNo => text().unique()();
+  IntColumn get creditMinor => integer()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class PurchaseReturnItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get returnId => integer().references(PurchaseReturns, #id)();
+  IntColumn get purchaseItemId => integer().references(PurchaseItems, #id)();
+  IntColumn get productId => integer().references(Products, #id)();
+  IntColumn get qty => integer()();
+  IntColumn get unitCostMinor => integer()();
+  IntColumn get inventoryUnitCostMinor => integer()();
+}
+
 LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
   return LazyDatabase(() async {
     final dir = await getApplicationSupportDirectory();
@@ -264,6 +282,8 @@ LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
     OpeningBalances,
     LedgerEntries,
     LedgerLines,
+    PurchaseReturns,
+    PurchaseReturnItems,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -295,6 +315,10 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 7) {
           await migrator.createTable(openingBalances);
+        }
+        if (from < 8) {
+          await migrator.createTable(purchaseReturns);
+          await migrator.createTable(purchaseReturnItems);
         }
       } catch (_, stackTrace) {
         Error.throwWithStackTrace(
@@ -347,6 +371,12 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_purchase_returns_purchase_id ON purchase_returns(purchase_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_purchase_return_items_purchase_item_id ON purchase_return_items(purchase_item_id);',
     );
   }
 

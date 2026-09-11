@@ -40,6 +40,45 @@ extension V2StatementReceiptUseCases on V2UseCases {
     return rows.map((row) => db.saleInvoices.map(row.data)).toList();
   }
 
+  Future<List<PurchaseInvoice>> purchaseInvoiceHistory({
+    String query = '',
+    DateTime? createdFrom,
+    DateTime? createdBefore,
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0 || limit < 1 || limit > 100) {
+      throw ArgumentError('Invalid page');
+    }
+    if (createdFrom != null &&
+        createdBefore != null &&
+        !createdFrom.isBefore(createdBefore)) {
+      throw ArgumentError('Invalid date range');
+    }
+    final term = query.trim();
+    final rows = await db
+        .customSelect(
+          '''
+      SELECT p.* FROM purchase_invoices p
+      LEFT JOIN suppliers s ON s.id = p.supplier_id
+      WHERE (? = '' OR instr(p.invoice_no, ?) > 0 OR instr(COALESCE(s.name, ''), ?) > 0 OR instr(COALESCE(s.phone, ''), ?) > 0)
+      ${createdFrom == null ? '' : 'AND p.created_at >= ?'}
+      ${createdBefore == null ? '' : 'AND p.created_at < ?'}
+      ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?
+      ''',
+          variables: [
+            for (var i = 0; i < 4; i++) Variable<String>(term),
+            if (createdFrom != null) Variable<DateTime>(createdFrom),
+            if (createdBefore != null) Variable<DateTime>(createdBefore),
+            Variable<int>(limit),
+            Variable<int>(offset),
+          ],
+          readsFrom: {db.purchaseInvoices, db.suppliers},
+        )
+        .get();
+    return rows.map((row) => db.purchaseInvoices.map(row.data)).toList();
+  }
+
   Future<StatementInvoiceDetails?> _statementInvoiceDetails(
     LedgerEntry entry,
   ) async {
@@ -388,6 +427,65 @@ extension V2StatementReceiptUseCases on V2UseCases {
       receipt: receipt,
       lines: lines,
       collectedInstallmentsMinor: plan?.paidMinor ?? 0,
+      remainingDebtMinor: plan == null
+          ? null
+          : math.max(0, plan.totalMinor - plan.paidMinor),
+    );
+  }
+
+  Future<PurchaseReturnPreview> purchaseReturnPreview(int purchaseId) async {
+    final invoice = await (db.select(
+      db.purchaseInvoices,
+    )..where((purchase) => purchase.id.equals(purchaseId))).getSingle();
+    final supplier = invoice.supplierId == null
+        ? null
+        : await (db.select(db.suppliers)
+                ..where((row) => row.id.equals(invoice.supplierId!)))
+              .getSingleOrNull();
+    final items =
+        await (db.select(db.purchaseItems)
+              ..where((item) => item.purchaseId.equals(purchaseId))
+              ..orderBy([(item) => OrderingTerm.asc(item.id)]))
+            .get();
+    final lines = <PurchaseReturnLinePreview>[];
+    for (final item in items) {
+      final product = await (db.select(
+        db.products,
+      )..where((product) => product.id.equals(item.productId))).getSingle();
+      final priorReturns = await (db.select(
+        db.purchaseReturnItems,
+      )..where((row) => row.purchaseItemId.equals(item.id))).get();
+      final returnedQty = priorReturns.fold<int>(
+        0,
+        (sum, row) => sum + row.qty,
+      );
+      final returnableQty = item.qty - returnedQty;
+      lines.add(
+        PurchaseReturnLinePreview(
+          purchaseItemId: item.id,
+          productName: product.name,
+          purchasedQty: item.qty,
+          returnedQty: returnedQty,
+          returnableQty: returnableQty,
+          availableStockQty: math.min(returnableQty, product.stockQty),
+          unitCostMinor: item.unitCostMinor,
+        ),
+      );
+    }
+    final plan = invoice.supplierId == null
+        ? null
+        : await (db.select(db.installmentPlans)..where(
+                (plan) =>
+                    plan.ownerType.equals('purchase') &
+                    plan.ownerId.equals(purchaseId) &
+                    plan.partyType.equals('supplier') &
+                    plan.partyId.equals(invoice.supplierId!),
+              ))
+              .getSingleOrNull();
+    return PurchaseReturnPreview(
+      invoice: invoice,
+      supplierName: supplier?.name,
+      lines: lines,
       remainingDebtMinor: plan == null
           ? null
           : math.max(0, plan.totalMinor - plan.paidMinor),

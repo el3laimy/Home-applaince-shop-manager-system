@@ -54,12 +54,13 @@ flutter build windows
   - `PRAGMA foreign_keys = ON`
   - `PRAGMA journal_mode = WAL`
   - `PRAGMA synchronous = FULL`
-- `schemaVersion` الحالي: 7.
-- v5 أضاف `products.imagePath` لتخزين مسار صورة المنتج الداخلية، وv6 أضاف مستندات تسوية الجرد، وv7 يضيف مستندات الأرصدة الافتتاحية مع حماية مفتاح العملية.
+- `schemaVersion` الحالي: 8.
+- v5 أضاف `products.imagePath` لتخزين مسار صورة المنتج الداخلية، وv6 أضاف مستندات تسوية الجرد، وv7 أضاف الأرصدة الافتتاحية، وv8 أضاف مستندات مرتجع المشتريات وبنودها.
 
 ## الاختبارات المهمة
 
-- `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، full owner day، backup/restore، وترقية migration من v3 إلى v7.
+- `test/v2/v2_use_cases_test.dart`: منطق v2، الدفتر، المخزون، الأقساط، المرتجعات، full owner day، backup/restore، وترقية migration من v3 إلى v8.
+- `test/v2/purchase_return_idempotency_test.dart`: مرتجع الشراء، فرق متوسط التكلفة، الاستعادة، ومنع التكرار والرجوع الذري عند فشل الإيصال.
 - `test/v2/v2_app_test.dart`: login، تغيير كلمة المرور، بيع POS، منع إدخال مال غير صالح، وشراء من الواجهة.
 - `test/v2/v2_theme_test.dart`: خط Cairo، التباين، منع رجوع Roboto أو w800، وحصر blur الحقيقي.
 - `test/v2/v2_golden_test.dart`: لقطات Golden لشاشة الدخول والـ dashboard وPOS والتقارير.
@@ -105,3 +106,4 @@ flutter build windows
 - مرتجع الكاش يحتاج وردية مفتوحة.
 - مرتجع التقسيط يخفض ذمة العميل حتى الرصيد المتبقي فقط، وأي فائض يرد كاش أو محفظة.
 - المرتجع يعكس تكلفة البيع التاريخية المخزنة في `SaleItem.unitCostMinor` ولا يعيد حساب WAC الحالي.
+- مرتجع الشراء يبدأ من شاشة المرتجعات، ويعيد المخزون من فاتورة شراء محددة دون تجاوز الكمية أو المخزون الحالي. تسوية ذمة المورد تستخدم تكلفة الشراء الأصلية، بينما ينخفض المخزون بمتوسط التكلفة الحالي ويُرحّل الفرق إلى `inventory_variance`.

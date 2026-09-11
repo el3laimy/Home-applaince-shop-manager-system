@@ -12,8 +12,8 @@
 
 - Local owner login with forced default password change.
 - PBKDF2-SHA256 password hashing with legacy SHA-256 upgrade on login.
-- SQLite WAL with `synchronous=FULL` and drift schema version 7.
-- Schema v5 adds `products.imagePath`; schema v6 adds auditable inventory-adjustment documents; schema v7 adds opening-balance documents protected by durable operation receipts.
+- SQLite WAL with `synchronous=FULL` and drift schema version 8.
+- Schema v5 adds `products.imagePath`; schema v6 adds auditable inventory-adjustment documents; schema v7 adds opening-balance documents; schema v8 adds purchase-return documents and lines.
 - Ledger-based sales, purchases, expenses, installments, returns, shifts, and reports.
 - Sale returns handle installment over-refund correctly:
   - receivable settlement is capped at remaining customer debt;
@@ -40,6 +40,7 @@
 - Opening balances use the same receipt, payload-conflict, rollback, and pending-recovery contract as the other financial mutations.
 - Existing shops can enter reviewed customer, supplier, cash, or wallet opening balances from Settings; customer and supplier balances create one collectible/payable installment, while cash and wallet remain separate from the physical opening-shift count.
 - Inventory reconciliation records the counted quantity, reason, stock movement, ledger variance, and idempotency receipt in one transaction.
+- Purchase returns select the original purchase invoice, prevent returning more than the original or current stock, and can reduce supplier debt or receive cash/wallet credit. They preserve the original supplier cost while valuing the stock removal at current WAC and post the difference to inventory variance.
 
 ## Verification
 
@@ -62,7 +63,7 @@ The v2 test suite covers:
 - installment collection and supplier payment;
 - expenses;
 - partial returns and installment return overflow;
-- backup/restore and v3/v4 to v7 migration.
+- backup/restore and v3/v4 to v8 migration.
 - inventory-adjustment accounting, recovery, integrity checks, and minimum-window UI coverage.
 - Cairo theme, glass contrast, centralized blur, and visual golden snapshots for login/dashboard/POS/reports.
 - party statement PDF smoke coverage with invoice details.
