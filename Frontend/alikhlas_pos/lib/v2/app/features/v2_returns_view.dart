@@ -89,6 +89,11 @@ class _ReturnsViewState extends ConsumerState<_ReturnsView> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               OutlinedButton.icon(
+                onPressed: _returning ? null : _openPurchaseReturn,
+                icon: const Icon(Icons.assignment_return_outlined),
+                label: const Text('مرتجع شراء'),
+              ),
+              OutlinedButton.icon(
                 onPressed: _pickDates,
                 icon: const Icon(Icons.date_range),
                 label: Text(
@@ -241,6 +246,30 @@ class _ReturnsViewState extends ConsumerState<_ReturnsView> {
     _dates = selected;
     _page = 0;
     _load();
+  }
+
+  Future<void> _openPurchaseReturn() async {
+    if (_returning) return;
+    setState(() => _returning = true);
+    try {
+      final result = await showDialog<AppResult<int>>(
+        context: context,
+        builder: (_) => const _PurchaseReturnDialog(),
+      );
+      if (!mounted || result == null) return;
+      _showResult(context, result, success: 'تم تسجيل مرتجع الشراء');
+      _refresh(ref);
+      _load();
+    } catch (_) {
+      if (mounted) {
+        _showSnack(
+          context,
+          'تعذر إكمال مرتجع الشراء. راجع الفاتورة والمخزون قبل إعادة المحاولة.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _returning = false);
+    }
   }
 
   Future<void> _openDetails(SaleInvoice sale) async {

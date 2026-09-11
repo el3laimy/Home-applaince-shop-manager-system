@@ -111,7 +111,9 @@ void main() {
                 'idx_opening_balances_target',
                 'idx_payments_owner',
                 'idx_installment_payments_plan_due',
-                'idx_sale_items_sale_id'
+                'idx_sale_items_sale_id',
+                'idx_purchase_returns_purchase_id',
+                'idx_purchase_return_items_purchase_item_id'
               )
             ''').get();
       final indexNames = rows.map((row) => row.data['name'] as String);
@@ -131,12 +133,14 @@ void main() {
           'idx_payments_owner',
           'idx_installment_payments_plan_due',
           'idx_sale_items_sale_id',
+          'idx_purchase_returns_purchase_id',
+          'idx_purchase_return_items_purchase_item_id',
         ]),
       );
     });
 
     test(
-      'database migrates a v3 file to v7 including opening balances and indexes',
+      'database migrates a v3 file to v8 including purchase returns and indexes',
       () async {
         await db.close();
 
@@ -160,7 +164,13 @@ void main() {
             SELECT name
             FROM sqlite_master
             WHERE type = 'table'
-              AND name IN ('expenses', 'inventory_adjustments', 'opening_balances')
+              AND name IN (
+                'expenses',
+                'inventory_adjustments',
+                'opening_balances',
+                'purchase_returns',
+                'purchase_return_items'
+              )
             ''').get();
         final productColumns = await db.customSelect('''
             PRAGMA table_info(products);
@@ -181,24 +191,28 @@ void main() {
                 'idx_opening_balances_target',
                 'idx_payments_owner',
                 'idx_installment_payments_plan_due',
-                'idx_sale_items_sale_id'
+                'idx_sale_items_sale_id',
+                'idx_purchase_returns_purchase_id',
+                'idx_purchase_return_items_purchase_item_id'
               )
             ''').get();
 
-        expect(userVersion.data['user_version'], 7);
+        expect(userVersion.data['user_version'], 8);
         expect(
           tables.map((row) => row.data['name']),
           containsAll([
             'expenses',
             'inventory_adjustments',
             'opening_balances',
+            'purchase_returns',
+            'purchase_return_items',
           ]),
         );
         expect(
           productColumns.map((row) => row.data['name']),
           contains('image_path'),
         );
-        expect(indexes, hasLength(12));
+        expect(indexes, hasLength(14));
       },
     );
 

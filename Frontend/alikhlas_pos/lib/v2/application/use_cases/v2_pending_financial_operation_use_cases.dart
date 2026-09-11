@@ -4,6 +4,7 @@ enum PendingFinancialOperationKind {
   customerInstallment,
   supplierInstallment,
   saleReturn,
+  purchaseReturn,
   expense,
   openShift,
   closeShift,
@@ -22,9 +23,11 @@ class PendingFinancialOperation {
     required this.operationKey,
     this.planId,
     this.saleId,
+    this.purchaseId,
     this.amountMinor,
     this.method,
     Map<int, int>? saleItemQuantities,
+    Map<int, int>? purchaseItemQuantities,
     this.overflowRefundMethod,
     this.description,
     this.productName,
@@ -44,7 +47,10 @@ class PendingFinancialOperation {
     this.openingBalancePartyId,
     this.openingBalanceDueDate,
     this.openingBalanceNote,
-  }) : saleItemQuantities = Map.unmodifiable(saleItemQuantities ?? const {}) {
+  }) : saleItemQuantities = Map.unmodifiable(saleItemQuantities ?? const {}),
+       purchaseItemQuantities = Map.unmodifiable(
+         purchaseItemQuantities ?? const {},
+       ) {
     if (!RegExp(r'^[A-Za-z0-9_-]{1,100}$').hasMatch(operationKey)) {
       throw const FormatException('Invalid pending financial operation key');
     }
@@ -88,6 +94,21 @@ class PendingFinancialOperation {
     saleId: saleId,
     saleItemQuantities: saleItemQuantities,
     method: refundMethod,
+    overflowRefundMethod: overflowRefundMethod,
+  );
+
+  factory PendingFinancialOperation.purchaseReturn({
+    required String operationKey,
+    required int purchaseId,
+    required Map<int, int> purchaseItemQuantities,
+    required PaymentMethod settlementMethod,
+    PaymentMethod? overflowRefundMethod,
+  }) => PendingFinancialOperation._(
+    kind: PendingFinancialOperationKind.purchaseReturn,
+    operationKey: operationKey,
+    purchaseId: purchaseId,
+    purchaseItemQuantities: purchaseItemQuantities,
+    method: settlementMethod,
     overflowRefundMethod: overflowRefundMethod,
   );
 
@@ -185,9 +206,11 @@ class PendingFinancialOperation {
   final String operationKey;
   final int? planId;
   final int? saleId;
+  final int? purchaseId;
   final int? amountMinor;
   final PaymentMethod? method;
   final Map<int, int> saleItemQuantities;
+  final Map<int, int> purchaseItemQuantities;
   final PaymentMethod? overflowRefundMethod;
   final String? description;
   final String? productName;
@@ -212,6 +235,7 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.customerInstallment => 'installment.customer',
     PendingFinancialOperationKind.supplierInstallment => 'installment.supplier',
     PendingFinancialOperationKind.saleReturn => 'sale_return',
+    PendingFinancialOperationKind.purchaseReturn => 'purchase_return',
     PendingFinancialOperationKind.expense => 'expense',
     PendingFinancialOperationKind.openShift => 'shift.open',
     PendingFinancialOperationKind.closeShift => 'shift.close',
@@ -224,6 +248,7 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.customerInstallment => 'تحصيل قسط عميل',
     PendingFinancialOperationKind.supplierInstallment => 'سداد قسط مورد',
     PendingFinancialOperationKind.saleReturn => 'مرتجع بيع',
+    PendingFinancialOperationKind.purchaseReturn => 'مرتجع شراء',
     PendingFinancialOperationKind.expense => 'تسجيل مصروف',
     PendingFinancialOperationKind.openShift => 'فتح وردية',
     PendingFinancialOperationKind.closeShift => 'إغلاق وردية',
@@ -234,7 +259,9 @@ class PendingFinancialOperation {
   };
 
   String encode() {
-    final quantities = saleItemQuantities.entries.toList()
+    final saleQuantities = saleItemQuantities.entries.toList()
+      ..sort((left, right) => left.key.compareTo(right.key));
+    final purchaseQuantities = purchaseItemQuantities.entries.toList()
       ..sort((left, right) => left.key.compareTo(right.key));
     return jsonEncode({
       'version': 1,
@@ -242,10 +269,14 @@ class PendingFinancialOperation {
       'operationKey': operationKey,
       'planId': planId,
       'saleId': saleId,
+      'purchaseId': purchaseId,
       'amountMinor': amountMinor,
       'method': method?.name,
       'saleItemQuantities': [
-        for (final item in quantities) [item.key, item.value],
+        for (final item in saleQuantities) [item.key, item.value],
+      ],
+      'purchaseItemQuantities': [
+        for (final item in purchaseQuantities) [item.key, item.value],
       ],
       'overflowRefundMethod': overflowRefundMethod?.name,
       'description': description,
@@ -286,6 +317,11 @@ class PendingFinancialOperation {
       for (final row in data['saleItemQuantities'] as List<dynamic>)
         row[0] as int: row[1] as int,
     };
+    final purchaseQuantities = <int, int>{
+      for (final row
+          in data['purchaseItemQuantities'] as List<dynamic>? ?? const [])
+        row[0] as int: row[1] as int,
+    };
 
     return switch (kind) {
       PendingFinancialOperationKind.customerInstallment =>
@@ -308,6 +344,16 @@ class PendingFinancialOperation {
           saleId: data['saleId'] as int,
           saleItemQuantities: quantities,
           refundMethod: PaymentMethod.values.byName(method!),
+          overflowRefundMethod: overflow == null
+              ? null
+              : PaymentMethod.values.byName(overflow),
+        ),
+      PendingFinancialOperationKind.purchaseReturn =>
+        PendingFinancialOperation.purchaseReturn(
+          operationKey: key,
+          purchaseId: data['purchaseId'] as int,
+          purchaseItemQuantities: purchaseQuantities,
+          settlementMethod: PaymentMethod.values.byName(method!),
           overflowRefundMethod: overflow == null
               ? null
               : PaymentMethod.values.byName(overflow),
@@ -421,6 +467,13 @@ extension V2PendingFinancialOperationUseCases on V2UseCases {
         refundMethod: request.method!,
         overflowRefundMethod: request.overflowRefundMethod,
         allowNegativeBalance: allowNegativeBalance,
+      ),
+      PendingFinancialOperationKind.purchaseReturn => createPurchaseReturn(
+        operationKey: request.operationKey,
+        purchaseId: request.purchaseId!,
+        purchaseItemQuantities: request.purchaseItemQuantities,
+        settlementMethod: request.method!,
+        overflowRefundMethod: request.overflowRefundMethod,
       ),
       PendingFinancialOperationKind.expense => recordExpense(
         operationKey: request.operationKey,

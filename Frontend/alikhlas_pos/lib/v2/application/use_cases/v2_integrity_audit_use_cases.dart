@@ -23,6 +23,8 @@ extension V2IntegrityAuditUseCases on V2UseCases {
     final payments = await db.select(db.payments).get();
     final returns = await db.select(db.saleReturns).get();
     final returnItems = await db.select(db.saleReturnItems).get();
+    final purchaseReturns = await db.select(db.purchaseReturns).get();
+    final purchaseReturnItems = await db.select(db.purchaseReturnItems).get();
     final expenses = await db.select(db.expenses).get();
     final issues = <DataIntegrityIssue>[];
 
@@ -541,9 +543,200 @@ extension V2IntegrityAuditUseCases on V2UseCases {
       }
     }
 
+    final purchaseReturnById = {
+      for (final purchaseReturn in purchaseReturns)
+        purchaseReturn.id: purchaseReturn,
+    };
+    final purchaseItemById = {
+      for (final purchaseItem in purchaseItems) purchaseItem.id: purchaseItem,
+    };
+    final creditTotalByPurchaseReturn = <int, int>{};
+    final inventoryValueByPurchaseReturn = <int, int>{};
+    final returnedQtyByPurchaseItem = <int, int>{};
+    final expectedMovementsByReturnProduct =
+        <String, ({int returnId, int productId, int qty, int itemCount})>{};
+    for (final item in purchaseReturnItems) {
+      final purchaseReturn = purchaseReturnById[item.returnId];
+      final purchaseItem = purchaseItemById[item.purchaseItemId];
+      if (purchaseReturn == null ||
+          purchaseItem == null ||
+          purchaseItem.purchaseId != purchaseReturn.purchaseId ||
+          purchaseItem.productId != item.productId ||
+          purchaseItem.unitCostMinor != item.unitCostMinor ||
+          item.qty <= 0 ||
+          item.inventoryUnitCostMinor < 0) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'purchase_return_item_link',
+            record: 'سطر مرتجع شراء #${item.id}',
+            message:
+                'سطر مرتجع الشراء لا يطابق فاتورة الشراء أو تكلفته الأصلية.',
+          ),
+        );
+      }
+      creditTotalByPurchaseReturn.update(
+        item.returnId,
+        (total) => total + item.qty * item.unitCostMinor,
+        ifAbsent: () => item.qty * item.unitCostMinor,
+      );
+      inventoryValueByPurchaseReturn.update(
+        item.returnId,
+        (total) => total + item.qty * item.inventoryUnitCostMinor,
+        ifAbsent: () => item.qty * item.inventoryUnitCostMinor,
+      );
+      returnedQtyByPurchaseItem.update(
+        item.purchaseItemId,
+        (total) => total + item.qty,
+        ifAbsent: () => item.qty,
+      );
+      final movementKey = '${item.returnId}:${item.productId}';
+      final expectedMovement = expectedMovementsByReturnProduct[movementKey];
+      expectedMovementsByReturnProduct[movementKey] = (
+        returnId: item.returnId,
+        productId: item.productId,
+        qty: (expectedMovement?.qty ?? 0) + item.qty,
+        itemCount: (expectedMovement?.itemCount ?? 0) + 1,
+      );
+    }
+    for (final expectedMovement in expectedMovementsByReturnProduct.values) {
+      final matchingMovements = movements
+          .where(
+            (movement) =>
+                movement.referenceType == 'purchase_return' &&
+                movement.referenceId == expectedMovement.returnId &&
+                movement.productId == expectedMovement.productId,
+          )
+          .toList();
+      final movementQty = matchingMovements.fold<int>(
+        0,
+        (total, movement) => total + movement.qtyDelta,
+      );
+      if (matchingMovements.length != expectedMovement.itemCount ||
+          movementQty != -expectedMovement.qty) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'purchase_return_movement',
+            record: 'مرتجع شراء #${expectedMovement.returnId}',
+            message: 'مرتجع الشراء لا يطابق حركة المخزون المرجعية.',
+          ),
+        );
+      }
+    }
+    for (final purchaseReturn in purchaseReturns) {
+      final purchase = purchaseById[purchaseReturn.purchaseId];
+      final credit = creditTotalByPurchaseReturn[purchaseReturn.id];
+      final inventoryValue = inventoryValueByPurchaseReturn[purchaseReturn.id];
+      if (purchase == null ||
+          credit == null ||
+          inventoryValue == null ||
+          credit != purchaseReturn.creditMinor ||
+          credit <= 0) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'purchase_return_total',
+            record: 'مرتجع شراء ${purchaseReturn.returnNo}',
+            message: 'إجمالي مرتجع الشراء لا يطابق بنوده أو فاتورته الأصلية.',
+          ),
+        );
+      }
+
+      final matchingEntries = entries
+          .where(
+            (entry) =>
+                entry.referenceType == 'purchase_return' &&
+                entry.referenceId == purchaseReturn.id,
+          )
+          .toList();
+      final purchaseReturnEntry = matchingEntries.length == 1
+          ? matchingEntries.single
+          : null;
+      final purchaseReturnLines = purchaseReturnEntry == null
+          ? const <LedgerLine>[]
+          : linesByEntry[purchaseReturnEntry.id] ?? const <LedgerLine>[];
+      final inventoryNet = purchaseReturnLines
+          .where((line) => line.accountCode == AccountCodes.inventory)
+          .fold<int>(
+            0,
+            (total, line) => total + line.debitMinor - line.creditMinor,
+          );
+      final varianceNet = purchaseReturnLines
+          .where((line) => line.accountCode == AccountCodes.inventoryVariance)
+          .fold<int>(
+            0,
+            (total, line) => total + line.debitMinor - line.creditMinor,
+          );
+      final supplierPayableDebit = purchaseReturnLines
+          .where(
+            (line) =>
+                line.accountCode == AccountCodes.payables &&
+                line.partyType == 'supplier' &&
+                line.partyId == purchase?.supplierId,
+          )
+          .fold<int>(0, (total, line) => total + line.debitMinor);
+      final liquidDebit = purchaseReturnLines
+          .where(
+            (line) =>
+                line.accountCode == AccountCodes.cash ||
+                line.accountCode == AccountCodes.wallet,
+          )
+          .fold<int>(0, (total, line) => total + line.debitMinor);
+      final containsOnlyExpectedAccounts = purchaseReturnLines.every(
+        (line) =>
+            line.accountCode == AccountCodes.inventory ||
+            line.accountCode == AccountCodes.inventoryVariance ||
+            line.accountCode == AccountCodes.payables ||
+            line.accountCode == AccountCodes.cash ||
+            line.accountCode == AccountCodes.wallet,
+      );
+      final ledgerIsValid =
+          purchase != null &&
+          credit != null &&
+          inventoryValue != null &&
+          purchaseReturnEntry != null &&
+          containsOnlyExpectedAccounts &&
+          inventoryNet == -inventoryValue &&
+          varianceNet == inventoryValue - credit &&
+          supplierPayableDebit + liquidDebit == credit;
+      if (!ledgerIsValid) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'purchase_return_ledger',
+            record: 'مرتجع شراء ${purchaseReturn.returnNo}',
+            message: 'قيد مرتجع الشراء مفقود أو لا يطابق قيمة المورد والمخزون.',
+          ),
+        );
+      }
+    }
+    for (final entry in returnedQtyByPurchaseItem.entries) {
+      final item = purchaseItemById[entry.key];
+      if (item != null && entry.value > item.qty) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'purchase_return_quantity',
+            record: 'سطر الشراء #${entry.key}',
+            message: 'كمية مرتجع الشراء أكبر من كمية الشراء الأصلية.',
+          ),
+        );
+      }
+    }
+    for (final movement in movements.where(
+      (movement) => movement.referenceType == 'purchase_return',
+    )) {
+      if (!purchaseReturnById.containsKey(movement.referenceId)) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'purchase_return_orphan_movement',
+            record: 'حركة مخزون #${movement.id}',
+            message: 'حركة مرتجع الشراء لا ترتبط بمستند مرتجع موجود.',
+          ),
+        );
+      }
+    }
+
     final expenseIds = {for (final expense in expenses) expense.id};
     final productIds = {for (final product in products) product.id};
     final returnIds = returnById.keys.toSet();
+    final purchaseReturnIds = purchaseReturnById.keys.toSet();
     final adjustmentIds = adjustmentById.keys.toSet();
     for (final entry in entries) {
       final referenceExists = switch (entry.referenceType) {
@@ -551,6 +744,7 @@ extension V2IntegrityAuditUseCases on V2UseCases {
         'purchase' => purchaseById.containsKey(entry.referenceId),
         'sale_return' ||
         'sale_return_cogs' => returnIds.contains(entry.referenceId),
+        'purchase_return' => purchaseReturnIds.contains(entry.referenceId),
         'installment_payment' => planById.containsKey(entry.referenceId),
         'expense' => expenseIds.contains(entry.referenceId),
         'opening_stock' => productIds.contains(entry.referenceId),

@@ -480,6 +480,54 @@ class SaleReturnPreview {
   final List<SaleReturnLinePreview> lines;
 }
 
+class PurchaseReturnLinePreview {
+  const PurchaseReturnLinePreview({
+    required this.purchaseItemId,
+    required this.productName,
+    required this.purchasedQty,
+    required this.returnedQty,
+    required this.returnableQty,
+    required this.availableStockQty,
+    required this.unitCostMinor,
+  });
+
+  final int purchaseItemId;
+  final String productName;
+  final int purchasedQty;
+  final int returnedQty;
+
+  /// Quantity still eligible under the original purchase document.
+  final int returnableQty;
+
+  /// Current stock caps an otherwise eligible supplier return.
+  final int availableStockQty;
+  final int unitCostMinor;
+
+  int creditForQuantity(int quantity) {
+    if (quantity < 0 || quantity > availableStockQty) {
+      throw RangeError('Invalid purchase return quantity');
+    }
+    return quantity * unitCostMinor;
+  }
+}
+
+class PurchaseReturnPreview {
+  const PurchaseReturnPreview({
+    required this.invoice,
+    required this.supplierName,
+    required this.lines,
+    this.remainingDebtMinor,
+  });
+
+  final PurchaseInvoice invoice;
+  final String? supplierName;
+  final List<PurchaseReturnLinePreview> lines;
+
+  /// Current supplier debt for this invoice; null if it was never bought on
+  /// credit. A return can still be settled to cash or wallet in that case.
+  final int? remainingDebtMinor;
+}
+
 class ShopSettingsSnapshot {
   const ShopSettingsSnapshot({
     required this.shopName,

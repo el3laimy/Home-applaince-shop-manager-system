@@ -119,11 +119,16 @@ void main() {
           .singleWhere(
             (row) => row.ownerType == 'purchase' && row.ownerId == purchaseId,
           );
+      final purchaseItem = await (db.select(
+        db.purchaseItems,
+      )..where((row) => row.purchaseId.equals(purchaseId))).getSingle();
 
       final invoicesBefore = (await db.select(db.saleInvoices).get()).length;
       final purchasesBefore =
           (await db.select(db.purchaseInvoices).get()).length;
       final returnsBefore = (await db.select(db.saleReturns).get()).length;
+      final purchaseReturnsBefore =
+          (await db.select(db.purchaseReturns).get()).length;
       final expensesBefore = (await db.select(db.expenses).get()).length;
       final ledgerBefore = (await db.select(db.ledgerEntries).get()).length;
       final adjustmentsBefore =
@@ -178,6 +183,14 @@ void main() {
         isA<AppFailure<int>>(),
       );
       expect(
+        await useCases.createPurchaseReturn(
+          purchaseId: purchaseId,
+          purchaseItemQuantities: {purchaseItem.id: 1},
+          settlementMethod: PaymentMethod.installment,
+        ),
+        isA<AppFailure<int>>(),
+      );
+      expect(
         await useCases.recordExpense(
           description: 'مصروف بلا مفتاح',
           amountMinor: 100,
@@ -211,6 +224,10 @@ void main() {
         purchasesBefore,
       );
       expect((await db.select(db.saleReturns).get()).length, returnsBefore);
+      expect(
+        (await db.select(db.purchaseReturns).get()).length,
+        purchaseReturnsBefore,
+      );
       expect((await db.select(db.expenses).get()).length, expensesBefore);
       expect((await db.select(db.ledgerEntries).get()).length, ledgerBefore);
       expect(

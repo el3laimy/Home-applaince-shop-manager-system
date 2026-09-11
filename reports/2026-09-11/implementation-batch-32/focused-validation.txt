@@ -1,0 +1,4 @@
+flutter test --no-pub test/v2/purchase_return_idempotency_test.dart test/v2/returns_ui_test.dart test/v2/data_integrity_audit_test.dart
+All tests passed (9 tests).
+
+Covered: idempotency, WAC variance, restart recovery, receipt rollback, integrity audit, and end-user purchase-return UI.
