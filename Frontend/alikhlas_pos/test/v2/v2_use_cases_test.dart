@@ -113,7 +113,8 @@ void main() {
                 'idx_installment_payments_plan_due',
                 'idx_sale_items_sale_id',
                 'idx_purchase_returns_purchase_id',
-                'idx_purchase_return_items_purchase_item_id'
+                'idx_purchase_return_items_purchase_item_id',
+                'idx_financial_corrections_target_created'
               )
             ''').get();
       final indexNames = rows.map((row) => row.data['name'] as String);
@@ -135,12 +136,13 @@ void main() {
           'idx_sale_items_sale_id',
           'idx_purchase_returns_purchase_id',
           'idx_purchase_return_items_purchase_item_id',
+          'idx_financial_corrections_target_created',
         ]),
       );
     });
 
     test(
-      'database migrates a v3 file to v8 including purchase returns and indexes',
+      'database migrates a v3 file to v9 including corrections and indexes',
       () async {
         await db.close();
 
@@ -169,7 +171,8 @@ void main() {
                 'inventory_adjustments',
                 'opening_balances',
                 'purchase_returns',
-                'purchase_return_items'
+                'purchase_return_items',
+                'financial_corrections'
               )
             ''').get();
         final productColumns = await db.customSelect('''
@@ -193,11 +196,12 @@ void main() {
                 'idx_installment_payments_plan_due',
                 'idx_sale_items_sale_id',
                 'idx_purchase_returns_purchase_id',
-                'idx_purchase_return_items_purchase_item_id'
+                'idx_purchase_return_items_purchase_item_id',
+                'idx_financial_corrections_target_created'
               )
             ''').get();
 
-        expect(userVersion.data['user_version'], 8);
+        expect(userVersion.data['user_version'], 9);
         expect(
           tables.map((row) => row.data['name']),
           containsAll([
@@ -206,13 +210,14 @@ void main() {
             'opening_balances',
             'purchase_returns',
             'purchase_return_items',
+            'financial_corrections',
           ]),
         );
         expect(
           productColumns.map((row) => row.data['name']),
           contains('image_path'),
         );
-        expect(indexes, hasLength(14));
+        expect(indexes, hasLength(15));
       },
     );
 

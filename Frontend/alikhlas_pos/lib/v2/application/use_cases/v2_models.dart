@@ -28,6 +28,18 @@ enum OpeningBalanceType {
       this == customerReceivable || this == supplierPayable;
 }
 
+enum FinancialCorrectionTarget {
+  cash('الخزينة'),
+  wallet('المحفظة');
+
+  const FinancialCorrectionTarget(this.label);
+
+  final String label;
+
+  String get accountCode =>
+      this == cash ? AccountCodes.cash : AccountCodes.wallet;
+}
+
 class PaymentInput {
   const PaymentInput(this.method, this.amountMinor, {this.note});
 
@@ -126,6 +138,7 @@ class DashboardSnapshot {
     required this.cogsMinor,
     required this.expensesMinor,
     this.inventoryVarianceMinor = 0,
+    this.financialVarianceMinor = 0,
     required this.lowStockCount,
     required this.openShift,
   });
@@ -139,11 +152,16 @@ class DashboardSnapshot {
   final int cogsMinor;
   final int expensesMinor;
   final int inventoryVarianceMinor;
+  final int financialVarianceMinor;
   final int lowStockCount;
   final Shift? openShift;
 
   int get grossProfitMinor =>
-      salesMinor - cogsMinor - expensesMinor - inventoryVarianceMinor;
+      salesMinor -
+      cogsMinor -
+      expensesMinor -
+      inventoryVarianceMinor -
+      financialVarianceMinor;
 }
 
 class DailySummarySnapshot {
@@ -153,6 +171,7 @@ class DailySummarySnapshot {
     required this.cogsMinor,
     required this.expensesMinor,
     this.inventoryVarianceMinor = 0,
+    this.financialVarianceMinor = 0,
     required this.interestMinor,
     required this.cashNetMinor,
     required this.walletNetMinor,
@@ -167,6 +186,7 @@ class DailySummarySnapshot {
   final int cogsMinor;
   final int expensesMinor;
   final int inventoryVarianceMinor;
+  final int financialVarianceMinor;
   final int interestMinor;
   final int cashNetMinor;
   final int walletNetMinor;
@@ -180,7 +200,8 @@ class DailySummarySnapshot {
       interestMinor -
       cogsMinor -
       expensesMinor -
-      inventoryVarianceMinor;
+      inventoryVarianceMinor -
+      financialVarianceMinor;
 }
 
 /// Read-only result for a consistency check; it never changes historical data.
@@ -222,6 +243,7 @@ class PeriodReportSnapshot {
     required this.cogsMinor,
     required this.expensesMinor,
     this.inventoryVarianceMinor = 0,
+    this.financialVarianceMinor = 0,
     required this.interestMinor,
     required this.cashNetMinor,
     required this.walletNetMinor,
@@ -237,6 +259,7 @@ class PeriodReportSnapshot {
   final int cogsMinor;
   final int expensesMinor;
   final int inventoryVarianceMinor;
+  final int financialVarianceMinor;
   final int interestMinor;
   final int cashNetMinor;
   final int walletNetMinor;
@@ -250,7 +273,8 @@ class PeriodReportSnapshot {
       interestMinor -
       cogsMinor -
       expensesMinor -
-      inventoryVarianceMinor;
+      inventoryVarianceMinor -
+      financialVarianceMinor;
 }
 
 class PartyBalance {

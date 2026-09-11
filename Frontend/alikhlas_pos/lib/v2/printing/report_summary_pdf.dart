@@ -79,6 +79,7 @@ class ReportSummaryPdf {
       ('تكلفة البضاعة', report.cogsMinor),
       ('المصروفات', report.expensesMinor),
       ('فروق الجرد', report.inventoryVarianceMinor),
+      ('فروق مالية موثقة', report.financialVarianceMinor),
       ('الفوائد', report.interestMinor),
       ('الربح', report.profitMinor),
       ('صافي الكاش', report.cashNetMinor),

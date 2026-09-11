@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
-  test('a verified v4 snapshot survives the successful v8 migration', () async {
+  test('a verified v4 snapshot survives the successful v9 migration', () async {
     final directory = await Directory.systemTemp.createTemp('migration-safe-');
     addTearDown(() => directory.delete(recursive: true));
     final live = File('${directory.path}/shop.db');
@@ -37,6 +37,7 @@ void main() {
     expect(_hasTable(live, 'opening_balances'), isTrue);
     expect(_hasTable(live, 'purchase_returns'), isTrue);
     expect(_hasTable(live, 'purchase_return_items'), isTrue);
+    expect(_hasTable(live, 'financial_corrections'), isTrue);
     expect(_version(snapshot), 4);
     expect(_setting(snapshot, 'migration.evidence'), 'before-upgrade');
     expect(await recovery.marker.exists(), isFalse);

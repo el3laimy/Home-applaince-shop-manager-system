@@ -14,6 +14,9 @@ extension V2SnapshotReportUseCases on V2UseCases {
       inventoryVarianceMinor: await _accountBalance(
         AccountCodes.inventoryVariance,
       ),
+      financialVarianceMinor: await _accountBalance(
+        AccountCodes.financialVariance,
+      ),
       lowStockCount:
           await (db.select(db.products)..where(
                 (p) =>

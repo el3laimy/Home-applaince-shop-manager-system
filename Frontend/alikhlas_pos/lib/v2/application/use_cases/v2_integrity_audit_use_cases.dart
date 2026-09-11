@@ -26,6 +26,7 @@ extension V2IntegrityAuditUseCases on V2UseCases {
     final purchaseReturns = await db.select(db.purchaseReturns).get();
     final purchaseReturnItems = await db.select(db.purchaseReturnItems).get();
     final expenses = await db.select(db.expenses).get();
+    final financialCorrections = await db.select(db.financialCorrections).get();
     final issues = <DataIntegrityIssue>[];
 
     final entryById = {for (final entry in entries) entry.id: entry};
@@ -413,6 +414,97 @@ extension V2IntegrityAuditUseCases on V2UseCases {
       }
     }
 
+    final financialCorrectionIds = {
+      for (final correction in financialCorrections) correction.id,
+    };
+    for (final correction in financialCorrections) {
+      final target = FinancialCorrectionTarget.values
+          .where((candidate) => candidate.name == correction.target)
+          .firstOrNull;
+      if (target == null ||
+          correction.deltaMinor == 0 ||
+          correction.reason.trim().isEmpty ||
+          correction.reason.length > 240 ||
+          (correction.note?.length ?? 0) > 500) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'financial_correction_data',
+            record: 'تصحيح مالي #${correction.id}',
+            message: 'بيانات مستند التصحيح المالي غير مكتملة أو غير صالحة.',
+          ),
+        );
+      }
+
+      final matchingEntries = entries
+          .where(
+            (entry) =>
+                entry.referenceType == 'financial_correction' &&
+                entry.referenceId == correction.id,
+          )
+          .toList();
+      final correctionEntry = matchingEntries.length == 1
+          ? matchingEntries.single
+          : null;
+      final correctionLines = correctionEntry == null
+          ? const <LedgerLine>[]
+          : linesByEntry[correctionEntry.id] ?? const <LedgerLine>[];
+      final assetNet = correctionLines
+          .where((line) => line.accountCode == target?.accountCode)
+          .fold<int>(
+            0,
+            (total, line) => total + line.debitMinor - line.creditMinor,
+          );
+      final varianceNet = correctionLines
+          .where((line) => line.accountCode == AccountCodes.financialVariance)
+          .fold<int>(
+            0,
+            (total, line) => total + line.debitMinor - line.creditMinor,
+          );
+      final onlyExpectedAccounts = correctionLines.every(
+        (line) =>
+            line.accountCode == target?.accountCode ||
+            line.accountCode == AccountCodes.financialVariance,
+      );
+      final isIncrease = correction.deltaMinor > 0;
+      final amountMinor = correction.deltaMinor.abs();
+      bool hasExactLine({
+        required String accountCode,
+        required int debitMinor,
+        required int creditMinor,
+      }) => correctionLines.any(
+        (line) =>
+            line.accountCode == accountCode &&
+            line.debitMinor == debitMinor &&
+            line.creditMinor == creditMinor &&
+            line.partyType == null &&
+            line.partyId == null,
+      );
+      if (target == null ||
+          correctionEntry == null ||
+          correctionLines.length != 2 ||
+          !onlyExpectedAccounts ||
+          assetNet != correction.deltaMinor ||
+          varianceNet != -correction.deltaMinor ||
+          !hasExactLine(
+            accountCode: target.accountCode,
+            debitMinor: isIncrease ? amountMinor : 0,
+            creditMinor: isIncrease ? 0 : amountMinor,
+          ) ||
+          !hasExactLine(
+            accountCode: AccountCodes.financialVariance,
+            debitMinor: isIncrease ? 0 : amountMinor,
+            creditMinor: isIncrease ? amountMinor : 0,
+          )) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'financial_correction_ledger',
+            record: 'تصحيح مالي #${correction.id}',
+            message: 'قيد التصحيح المالي مفقود أو لا يطابق المستند.',
+          ),
+        );
+      }
+    }
+
     final saleById = {for (final sale in sales) sale.id: sale};
     final saleItemsBySale = _groupByInt(saleItems, (item) => item.saleId);
     final purchaseById = {
@@ -750,6 +842,9 @@ extension V2IntegrityAuditUseCases on V2UseCases {
         'opening_stock' => productIds.contains(entry.referenceId),
         'inventory_adjustment' => adjustmentIds.contains(entry.referenceId),
         'opening_balance' => openingBalanceIds.contains(entry.referenceId),
+        'financial_correction' => financialCorrectionIds.contains(
+          entry.referenceId,
+        ),
         _ => false,
       };
       if (!referenceExists) {

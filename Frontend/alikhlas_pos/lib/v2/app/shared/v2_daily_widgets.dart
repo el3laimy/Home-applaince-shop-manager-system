@@ -110,6 +110,8 @@ class _DailySummaryPanel extends StatelessWidget {
           _AmountRow('المصروفات', summary.expensesMinor),
           if (summary.inventoryVarianceMinor != 0)
             _AmountRow('فروق الجرد', summary.inventoryVarianceMinor),
+          if (summary.financialVarianceMinor != 0)
+            _AmountRow('فروق مالية موثقة', summary.financialVarianceMinor),
           if (summary.interestMinor > 0)
             _AmountRow('فوائد تقسيط العملاء', summary.interestMinor),
           const Divider(height: 22),

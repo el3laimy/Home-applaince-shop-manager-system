@@ -45,6 +45,8 @@ class _PeriodReportPanel extends StatelessWidget {
           _AmountRow('المصروفات', report.expensesMinor),
           if (report.inventoryVarianceMinor != 0)
             _AmountRow('فروق الجرد', report.inventoryVarianceMinor),
+          if (report.financialVarianceMinor != 0)
+            _AmountRow('فروق مالية موثقة', report.financialVarianceMinor),
           if (report.interestMinor > 0)
             _AmountRow('فوائد تقسيط العملاء', report.interestMinor),
           const Divider(height: 22),

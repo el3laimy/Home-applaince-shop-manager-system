@@ -10489,6 +10489,401 @@ class PurchaseReturnItemsCompanion extends UpdateCompanion<PurchaseReturnItem> {
   }
 }
 
+class $FinancialCorrectionsTable extends FinancialCorrections
+    with TableInfo<$FinancialCorrectionsTable, FinancialCorrection> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FinancialCorrectionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _targetMeta = const VerificationMeta('target');
+  @override
+  late final GeneratedColumn<String> target = GeneratedColumn<String>(
+    'target',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deltaMinorMeta = const VerificationMeta(
+    'deltaMinor',
+  );
+  @override
+  late final GeneratedColumn<int> deltaMinor = GeneratedColumn<int>(
+    'delta_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    target,
+    deltaMinor,
+    reason,
+    note,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'financial_corrections';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FinancialCorrection> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('target')) {
+      context.handle(
+        _targetMeta,
+        target.isAcceptableOrUnknown(data['target']!, _targetMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetMeta);
+    }
+    if (data.containsKey('delta_minor')) {
+      context.handle(
+        _deltaMinorMeta,
+        deltaMinor.isAcceptableOrUnknown(data['delta_minor']!, _deltaMinorMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deltaMinorMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FinancialCorrection map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FinancialCorrection(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      target: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target'],
+      )!,
+      deltaMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}delta_minor'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FinancialCorrectionsTable createAlias(String alias) {
+    return $FinancialCorrectionsTable(attachedDatabase, alias);
+  }
+}
+
+class FinancialCorrection extends DataClass
+    implements Insertable<FinancialCorrection> {
+  final int id;
+  final String target;
+  final int deltaMinor;
+  final String reason;
+  final String? note;
+  final DateTime createdAt;
+  const FinancialCorrection({
+    required this.id,
+    required this.target,
+    required this.deltaMinor,
+    required this.reason,
+    this.note,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['target'] = Variable<String>(target);
+    map['delta_minor'] = Variable<int>(deltaMinor);
+    map['reason'] = Variable<String>(reason);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  FinancialCorrectionsCompanion toCompanion(bool nullToAbsent) {
+    return FinancialCorrectionsCompanion(
+      id: Value(id),
+      target: Value(target),
+      deltaMinor: Value(deltaMinor),
+      reason: Value(reason),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory FinancialCorrection.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FinancialCorrection(
+      id: serializer.fromJson<int>(json['id']),
+      target: serializer.fromJson<String>(json['target']),
+      deltaMinor: serializer.fromJson<int>(json['deltaMinor']),
+      reason: serializer.fromJson<String>(json['reason']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'target': serializer.toJson<String>(target),
+      'deltaMinor': serializer.toJson<int>(deltaMinor),
+      'reason': serializer.toJson<String>(reason),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  FinancialCorrection copyWith({
+    int? id,
+    String? target,
+    int? deltaMinor,
+    String? reason,
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+  }) => FinancialCorrection(
+    id: id ?? this.id,
+    target: target ?? this.target,
+    deltaMinor: deltaMinor ?? this.deltaMinor,
+    reason: reason ?? this.reason,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  FinancialCorrection copyWithCompanion(FinancialCorrectionsCompanion data) {
+    return FinancialCorrection(
+      id: data.id.present ? data.id.value : this.id,
+      target: data.target.present ? data.target.value : this.target,
+      deltaMinor: data.deltaMinor.present
+          ? data.deltaMinor.value
+          : this.deltaMinor,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FinancialCorrection(')
+          ..write('id: $id, ')
+          ..write('target: $target, ')
+          ..write('deltaMinor: $deltaMinor, ')
+          ..write('reason: $reason, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, target, deltaMinor, reason, note, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FinancialCorrection &&
+          other.id == this.id &&
+          other.target == this.target &&
+          other.deltaMinor == this.deltaMinor &&
+          other.reason == this.reason &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt);
+}
+
+class FinancialCorrectionsCompanion
+    extends UpdateCompanion<FinancialCorrection> {
+  final Value<int> id;
+  final Value<String> target;
+  final Value<int> deltaMinor;
+  final Value<String> reason;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  const FinancialCorrectionsCompanion({
+    this.id = const Value.absent(),
+    this.target = const Value.absent(),
+    this.deltaMinor = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  FinancialCorrectionsCompanion.insert({
+    this.id = const Value.absent(),
+    required String target,
+    required int deltaMinor,
+    required String reason,
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : target = Value(target),
+       deltaMinor = Value(deltaMinor),
+       reason = Value(reason);
+  static Insertable<FinancialCorrection> custom({
+    Expression<int>? id,
+    Expression<String>? target,
+    Expression<int>? deltaMinor,
+    Expression<String>? reason,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (target != null) 'target': target,
+      if (deltaMinor != null) 'delta_minor': deltaMinor,
+      if (reason != null) 'reason': reason,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  FinancialCorrectionsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? target,
+    Value<int>? deltaMinor,
+    Value<String>? reason,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+  }) {
+    return FinancialCorrectionsCompanion(
+      id: id ?? this.id,
+      target: target ?? this.target,
+      deltaMinor: deltaMinor ?? this.deltaMinor,
+      reason: reason ?? this.reason,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (target.present) {
+      map['target'] = Variable<String>(target.value);
+    }
+    if (deltaMinor.present) {
+      map['delta_minor'] = Variable<int>(deltaMinor.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FinancialCorrectionsCompanion(')
+          ..write('id: $id, ')
+          ..write('target: $target, ')
+          ..write('deltaMinor: $deltaMinor, ')
+          ..write('reason: $reason, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -10528,6 +10923,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $PurchaseReturnItemsTable purchaseReturnItems =
       $PurchaseReturnItemsTable(this);
+  late final $FinancialCorrectionsTable financialCorrections =
+      $FinancialCorrectionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -10556,6 +10953,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     ledgerLines,
     purchaseReturns,
     purchaseReturnItems,
+    financialCorrections,
   ];
 }
 
@@ -20191,6 +20589,237 @@ typedef $$PurchaseReturnItemsTableProcessedTableManager =
         bool productId,
       })
     >;
+typedef $$FinancialCorrectionsTableCreateCompanionBuilder =
+    FinancialCorrectionsCompanion Function({
+      Value<int> id,
+      required String target,
+      required int deltaMinor,
+      required String reason,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+    });
+typedef $$FinancialCorrectionsTableUpdateCompanionBuilder =
+    FinancialCorrectionsCompanion Function({
+      Value<int> id,
+      Value<String> target,
+      Value<int> deltaMinor,
+      Value<String> reason,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+    });
+
+class $$FinancialCorrectionsTableFilterComposer
+    extends Composer<_$AppDatabase, $FinancialCorrectionsTable> {
+  $$FinancialCorrectionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deltaMinor => $composableBuilder(
+    column: $table.deltaMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FinancialCorrectionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FinancialCorrectionsTable> {
+  $$FinancialCorrectionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deltaMinor => $composableBuilder(
+    column: $table.deltaMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FinancialCorrectionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FinancialCorrectionsTable> {
+  $$FinancialCorrectionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get target =>
+      $composableBuilder(column: $table.target, builder: (column) => column);
+
+  GeneratedColumn<int> get deltaMinor => $composableBuilder(
+    column: $table.deltaMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$FinancialCorrectionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FinancialCorrectionsTable,
+          FinancialCorrection,
+          $$FinancialCorrectionsTableFilterComposer,
+          $$FinancialCorrectionsTableOrderingComposer,
+          $$FinancialCorrectionsTableAnnotationComposer,
+          $$FinancialCorrectionsTableCreateCompanionBuilder,
+          $$FinancialCorrectionsTableUpdateCompanionBuilder,
+          (
+            FinancialCorrection,
+            BaseReferences<
+              _$AppDatabase,
+              $FinancialCorrectionsTable,
+              FinancialCorrection
+            >,
+          ),
+          FinancialCorrection,
+          PrefetchHooks Function()
+        > {
+  $$FinancialCorrectionsTableTableManager(
+    _$AppDatabase db,
+    $FinancialCorrectionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FinancialCorrectionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FinancialCorrectionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$FinancialCorrectionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> target = const Value.absent(),
+                Value<int> deltaMinor = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FinancialCorrectionsCompanion(
+                id: id,
+                target: target,
+                deltaMinor: deltaMinor,
+                reason: reason,
+                note: note,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String target,
+                required int deltaMinor,
+                required String reason,
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FinancialCorrectionsCompanion.insert(
+                id: id,
+                target: target,
+                deltaMinor: deltaMinor,
+                reason: reason,
+                note: note,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FinancialCorrectionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FinancialCorrectionsTable,
+      FinancialCorrection,
+      $$FinancialCorrectionsTableFilterComposer,
+      $$FinancialCorrectionsTableOrderingComposer,
+      $$FinancialCorrectionsTableAnnotationComposer,
+      $$FinancialCorrectionsTableCreateCompanionBuilder,
+      $$FinancialCorrectionsTableUpdateCompanionBuilder,
+      (
+        FinancialCorrection,
+        BaseReferences<
+          _$AppDatabase,
+          $FinancialCorrectionsTable,
+          FinancialCorrection
+        >,
+      ),
+      FinancialCorrection,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -20241,4 +20870,6 @@ class $AppDatabaseManager {
       $$PurchaseReturnsTableTableManager(_db, _db.purchaseReturns);
   $$PurchaseReturnItemsTableTableManager get purchaseReturnItems =>
       $$PurchaseReturnItemsTableTableManager(_db, _db.purchaseReturnItems);
+  $$FinancialCorrectionsTableTableManager get financialCorrections =>
+      $$FinancialCorrectionsTableTableManager(_db, _db.financialCorrections);
 }

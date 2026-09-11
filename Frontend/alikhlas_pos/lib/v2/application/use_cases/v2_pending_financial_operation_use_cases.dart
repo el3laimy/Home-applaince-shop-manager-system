@@ -11,6 +11,7 @@ enum PendingFinancialOperationKind {
   openingStock,
   inventoryAdjustment,
   openingBalance,
+  financialCorrection,
 }
 
 /// One explicitly recoverable mutation outside the sale and purchase carts.
@@ -47,6 +48,10 @@ class PendingFinancialOperation {
     this.openingBalancePartyId,
     this.openingBalanceDueDate,
     this.openingBalanceNote,
+    this.financialCorrectionTarget,
+    this.financialCorrectionIncreasesBalance,
+    this.financialCorrectionReason,
+    this.financialCorrectionNote,
   }) : saleItemQuantities = Map.unmodifiable(saleItemQuantities ?? const {}),
        purchaseItemQuantities = Map.unmodifiable(
          purchaseItemQuantities ?? const {},
@@ -202,6 +207,23 @@ class PendingFinancialOperation {
     openingBalanceNote: note,
   );
 
+  factory PendingFinancialOperation.financialCorrection({
+    required String operationKey,
+    required FinancialCorrectionTarget target,
+    required int amountMinor,
+    required bool increasesBalance,
+    required String reason,
+    String? note,
+  }) => PendingFinancialOperation._(
+    kind: PendingFinancialOperationKind.financialCorrection,
+    operationKey: operationKey,
+    amountMinor: amountMinor,
+    financialCorrectionTarget: target,
+    financialCorrectionIncreasesBalance: increasesBalance,
+    financialCorrectionReason: reason,
+    financialCorrectionNote: note,
+  );
+
   final PendingFinancialOperationKind kind;
   final String operationKey;
   final int? planId;
@@ -230,6 +252,10 @@ class PendingFinancialOperation {
   final int? openingBalancePartyId;
   final DateTime? openingBalanceDueDate;
   final String? openingBalanceNote;
+  final FinancialCorrectionTarget? financialCorrectionTarget;
+  final bool? financialCorrectionIncreasesBalance;
+  final String? financialCorrectionReason;
+  final String? financialCorrectionNote;
 
   String get receiptNamespace => switch (kind) {
     PendingFinancialOperationKind.customerInstallment => 'installment.customer',
@@ -242,6 +268,7 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.openingStock => 'opening_stock',
     PendingFinancialOperationKind.inventoryAdjustment => 'inventory_adjustment',
     PendingFinancialOperationKind.openingBalance => 'opening_balance',
+    PendingFinancialOperationKind.financialCorrection => 'financial_correction',
   };
 
   String get label => switch (kind) {
@@ -256,6 +283,7 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.inventoryAdjustment =>
       'تسوية فرق جرد المخزون',
     PendingFinancialOperationKind.openingBalance => 'إدخال رصيد افتتاحي',
+    PendingFinancialOperationKind.financialCorrection => 'تصحيح خزينة أو محفظة',
   };
 
   String encode() {
@@ -297,6 +325,11 @@ class PendingFinancialOperation {
       'openingBalancePartyId': openingBalancePartyId,
       'openingBalanceDueDate': openingBalanceDueDate?.toIso8601String(),
       'openingBalanceNote': openingBalanceNote,
+      'financialCorrectionTarget': financialCorrectionTarget?.name,
+      'financialCorrectionIncreasesBalance':
+          financialCorrectionIncreasesBalance,
+      'financialCorrectionReason': financialCorrectionReason,
+      'financialCorrectionNote': financialCorrectionNote,
     });
   }
 
@@ -412,6 +445,17 @@ class PendingFinancialOperation {
               : DateTime.parse(data['openingBalanceDueDate'] as String),
           note: data['openingBalanceNote'] as String?,
         ),
+      PendingFinancialOperationKind.financialCorrection =>
+        PendingFinancialOperation.financialCorrection(
+          operationKey: key,
+          target: FinancialCorrectionTarget.values.byName(
+            data['financialCorrectionTarget'] as String,
+          ),
+          amountMinor: data['amountMinor'] as int,
+          increasesBalance: data['financialCorrectionIncreasesBalance'] as bool,
+          reason: data['financialCorrectionReason'] as String,
+          note: data['financialCorrectionNote'] as String?,
+        ),
     };
   }
 }
@@ -518,6 +562,16 @@ extension V2PendingFinancialOperationUseCases on V2UseCases {
         dueDate: request.openingBalanceDueDate,
         note: request.openingBalanceNote,
       ),
+      PendingFinancialOperationKind.financialCorrection =>
+        recordFinancialCorrection(
+          operationKey: request.operationKey,
+          target: request.financialCorrectionTarget!,
+          amountMinor: request.amountMinor!,
+          increasesBalance: request.financialCorrectionIncreasesBalance!,
+          reason: request.financialCorrectionReason!,
+          note: request.financialCorrectionNote,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
     };
   });
 

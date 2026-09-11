@@ -306,6 +306,7 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
   late String? _backgroundImagePath = widget.snapshot.uiBackground.imagePath;
   bool _saving = false;
   bool _openingBalanceSubmitting = false;
+  bool _financialCorrectionSubmitting = false;
 
   @override
   void dispose() {
@@ -510,6 +511,23 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                           : 'إدخال رصيد افتتاحي',
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'فرق ظهر بعد بدء العمل؟ سجّله كمستند مستقل للخزينة أو المحفظة مع سببه. لا تستخدمه لتعديل فاتورة أو مخزون أو مديونية طرف.',
+                    style: TextStyle(color: _mutedInk),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _financialCorrectionSubmitting
+                        ? null
+                        : _openFinancialCorrection,
+                    icon: const Icon(Icons.rule_folder_outlined),
+                    label: Text(
+                      _financialCorrectionSubmitting
+                          ? 'جاري تسجيل التصحيح...'
+                          : 'تصحيح خزينة أو محفظة',
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -659,6 +677,88 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
       );
     } finally {
       if (mounted) setState(() => _openingBalanceSubmitting = false);
+    }
+  }
+
+  Future<void> _openFinancialCorrection() async {
+    final data = await showDialog<_FinancialCorrectionFormData>(
+      context: context,
+      builder: (_) => const _FinancialCorrectionDialog(),
+    );
+    if (!mounted || data == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تأكيد التصحيح المالي'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _InfoLine('الحساب', data.target.label),
+              _InfoLine(
+                'النتيجة',
+                data.increasesBalance ? 'زيادة فعلية' : 'عجز فعلي',
+              ),
+              _InfoLine('القيمة', Money(data.amountMinor).format()),
+              _InfoLine('السبب', data.reason),
+              if (data.note != null) _InfoLine('التوضيح', data.note!),
+              const SizedBox(height: 8),
+              const Text(
+                'سيسجل التطبيق مستندًا وقيدًا محاسبيًا متزنًا. لا يمكن لهذا التصحيح تغيير فواتير البيع أو الشراء أو المخزون أو أرصدة العملاء والموردين.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('العودة للتعديل'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('اعتماد التصحيح'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _financialCorrectionSubmitting = true);
+    final useCases = ref.read(useCasesProvider);
+    final request = PendingFinancialOperation.financialCorrection(
+      operationKey: useCases.newFinancialCorrectionOperationKey(),
+      target: data.target,
+      amountMinor: data.amountMinor,
+      increasesBalance: data.increasesBalance,
+      reason: data.reason,
+      note: data.note,
+    );
+    try {
+      final result = await _runWithNegativeBalanceApproval(
+        context,
+        action: (allowNegativeBalance) => _submitPendingFinancialOperation(
+          useCases,
+          request,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
+        onConfirmationDeclined: () => useCases
+            .discardUncommittedPendingFinancialOperation(request.operationKey)
+            .then((_) {}),
+      );
+      if (!mounted) return;
+      _showResult(context, result, success: 'تم تسجيل التصحيح المالي');
+      _refresh(ref);
+    } on Object {
+      if (!mounted) return;
+      _showSnack(
+        context,
+        'تعذر تسجيل التصحيح. لم نكرر العملية؛ أعد فتح التطبيق للتحقق من الطلب السابق.',
+      );
+    } finally {
+      if (mounted) setState(() => _financialCorrectionSubmitting = false);
     }
   }
 

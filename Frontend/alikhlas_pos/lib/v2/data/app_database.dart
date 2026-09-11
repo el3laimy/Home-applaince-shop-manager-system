@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
-const kAppDatabaseSchemaVersion = 8;
+const kAppDatabaseSchemaVersion = 9;
 
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -244,6 +244,19 @@ class PurchaseReturnItems extends Table {
   IntColumn get inventoryUnitCostMinor => integer()();
 }
 
+/// A documented correction for a counted difference in a liquid account.
+///
+/// This deliberately has no link to an invoice, party, or stock item. Those
+/// changes must retain their own documents so the audit trail stays intact.
+class FinancialCorrections extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get target => text()();
+  IntColumn get deltaMinor => integer()();
+  TextColumn get reason => text()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
   return LazyDatabase(() async {
     final dir = await getApplicationSupportDirectory();
@@ -284,6 +297,7 @@ LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
     LedgerLines,
     PurchaseReturns,
     PurchaseReturnItems,
+    FinancialCorrections,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -319,6 +333,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 8) {
           await migrator.createTable(purchaseReturns);
           await migrator.createTable(purchaseReturnItems);
+        }
+        if (from < 9) {
+          await migrator.createTable(financialCorrections);
         }
       } catch (_, stackTrace) {
         Error.throwWithStackTrace(
@@ -377,6 +394,9 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_purchase_return_items_purchase_item_id ON purchase_return_items(purchase_item_id);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_financial_corrections_target_created ON financial_corrections(target, created_at);',
     );
   }
 

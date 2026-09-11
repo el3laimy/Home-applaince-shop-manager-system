@@ -133,6 +133,8 @@ void main() {
       final ledgerBefore = (await db.select(db.ledgerEntries).get()).length;
       final adjustmentsBefore =
           (await db.select(db.inventoryAdjustments).get()).length;
+      final correctionsBefore =
+          (await db.select(db.financialCorrections).get()).length;
 
       expect(
         await useCases.createSale(
@@ -217,6 +219,15 @@ void main() {
         ),
         isA<AppFailure<int>>(),
       );
+      expect(
+        await useCases.recordFinancialCorrection(
+          target: FinancialCorrectionTarget.wallet,
+          amountMinor: 1000,
+          increasesBalance: true,
+          reason: 'تصحيح بلا مفتاح',
+        ),
+        isA<AppFailure<int>>(),
+      );
 
       expect((await db.select(db.saleInvoices).get()).length, invoicesBefore);
       expect(
@@ -235,6 +246,10 @@ void main() {
         adjustmentsBefore,
       );
       expect(await db.select(db.openingBalances).get(), isEmpty);
+      expect(
+        (await db.select(db.financialCorrections).get()).length,
+        correctionsBefore,
+      );
     },
   );
 }
