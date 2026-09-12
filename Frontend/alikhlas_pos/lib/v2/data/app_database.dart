@@ -435,6 +435,30 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);',
     );
     await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sale_invoices_created_id ON sale_invoices(created_at DESC, id DESC);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_purchase_invoices_created_id ON purchase_invoices(created_at DESC, id DESC);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sale_returns_created_at ON sale_returns(created_at);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expenses(created_at);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_installment_plans_status_created ON installment_plans(status, created_at DESC);',
+    );
+    await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_purchase_returns_purchase_id ON purchase_returns(purchase_id);',
     );
     await customStatement(

@@ -1,0 +1,59 @@
+{
+ "created_at_utc": "2026-09-12T11:40:01.748570Z",
+ "platform": "linux",
+ "os_version": "Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2",
+ "dart_version": "3.12.2 (stable) (Tue Jun 9 01:11:39 2026 -0700) on \"linux_x64\"",
+ "logical_processors": 8,
+ "cpu_model": "AMD Ryzen 5 PRO 2400G with Radeon Vega Graphics",
+ "database_backend": "SQLite file via NativeDatabase",
+ "products": 10000,
+ "seeded_invoices": 50000,
+ "measured_sale_commits": 23,
+ "database_size_bytes": 39411712,
+ "seed_duration_ms": 2107.308,
+ "metrics_ms": {
+  "database_open_ms": 103.663,
+  "workbench_snapshot": {
+   "samples": 5,
+   "min": 436.544,
+   "median": 465.753,
+   "p95": 475.138,
+   "max": 475.138
+  },
+  "exact_invoice_search": {
+   "samples": 20,
+   "min": 37.446,
+   "median": 41.645,
+   "p95": 43.231,
+   "max": 44.548
+  },
+  "period_report": {
+   "samples": 8,
+   "min": 129.272,
+   "median": 139.568,
+   "p95": 184.202,
+   "max": 184.202
+  },
+  "cash_sale_commit": {
+   "samples": 20,
+   "min": 14.093,
+   "median": 16.703,
+   "p95": 20.621,
+   "max": 20.868
+  },
+  "full_integrity_audit_ms": 6101.148
+ },
+ "initial_targets": {
+  "database_open_under_5000_ms": true,
+  "workbench_p95_under_2500_ms": true,
+  "exact_search_p95_under_300_ms": true,
+  "period_report_p95_under_2000_ms": true,
+  "sale_commit_p95_under_1000_ms": true
+ },
+ "integrity": {
+  "issues": 0,
+  "ledger_entries": 60046,
+  "products": 10000
+ },
+ "limitations": "Measures the SQLite/application layer in Flutter test JIT with warm query caches. Database open excludes Flutter engine and window rendering. Synthetic invoices use one item and cash payment. Results must be repeated on the declared customer hardware before release."
+}

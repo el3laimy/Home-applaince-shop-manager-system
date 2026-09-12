@@ -61,30 +61,36 @@ extension V2ReportUseCaseHelpers on V2UseCases {
       referenceType: 'purchase',
     );
 
+    final saleCountColumn = db.saleInvoices.id.count();
     final saleCount =
-        await (db.select(db.saleInvoices)..where(
-              (sale) =>
-                  sale.createdAt.isBiggerOrEqualValue(start) &
-                  sale.createdAt.isSmallerThanValue(end),
-            ))
-            .get()
-            .then((rows) => rows.length);
+        await (db.selectOnly(db.saleInvoices)
+              ..addColumns([saleCountColumn])
+              ..where(
+                db.saleInvoices.createdAt.isBiggerOrEqualValue(start) &
+                    db.saleInvoices.createdAt.isSmallerThanValue(end),
+              ))
+            .map((row) => row.read(saleCountColumn) ?? 0)
+            .getSingle();
+    final purchaseCountColumn = db.purchaseInvoices.id.count();
     final purchaseCount =
-        await (db.select(db.purchaseInvoices)..where(
-              (purchase) =>
-                  purchase.createdAt.isBiggerOrEqualValue(start) &
-                  purchase.createdAt.isSmallerThanValue(end),
-            ))
-            .get()
-            .then((rows) => rows.length);
+        await (db.selectOnly(db.purchaseInvoices)
+              ..addColumns([purchaseCountColumn])
+              ..where(
+                db.purchaseInvoices.createdAt.isBiggerOrEqualValue(start) &
+                    db.purchaseInvoices.createdAt.isSmallerThanValue(end),
+              ))
+            .map((row) => row.read(purchaseCountColumn) ?? 0)
+            .getSingle();
+    final returnCountColumn = db.saleReturns.id.count();
     final returnCount =
-        await (db.select(db.saleReturns)..where(
-              (saleReturn) =>
-                  saleReturn.createdAt.isBiggerOrEqualValue(start) &
-                  saleReturn.createdAt.isSmallerThanValue(end),
-            ))
-            .get()
-            .then((rows) => rows.length);
+        await (db.selectOnly(db.saleReturns)
+              ..addColumns([returnCountColumn])
+              ..where(
+                db.saleReturns.createdAt.isBiggerOrEqualValue(start) &
+                    db.saleReturns.createdAt.isSmallerThanValue(end),
+              ))
+            .map((row) => row.read(returnCountColumn) ?? 0)
+            .getSingle();
 
     return PeriodReportSnapshot(
       start: start,

@@ -39,21 +39,26 @@ function Invoke-AndRequireSuccess {
 
 function Install-Package {
   param([Parameter(Mandatory = $true)][string]$Path)
+  Write-Host "Installing package: $Path"
   Invoke-AndRequireSuccess -FilePath $Path -Arguments @('/S')
   $script:installed = $true
+  Write-Host "Package installation completed."
 }
 
 function Invoke-SmokeCheck {
   if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw "Installed executable is missing: $executable"
   }
+  Write-Host "Running installed application smoke check: $executable"
   Invoke-AndRequireSuccess -FilePath $executable -Arguments @('--installer-smoke-check') -TimeoutMilliseconds 30000
+  Write-Host "Installed application smoke check passed."
 }
 
 function Remove-Package {
   if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
     throw "Installed uninstaller is missing: $uninstaller"
   }
+  Write-Host "Removing installed package: $installDirectory"
   Invoke-AndRequireSuccess -FilePath $uninstaller -Arguments @('/S')
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
   while ((Test-Path -LiteralPath $installDirectory) -and [DateTime]::UtcNow -lt $deadline) {
@@ -63,6 +68,7 @@ function Remove-Package {
     throw "Uninstaller did not finish removing: $installDirectory"
   }
   $script:installed = $false
+  Write-Host "Package removal completed."
 }
 
 try {
@@ -87,6 +93,7 @@ try {
   $database = Get-Item -LiteralPath $databasePath
   $sentinel = Join-Path $database.DirectoryName 'installer-data-sentinel'
   Set-Content -LiteralPath $sentinel -Value 'preserve-me' -Encoding utf8NoBOM
+  Write-Host "Initial install and user-data sentinel passed."
 
   Install-Package -Path $current
   $displayVersion = (Get-ItemProperty -LiteralPath $registryPath).DisplayVersion
@@ -98,6 +105,7 @@ try {
       (Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve-me') {
     throw 'Application data did not survive the installer upgrade.'
   }
+  Write-Host "Upgrade and user-data preservation passed."
 
   Remove-Package
   foreach ($removedPath in @($installDirectory, $desktopShortcut, $startMenuShortcut, $registryPath)) {
@@ -109,6 +117,7 @@ try {
       (Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve-me') {
     throw 'Uninstaller removed application data.'
   }
+  Write-Host "Uninstall retained user data and removed program state."
 
   Install-Package -Path $current
   Invoke-SmokeCheck
@@ -119,6 +128,11 @@ try {
   Remove-Package
 
   Write-Host "Windows installer acceptance passed; version $ExpectedVersion launched and data survived upgrade, removal, and reinstall."
+}
+catch {
+  $message = $_.Exception.Message -replace '[\r\n]+', ' '
+  Write-Host "::error title=Windows installer acceptance failed::$message"
+  throw
 }
 finally {
   if ($installed -and (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {

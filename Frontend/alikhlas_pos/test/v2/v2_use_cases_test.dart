@@ -112,6 +112,14 @@ void main() {
                 'idx_payments_owner',
                 'idx_installment_payments_plan_due',
                 'idx_sale_items_sale_id',
+                'idx_sale_invoices_created_id',
+                'idx_purchase_invoices_created_id',
+                'idx_sale_returns_created_at',
+                'idx_expenses_created_at',
+                'idx_products_name',
+                'idx_customers_name',
+                'idx_suppliers_name',
+                'idx_installment_plans_status_created',
                 'idx_purchase_returns_purchase_id',
                 'idx_purchase_return_items_purchase_item_id',
                 'idx_financial_corrections_target_created',
@@ -135,6 +143,14 @@ void main() {
           'idx_payments_owner',
           'idx_installment_payments_plan_due',
           'idx_sale_items_sale_id',
+          'idx_sale_invoices_created_id',
+          'idx_purchase_invoices_created_id',
+          'idx_sale_returns_created_at',
+          'idx_expenses_created_at',
+          'idx_products_name',
+          'idx_customers_name',
+          'idx_suppliers_name',
+          'idx_installment_plans_status_created',
           'idx_purchase_returns_purchase_id',
           'idx_purchase_return_items_purchase_item_id',
           'idx_financial_corrections_target_created',
@@ -204,6 +220,14 @@ void main() {
                 'idx_payments_owner',
                 'idx_installment_payments_plan_due',
                 'idx_sale_items_sale_id',
+                'idx_sale_invoices_created_id',
+                'idx_purchase_invoices_created_id',
+                'idx_sale_returns_created_at',
+                'idx_expenses_created_at',
+                'idx_products_name',
+                'idx_customers_name',
+                'idx_suppliers_name',
+                'idx_installment_plans_status_created',
                 'idx_purchase_returns_purchase_id',
                 'idx_purchase_return_items_purchase_item_id',
                 'idx_financial_corrections_target_created',
@@ -236,7 +260,7 @@ void main() {
           saleReturnItemColumns.map((row) => row.data['name']),
           contains('cost_minor'),
         );
-        expect(indexes, hasLength(16));
+        expect(indexes, hasLength(24));
       },
     );
 
@@ -1852,6 +1876,65 @@ Future<void> createMinimalV3Database(File file) async {
           is_active INTEGER NOT NULL DEFAULT 1,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE customers (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          phone TEXT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE suppliers (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          phone TEXT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE sale_invoices (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          invoice_no TEXT NOT NULL UNIQUE,
+          customer_id INTEGER NULL,
+          shift_id INTEGER NULL,
+          subtotal_minor INTEGER NOT NULL,
+          discount_minor INTEGER NOT NULL DEFAULT 0,
+          interest_minor INTEGER NOT NULL DEFAULT 0,
+          total_minor INTEGER NOT NULL,
+          paid_minor INTEGER NOT NULL,
+          remaining_minor INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE purchase_invoices (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          invoice_no TEXT NOT NULL UNIQUE,
+          supplier_id INTEGER NULL,
+          shift_id INTEGER NULL,
+          total_minor INTEGER NOT NULL,
+          paid_minor INTEGER NOT NULL,
+          remaining_minor INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE installment_plans (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          owner_type TEXT NOT NULL,
+          owner_id INTEGER NOT NULL,
+          party_type TEXT NOT NULL,
+          party_id INTEGER NOT NULL,
+          principal_minor INTEGER NOT NULL,
+          interest_minor INTEGER NOT NULL DEFAULT 0,
+          total_minor INTEGER NOT NULL,
+          paid_minor INTEGER NOT NULL DEFAULT 0,
+          installment_count INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          created_at INTEGER NOT NULL
         );
       ''')
       ..execute('''

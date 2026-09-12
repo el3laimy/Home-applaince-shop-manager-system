@@ -417,7 +417,7 @@ class _QuickStartCard extends StatelessWidget {
                   step.number,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: colors.primary,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -427,7 +427,7 @@ class _QuickStartCard extends StatelessWidget {
               step.title,
               style: Theme.of(
                 context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 5),
             Text(step.text, style: Theme.of(context).textTheme.bodySmall),

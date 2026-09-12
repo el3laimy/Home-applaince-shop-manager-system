@@ -3,7 +3,7 @@
 ## Source of truth
 
 - Package version: `1.1.0+10`.
-- Database schema: `10`.
+- Database schema: `11`.
 - A release artifact is valid only when its GitHub Actions run is green and its commit matches the commit shown by that run.
 - CI injects that commit into the desktop build as `APP_GIT_SHA`; the in-app support screen therefore shows the installed package version together with the build revision.
 - Do not treat an older artifact, its expiry date, or a manually copied bundle as the current release candidate.
@@ -15,7 +15,7 @@ For the exact commit being handed over, attach links to a green `Desktop Release
 1. `alikhlas-pos-windows-installer`
 2. `alikhlas-pos-linux-deb`
 
-The run must pass analyze, tests, Windows bundle, Windows NSIS installer, Linux bundle, Debian package build, and Debian package verification.
+The run must pass analyze, tests, both desktop builds, both installer builds, and the automated install, upgrade, removal, reinstall, and data-retention lifecycle for Windows and Linux.
 
 ## Final-device acceptance
 
