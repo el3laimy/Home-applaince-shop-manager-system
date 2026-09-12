@@ -39,11 +39,13 @@ UninstPage uninstConfirm
 UninstPage instfiles
 
 Section "Install ${APP_NAME}" SEC_MAIN
+  SetShellVarContext current
   SetOutPath "$INSTDIR"
   File /r "${SOURCE_DIR}\*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+  CreateDirectory "$DESKTOP"
   CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\alikhlas_pos.exe"
   CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\alikhlas_pos.exe"
 
@@ -57,6 +59,7 @@ Section "Install ${APP_NAME}" SEC_MAIN
 SectionEnd
 
 Section "Uninstall"
+  SetShellVarContext current
   Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
   RMDir "$SMPROGRAMS\${APP_NAME}"
   Delete "$DESKTOP\${APP_NAME}.lnk"
