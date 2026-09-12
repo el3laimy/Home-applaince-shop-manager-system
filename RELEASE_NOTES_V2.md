@@ -1,19 +1,21 @@
 # ALIkhlasPOS v2 Release Notes
 
+الإصدار المرشح الحالي: `1.1.0+10`، مخطط قاعدة البيانات `11`.
+
 ## Current v2 State
 
 - `Frontend/alikhlas_pos/lib/main.dart` starts `ALIkhlasV2App` directly.
 - Runtime is local Flutter Desktop + SQLite/drift.
 - No runtime Backend, Docker, PostgreSQL, or Redis is required for v2.
-- The pre-cleanup v1 state is archived in `archives/pre-v1-cleanup-working-tree.tar.gz`.
+- The pre-cleanup v1 state is archived locally in the ignored file `archives/pre-v1-cleanup-working-tree.tar.gz`.
 - Old backend and Flutter v1 runtime code have been removed from the active tree.
 
 ## Completed
 
-- Local owner login with forced default password change.
+- First-run owner creation with a user-chosen password; legacy default-owner accounts are forced to change their password.
 - PBKDF2-SHA256 password hashing with legacy SHA-256 upgrade on login.
-- SQLite WAL with `synchronous=FULL` and drift schema version 8.
-- Schema v5 adds `products.imagePath`; schema v6 adds auditable inventory-adjustment documents; schema v7 adds opening-balance documents; schema v8 adds purchase-return documents and lines.
+- SQLite WAL with `synchronous=FULL` and drift schema version 11.
+- The supported migration chain covers product images, inventory adjustments, opening balances, purchase returns, financial corrections, exact inventory value, and correction-reversal documents through schema v11.
 - Ledger-based sales, purchases, expenses, installments, returns, shifts, and reports.
 - Sale returns handle installment over-refund correctly:
   - receivable settlement is capped at remaining customer debt;
@@ -41,6 +43,12 @@
 - Existing shops can enter reviewed customer, supplier, cash, or wallet opening balances from Settings; customer and supplier balances create one collectible/payable installment, while cash and wallet remain separate from the physical opening-shift count.
 - Inventory reconciliation records the counted quantity, reason, stock movement, ledger variance, and idempotency receipt in one transaction.
 - Purchase returns select the original purchase invoice, prevent returning more than the original or current stock, and can reduce supplier debt or receive cash/wallet credit. They preserve the original supplier cost while valuing the stock removal at current WAC and post the difference to inventory variance.
+- Exact inventory value is stored separately from the rounded displayed WAC so clearing the final units also clears the inventory ledger value without minor-unit drift.
+- Financial corrections can be reversed through a separate immutable document and balanced reversing entry; the original history is retained.
+- Product and opening-stock CSV import validates a UTF-8 Arabic template, previews row errors, and commits the reviewed batch atomically with operation-receipt protection.
+- Login and recovery attempts are throttled, and current password hashes use PBKDF2-HMAC-SHA256 with 600,000 iterations.
+- Unexpected failures are written to a bounded local JSONL diagnostic log that omits exception messages, customer data, file paths, and raw operation keys.
+- Windows NSIS and Linux Debian packages pass automated install, upgrade, uninstall, reinstall, launch, and user-data-retention checks in `Desktop Release Build`.
 
 ## Verification
 
@@ -48,9 +56,9 @@ Last verified commands:
 
 ```bash
 cd Frontend/alikhlas_pos
-dart analyze lib/v2 lib/main.dart test/v2
-flutter test
-HOME=/tmp PUB_CACHE=/home/el3laimy/.pub-cache /home/el3laimy/development/flutter/bin/flutter build linux
+dart analyze lib test/v2 tool/production_scale_benchmark.dart
+flutter test --no-pub
+flutter build linux --release --no-pub --dart-define=APP_GIT_SHA=local-check
 ```
 
 The v2 test suite covers:
@@ -63,14 +71,16 @@ The v2 test suite covers:
 - installment collection and supplier payment;
 - expenses;
 - partial returns and installment return overflow;
-- backup/restore and v3/v4 to v8 migration.
+- backup/restore and v3/v4 to v11 migration.
 - inventory-adjustment accounting, recovery, integrity checks, and minimum-window UI coverage.
 - Cairo theme, glass contrast, centralized blur, and visual golden snapshots for login/dashboard/POS/reports.
 - party statement PDF smoke coverage with invoice details.
 - local image copy coverage for product and background images.
 
-## Remaining
+## Remaining before commercial release
 
-- Validate Windows build on a Windows machine or Windows CI.
-- Validate printed sale receipts and party statements on the target thermal/A4 printers.
-- Sign and field-test the Windows installer and clean-install/upgrade/remove the Debian package before end-user release.
+- Run `FIELD_ACCEPTANCE_AR.md` on the actual Windows and Linux delivery devices.
+- Validate sale receipts, A4 statements, barcode labels, and scanning on the target physical devices.
+- Exercise an external backup destination, a representative old shop database, forced close/power loss, and a full filesystem on disposable test data.
+- Complete a controlled pilot with a non-technical shop user and resolve all blocking observations.
+- Approve the publisher identity, sign the Windows installer, check SmartScreen behavior, and publish the support contact and response hours.

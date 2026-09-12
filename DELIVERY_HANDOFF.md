@@ -19,6 +19,8 @@ The run must pass analyze, tests, both desktop builds, both installer builds, an
 
 ## Final-device acceptance
 
+Use `FIELD_ACCEPTANCE_AR.md` as the evidence form. It records the exact package revision, device, peripherals, results, observations, and owner sign-off; the summary below does not replace that record.
+
 Run this checklist on clean target devices before commercial release:
 
 1. Install the Windows installer, open the app, create the first owner, then verify its version and revision in Help.
