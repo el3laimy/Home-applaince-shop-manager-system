@@ -168,7 +168,7 @@ void main() {
   testWidgets(
     'support screen previews exact report, allows cancellation and tests printer',
     (tester) async {
-      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.physicalSize = const Size(1024, 720);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -212,10 +212,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('المساعدة وحالة التطبيق'), findsOneWidget);
+      expect(find.text('دليل يوم العمل في ٥ خطوات'), findsOneWidget);
+      expect(find.text('جهّز المحل'), findsOneWidget);
+      expect(find.text('افتح اليومية'), findsOneWidget);
+      expect(find.text('سجّل البيع'), findsOneWidget);
+      expect(find.text('تابع ما بعد البيع'), findsOneWidget);
+      expect(find.text('احمِ بياناتك'), findsOneWidget);
       expect(find.text('قبل طلب المساعدة'), findsOneWidget);
       expect(find.text('9.4.2+7'), findsOneWidget);
       expect(find.text('اختبار الطابعة'), findsNWidgets(2));
       expect(find.text('حفظ تقرير للدعم'), findsOneWidget);
+      expect(find.text('تراخيص البرامج المستخدمة'), findsOneWidget);
       expect(find.textContaining('لا يتضمن قاعدة البيانات'), findsOneWidget);
       await tester.ensureVisible(
         find.widgetWithText(OutlinedButton, 'اختبار الطابعة'),
@@ -247,6 +254,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(savedReport, approved);
       expect(find.textContaining('تم حفظ تقرير الدعم.'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('تراخيص البرامج المستخدمة'));
+      await tester.tap(find.text('تراخيص البرامج المستخدمة'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LicensePage), findsOneWidget);
+      expect(find.text('إخلاص POS'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
     },
   );
 

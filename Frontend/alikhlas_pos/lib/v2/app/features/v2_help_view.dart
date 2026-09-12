@@ -25,6 +25,8 @@ class _HelpViewState extends ConsumerState<_HelpView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const _QuickStartGuide(),
+            const SizedBox(height: 14),
             _GlassPane(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -154,6 +156,32 @@ class _HelpViewState extends ConsumerState<_HelpView> {
                     const SizedBox(height: 12),
                     Text(_message!),
                   ],
+                  const Divider(height: 28),
+                  Text(
+                    'التراخيص والحقوق',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'يعرض التطبيق تراخيص Flutter والمكتبات مفتوحة المصدر المضمّنة في هذه النسخة.',
+                  ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed: () => showLicensePage(
+                        context: context,
+                        applicationName: 'إخلاص POS',
+                        applicationVersion: version.asData?.value,
+                        applicationIcon: const Icon(
+                          Icons.storefront_outlined,
+                          size: 42,
+                        ),
+                      ),
+                      icon: const Icon(Icons.policy_outlined),
+                      label: const Text('تراخيص البرامج المستخدمة'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -254,6 +282,185 @@ class _HelpViewState extends ConsumerState<_HelpView> {
       if (mounted) setState(() => _savingReport = false);
     }
   }
+}
+
+class _QuickStartGuide extends StatelessWidget {
+  const _QuickStartGuide();
+
+  static const _steps = <_GuideStep>[
+    _GuideStep(
+      number: '١',
+      icon: Icons.storefront_outlined,
+      title: 'جهّز المحل',
+      text: 'راجع اسم المحل وبيانات الفاتورة، ثم اختر مكان النسخ الاحتياطي.',
+      destination: 'الإعدادات',
+    ),
+    _GuideStep(
+      number: '٢',
+      icon: Icons.lock_open_outlined,
+      title: 'افتح اليومية',
+      text: 'سجّل المبلغ الموجود في الدرج قبل أول بيع نقدي.',
+      destination: 'اليومية',
+    ),
+    _GuideStep(
+      number: '٣',
+      icon: Icons.point_of_sale_outlined,
+      title: 'سجّل البيع',
+      text: 'اختر الأصناف وطريقة الدفع، وراجع الإجمالي قبل الحفظ.',
+      destination: 'البيع',
+    ),
+    _GuideStep(
+      number: '٤',
+      icon: Icons.receipt_long_outlined,
+      title: 'تابع ما بعد البيع',
+      text: 'حصّل الدفعات من الأقساط، وابدأ أي مرتجع من الفاتورة الأصلية.',
+      destination: 'الأقساط والمرتجعات',
+    ),
+    _GuideStep(
+      number: '٥',
+      icon: Icons.verified_user_outlined,
+      title: 'احمِ بياناتك',
+      text: 'تأكد من تاريخ آخر نسخة ناجحة، وأنشئ نسخة قبل أي استرجاع.',
+      destination: 'النسخ',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPane(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'دليل يوم العمل في ٥ خطوات',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'اتبع المسار بالترتيب في أول يوم، ثم ارجع إلى الخطوة التي تحتاجها.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 1400
+                  ? 5
+                  : constraints.maxWidth >= 620
+                  ? 3
+                  : 1;
+              const gap = 12.0;
+              final cardWidth =
+                  (constraints.maxWidth - (columns - 1) * gap) / columns;
+              final cardHeight = columns == 5
+                  ? 190.0
+                  : columns == 3
+                  ? (constraints.maxWidth < 800 ? 245.0 : 220.0)
+                  : 230.0;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final step in _steps)
+                    SizedBox(
+                      width: cardWidth,
+                      height: cardHeight,
+                      child: _QuickStartCard(step: step),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickStartCard extends StatelessWidget {
+  const _QuickStartCard({required this.step});
+
+  final _GuideStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'الخطوة ${step.number}: ${step.title}. ${step.text}',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 178),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHigh.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.7),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(step.icon, color: colors.onPrimaryContainer),
+                ),
+                const Spacer(),
+                Text(
+                  step.number,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              step.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 5),
+            Text(step.text, style: Theme.of(context).textTheme.bodySmall),
+            const Spacer(),
+            const SizedBox(height: 10),
+            Text(
+              'من شاشة: ${step.destination}',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideStep {
+  const _GuideStep({
+    required this.number,
+    required this.icon,
+    required this.title,
+    required this.text,
+    required this.destination,
+  });
+
+  final String number;
+  final IconData icon;
+  final String title;
+  final String text;
+  final String destination;
 }
 
 class _HelpStep extends StatelessWidget {
