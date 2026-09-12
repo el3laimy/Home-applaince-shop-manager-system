@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -48,6 +49,7 @@ part 'shared/v2_product_dialogs.dart';
 part 'shared/v2_inventory_adjustment_dialog.dart';
 part 'shared/v2_opening_balance_dialog.dart';
 part 'shared/v2_financial_correction_dialog.dart';
+part 'shared/v2_product_csv_import_dialog.dart';
 part 'shared/v2_helpers.dart';
 
 class ALIkhlasV2App extends ConsumerWidget {

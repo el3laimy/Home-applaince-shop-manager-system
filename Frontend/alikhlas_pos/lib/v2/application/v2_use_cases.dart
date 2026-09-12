@@ -27,6 +27,7 @@ part 'use_cases/v2_catalog_party_use_cases.dart';
 part 'use_cases/v2_inventory_adjustment_use_cases.dart';
 part 'use_cases/v2_opening_balance_use_cases.dart';
 part 'use_cases/v2_financial_correction_use_cases.dart';
+part 'use_cases/v2_product_csv_import_use_cases.dart';
 part 'use_cases/v2_sales_purchase_return_use_cases.dart';
 part 'use_cases/v2_installment_use_cases.dart';
 part 'use_cases/v2_snapshot_report_use_cases.dart';

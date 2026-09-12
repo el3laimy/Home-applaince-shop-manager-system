@@ -21,6 +21,19 @@ typedef BarcodeLabelPrinter =
 
 typedef PrinterTestPage = Future<bool> Function(ShopSettingsSnapshot settings);
 typedef SupportReportSaver = Future<bool> Function(String report);
+typedef ProductCsvFilePicker = Future<ProductCsvPickedFile?> Function();
+typedef ProductCsvTemplateSaver = Future<bool> Function(String template);
+
+class ProductCsvPickedFile {
+  const ProductCsvPickedFile({required this.name, required this.bytes});
+
+  final String name;
+  final List<int> bytes;
+}
+
+class ProductCsvFileTooLarge implements Exception {
+  const ProductCsvFileTooLarge();
+}
 
 final appVersionProvider = FutureProvider<String>((ref) async {
   try {
@@ -45,6 +58,43 @@ final supportReportSaverProvider = Provider<SupportReportSaver>((ref) {
     );
     if (path == null) return false;
     await File(path).writeAsString(report, flush: true);
+    return true;
+  };
+});
+
+final productCsvFilePickerProvider = Provider<ProductCsvFilePicker>((ref) {
+  return () async {
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'اختر ملف منتجات CSV',
+      type: FileType.custom,
+      allowedExtensions: const ['csv'],
+      withData: false,
+    );
+    final file = picked?.files.single;
+    if (file == null || file.path == null) return null;
+    final source = File(file.path!);
+    if (await source.length() > V2ProductCsvImportUseCases.productCsvMaxBytes) {
+      throw const ProductCsvFileTooLarge();
+    }
+    return ProductCsvPickedFile(
+      name: file.name,
+      bytes: await source.readAsBytes(),
+    );
+  };
+});
+
+final productCsvTemplateSaverProvider = Provider<ProductCsvTemplateSaver>((
+  ref,
+) {
+  return (template) async {
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'احفظ قالب المنتجات CSV',
+      fileName: 'alikhlas-products-template.csv',
+      type: FileType.custom,
+      allowedExtensions: const ['csv'],
+    );
+    if (path == null) return false;
+    await File(path).writeAsString(template, flush: true);
     return true;
   };
 });

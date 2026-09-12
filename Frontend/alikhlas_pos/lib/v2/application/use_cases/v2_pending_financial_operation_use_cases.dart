@@ -13,6 +13,7 @@ enum PendingFinancialOperationKind {
   openingBalance,
   financialCorrection,
   financialCorrectionReversal,
+  productCsvImport,
 }
 
 /// One explicitly recoverable mutation outside the sale and purchase carts.
@@ -54,10 +55,12 @@ class PendingFinancialOperation {
     this.financialCorrectionReason,
     this.financialCorrectionNote,
     this.financialCorrectionId,
+    List<ProductCsvImportRow>? productCsvRows,
   }) : saleItemQuantities = Map.unmodifiable(saleItemQuantities ?? const {}),
        purchaseItemQuantities = Map.unmodifiable(
          purchaseItemQuantities ?? const {},
-       ) {
+       ),
+       productCsvRows = List.unmodifiable(productCsvRows ?? const []) {
     if (!RegExp(r'^[A-Za-z0-9_-]{1,100}$').hasMatch(operationKey)) {
       throw const FormatException('Invalid pending financial operation key');
     }
@@ -239,6 +242,15 @@ class PendingFinancialOperation {
     financialCorrectionNote: note,
   );
 
+  factory PendingFinancialOperation.productCsvImport({
+    required String operationKey,
+    required List<ProductCsvImportRow> rows,
+  }) => PendingFinancialOperation._(
+    kind: PendingFinancialOperationKind.productCsvImport,
+    operationKey: operationKey,
+    productCsvRows: rows,
+  );
+
   final PendingFinancialOperationKind kind;
   final String operationKey;
   final int? planId;
@@ -272,6 +284,7 @@ class PendingFinancialOperation {
   final String? financialCorrectionReason;
   final String? financialCorrectionNote;
   final int? financialCorrectionId;
+  final List<ProductCsvImportRow> productCsvRows;
 
   String get receiptNamespace => switch (kind) {
     PendingFinancialOperationKind.customerInstallment => 'installment.customer',
@@ -287,6 +300,7 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.financialCorrection => 'financial_correction',
     PendingFinancialOperationKind.financialCorrectionReversal =>
       'financial_correction_reversal',
+    PendingFinancialOperationKind.productCsvImport => 'product_csv_import',
   };
 
   String get label => switch (kind) {
@@ -304,6 +318,7 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.financialCorrection => 'تصحيح خزينة أو محفظة',
     PendingFinancialOperationKind.financialCorrectionReversal =>
       'عكس تصحيح مالي',
+    PendingFinancialOperationKind.productCsvImport => 'استيراد منتجات من CSV',
   };
 
   String encode() {
@@ -351,6 +366,7 @@ class PendingFinancialOperation {
       'financialCorrectionReason': financialCorrectionReason,
       'financialCorrectionNote': financialCorrectionNote,
       'financialCorrectionId': financialCorrectionId,
+      'productCsvRows': productCsvRows.map((row) => row.toJson()).toList(),
     });
   }
 
@@ -484,6 +500,14 @@ class PendingFinancialOperation {
           reason: data['financialCorrectionReason'] as String,
           note: data['financialCorrectionNote'] as String?,
         ),
+      PendingFinancialOperationKind.productCsvImport =>
+        PendingFinancialOperation.productCsvImport(
+          operationKey: key,
+          rows: [
+            for (final row in data['productCsvRows'] as List<dynamic>)
+              ProductCsvImportRow.fromJson(row as Map<String, dynamic>),
+          ],
+        ),
     };
   }
 }
@@ -608,6 +632,10 @@ extension V2PendingFinancialOperationUseCases on V2UseCases {
           note: request.financialCorrectionNote,
           allowNegativeBalance: allowNegativeBalance,
         ),
+      PendingFinancialOperationKind.productCsvImport => importProductCsv(
+        operationKey: request.operationKey,
+        rows: request.productCsvRows,
+      ),
     };
   });
 

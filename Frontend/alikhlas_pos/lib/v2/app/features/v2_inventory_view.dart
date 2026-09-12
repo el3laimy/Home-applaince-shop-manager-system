@@ -12,6 +12,7 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
   final _search = TextEditingController();
   _InventoryFilter _filter = _InventoryFilter.all;
   _InventorySort _sort = _InventorySort.name;
+  bool _csvBusy = false;
 
   @override
   void dispose() {
@@ -33,10 +34,29 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
     return _Screen(
       title: 'المخزون',
       subtitle: 'منتجات وأسعار ورصيد وحد نقص',
-      trailing: FilledButton.icon(
-        onPressed: () => _openProductDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('منتج جديد'),
+      trailing: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.end,
+        children: [
+          OutlinedButton.icon(
+            key: const ValueKey('product-csv-template'),
+            onPressed: _csvBusy ? null : _saveCsvTemplate,
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('قالب CSV'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('product-csv-import'),
+            onPressed: _csvBusy ? null : _openCsvImport,
+            icon: const Icon(Icons.file_upload_outlined),
+            label: Text(_csvBusy ? 'جاري الفحص...' : 'استيراد CSV'),
+          ),
+          FilledButton.icon(
+            onPressed: () => _openProductDialog(context, ref),
+            icon: const Icon(Icons.add),
+            label: const Text('منتج جديد'),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -275,6 +295,87 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
       };
     });
     return products;
+  }
+
+  Future<void> _saveCsvTemplate() async {
+    if (_csvBusy) return;
+    setState(() => _csvBusy = true);
+    try {
+      final saved = await ref.read(productCsvTemplateSaverProvider)(
+        ref.read(useCasesProvider).productCsvTemplate(),
+      );
+      if (!mounted) return;
+      _showSnack(
+        context,
+        saved ? 'تم حفظ قالب المنتجات' : 'لم يتم اختيار مكان لحفظ القالب',
+      );
+    } on FileSystemException {
+      if (!mounted) return;
+      _showSnack(context, 'تعذر حفظ القالب في المكان المختار');
+    } finally {
+      if (mounted) setState(() => _csvBusy = false);
+    }
+  }
+
+  Future<void> _openCsvImport() async {
+    if (_csvBusy) return;
+    setState(() => _csvBusy = true);
+    try {
+      final picked = await ref.read(productCsvFilePickerProvider)();
+      if (!mounted || picked == null) return;
+      if (picked.bytes.length > V2ProductCsvImportUseCases.productCsvMaxBytes) {
+        _showSnack(context, 'ملف CSV أكبر من الحد المسموح وهو 2 ميجابايت');
+        return;
+      }
+      late final String source;
+      try {
+        source = utf8.decode(picked.bytes, allowMalformed: false);
+      } on FormatException {
+        _showSnack(context, 'تعذر قراءة الملف. احفظه بصيغة CSV UTF-8');
+        return;
+      }
+      final useCases = ref.read(useCasesProvider);
+      final preview = await useCases.previewProductCsv(source);
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) =>
+            _ProductCsvPreviewDialog(fileName: picked.name, preview: preview),
+      );
+      if (!mounted || confirmed != true || !preview.canImport) return;
+
+      final request = PendingFinancialOperation.productCsvImport(
+        operationKey: useCases.newProductCsvImportOperationKey(),
+        rows: preview.rows,
+      );
+      final result = await _submitPendingFinancialOperation(
+        useCases,
+        request,
+        allowNegativeBalance: false,
+      );
+      if (!mounted) return;
+      _showResult(
+        context,
+        result,
+        success: 'تم استيراد ${preview.rows.length} منتج بنجاح',
+      );
+      if (result is AppSuccess<int>) _refresh(ref);
+    } on ProductCsvFileTooLarge {
+      if (!mounted) return;
+      _showSnack(context, 'ملف CSV أكبر من الحد المسموح وهو 2 ميجابايت');
+    } on FileSystemException {
+      if (!mounted) return;
+      _showSnack(context, 'تعذر فتح ملف CSV المختار');
+    } on Object {
+      if (!mounted) return;
+      _showSnack(
+        context,
+        'تعذر إكمال الاستيراد. لم نعتمد جزءًا من الملف؛ أعد فتح التطبيق للتحقق من الطلب السابق.',
+      );
+    } finally {
+      if (mounted) setState(() => _csvBusy = false);
+    }
   }
 
   Future<void> _printBarcodeForProduct(
