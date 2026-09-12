@@ -72,10 +72,19 @@ try {
     if ($LASTEXITCODE -ne 0) {
       throw "Failed to sign $file ($LASTEXITCODE)."
     }
-    Write-Host "Verifying signature: $file"
-    & $signTool.FullName verify /pa /v $file
-    if ($LASTEXITCODE -ne 0) {
-      throw "Signature verification failed for $file ($LASTEXITCODE)."
+    Write-Host "Verifying Authenticode signature: $file"
+    $signature = Get-AuthenticodeSignature -FilePath $file
+    if ($signature.Status -ne 'Valid') {
+      throw "Authenticode signature verification failed for $file ($($signature.Status))."
+    }
+    if ($signature.SignerCertificate.Thumbprint -ne $certificate.Thumbprint) {
+      throw "The Authenticode signer does not match the imported certificate: $file"
+    }
+    if (
+      -not [string]::IsNullOrWhiteSpace($TimestampUrl) -and
+      $null -eq $signature.TimeStamperCertificate
+    ) {
+      throw "The Authenticode signature does not contain a timestamp: $file"
     }
   }
 } finally {
