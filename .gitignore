@@ -36,6 +36,7 @@ Thumbs.db
 Backend/ALIkhlasPOS.API/logs/
 artifacts/
 archives/*.tar.gz
+reports/**/*.deb
 
 # Agent configs
 .agents/

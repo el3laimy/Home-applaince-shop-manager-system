@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_build_info.dart';
 import '../application/v2_use_cases.dart';
+import '../application/v2_diagnostic_logger.dart';
 import '../data/app_database.dart';
 import '../core/result.dart';
 import '../printing/barcode_labels_pdf.dart';
@@ -101,6 +102,17 @@ final productCsvTemplateSaverProvider = Provider<ProductCsvTemplateSaver>((
 
 final appClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
+final diagnosticLoggerProvider = FutureProvider<V2DiagnosticLogger>((ref) {
+  return V2DiagnosticLogger.shared();
+});
+
+final diagnosticLogSummaryProvider = FutureProvider<DiagnosticLogSummary>((
+  ref,
+) async {
+  final logger = await ref.watch(diagnosticLoggerProvider.future);
+  return logger.summary();
+});
+
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);
@@ -111,6 +123,7 @@ final useCasesProvider = Provider<V2UseCases>((ref) {
   return V2UseCases(
     ref.watch(databaseProvider),
     clock: ref.watch(appClockProvider),
+    diagnosticSink: recordV2DiagnosticError,
   );
 });
 
@@ -135,14 +148,33 @@ final automaticBackupCheckProvider = Provider<Future<File?> Function()>((ref) {
 final bootstrapProvider = FutureProvider<void>((ref) async {
   final useCases = ref.watch(useCasesProvider);
   final checkBackup = ref.watch(automaticBackupCheckProvider);
-  await useCases.bootstrap(createDefaultOwner: false);
+  try {
+    await useCases.bootstrap(createDefaultOwner: false);
+  } on Object catch (error, stackTrace) {
+    recordV2DiagnosticError(
+      module: 'bootstrap',
+      event: 'initialize',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    rethrow;
+  }
   if (!ref.mounted) return;
   final timer = Timer.periodic(const Duration(minutes: 1), (_) async {
-    final previousWarning = useCases.backupWarning;
-    final file = await checkBackup();
-    if (ref.mounted &&
-        (file != null || previousWarning != useCases.backupWarning)) {
-      ref.invalidate(workbenchProvider);
+    try {
+      final previousWarning = useCases.backupWarning;
+      final file = await checkBackup();
+      if (ref.mounted &&
+          (file != null || previousWarning != useCases.backupWarning)) {
+        ref.invalidate(workbenchProvider);
+      }
+    } on Object catch (error, stackTrace) {
+      recordV2DiagnosticError(
+        module: 'backup',
+        event: 'automatic_check',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   });
   ref.onDispose(timer.cancel);

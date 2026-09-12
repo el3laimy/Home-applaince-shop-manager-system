@@ -18,6 +18,7 @@ class _HelpViewState extends ConsumerState<_HelpView> {
   Widget build(BuildContext context) {
     final backup = widget.snapshot.backupStatus;
     final version = ref.watch(appVersionProvider);
+    ref.watch(diagnosticLogSummaryProvider);
     return _Screen(
       title: 'المساعدة وحالة التطبيق',
       subtitle: 'راجع الحالة أولًا، ثم احفظ تقريرًا آمنًا إذا احتجت مساعدة',
@@ -223,6 +224,7 @@ class _HelpViewState extends ConsumerState<_HelpView> {
       _message = null;
     });
     try {
+      final diagnosticLog = ref.read(diagnosticLogSummaryProvider);
       final saveReport = ref.read(supportReportSaverProvider);
       final schemaVersion = ref.read(databaseProvider).schemaVersion;
       final backupStatus = widget.snapshot.backupStatus;
@@ -237,6 +239,7 @@ class _HelpViewState extends ConsumerState<_HelpView> {
             backupStatus: backupStatus,
             operatingSystem: Platform.operatingSystem,
             createdAt: createdAt,
+            diagnosticLog: diagnosticLog.asData?.value,
           );
       final confirmed = await showDialog<bool>(
         context: context,

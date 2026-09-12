@@ -1,4 +1,5 @@
 import 'v2_use_cases.dart';
+import 'v2_diagnostic_logger.dart';
 
 /// Produces a small, shareable support report without customer or file data.
 class V2SupportDiagnostics {
@@ -14,6 +15,7 @@ class V2SupportDiagnostics {
     required BackupStatus backupStatus,
     required String operatingSystem,
     required DateTime createdAt,
+    DiagnosticLogSummary? diagnosticLog,
   }) {
     final destination =
         backupStatus.directory == null || backupStatus.directory!.trim().isEmpty
@@ -31,8 +33,10 @@ class V2SupportDiagnostics {
       'تاريخ آخر نسخة تلقائية ناجحة: ${backupDate(backupStatus.lastDate)}',
       'عدد النسخ المتاحة: ${backupStatus.backupCount} من ${backupStatus.retentionCopies}',
       'تحذير النسخ: $warning',
+      'سجل الأعطال المحلي: ${diagnosticLog == null ? 'غير متاح' : '${diagnosticLog.recordCount} حدث'}',
+      'وقت آخر عطل (UTC): ${diagnosticLog?.lastRecordedAt?.toUtc().toIso8601String() ?? 'لا يوجد'}',
       '',
-      'لا يحتوي هذا التقرير على قاعدة البيانات أو المبيعات أو بيانات العملاء أو أرقام الهواتف أو كلمات المرور أو مسارات الملفات.',
+      'لا يحتوي هذا التقرير على قاعدة البيانات أو المبيعات أو بيانات العملاء أو أرقام الهواتف أو كلمات المرور أو مسارات الملفات أو رسائل الأعطال.',
     ].join('\n');
   }
 

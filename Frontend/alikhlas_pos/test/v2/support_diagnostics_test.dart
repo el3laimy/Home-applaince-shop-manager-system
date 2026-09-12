@@ -1,4 +1,5 @@
 import 'package:alikhlas_pos/v2/application/v2_support_diagnostics.dart';
+import 'package:alikhlas_pos/v2/application/v2_diagnostic_logger.dart';
 import 'package:alikhlas_pos/v2/application/v2_use_cases.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,6 +23,11 @@ void main() {
         ),
         operatingSystem: 'linux',
         createdAt: DateTime.utc(2026, 9, 11, 10, 0),
+        diagnosticLog: DiagnosticLogSummary(
+          recordCount: 2,
+          lastRecordedAt: DateTime.utc(2026, 9, 11, 9, 30),
+          hasRotatedLog: false,
+        ),
       );
 
       expect(report, contains('نسخة التطبيق: 9.4.2+7'));
@@ -31,6 +37,8 @@ void main() {
       expect(report, contains('عدد النسخ المتاحة: 3 من 30'));
       expect(report, contains('تاريخ آخر نسخة تلقائية ناجحة: 2026-09-11'));
       expect(report, contains('تحذير النسخ: موجود'));
+      expect(report, contains('سجل الأعطال المحلي: 2 حدث'));
+      expect(report, contains('وقت آخر عطل (UTC): 2026-09-11T09:30:00.000Z'));
       expect(report, contains('لا يحتوي هذا التقرير على قاعدة البيانات'));
       expect(report, isNot(contains('/home/owner')));
       expect(report, isNot(contains('private-usb')));

@@ -34,34 +34,45 @@ extension V2OperationReceiptHelpers on V2UseCases {
               .toString();
     final key = 'operation.$namespace.$operationKey';
 
-    return _writeTransaction(() async {
-      final prior = await (db.select(
-        db.appSettings,
-      )..where((row) => row.key.equals(key))).getSingleOrNull();
-      if (prior != null) {
-        final saved = _decodeOperationReceipt(
-          prior.value,
-          legacyIdFields: legacyIdFields,
-        );
-        if (saved == null) {
-          return const AppFailure<int>(_unreadableReceiptMessage);
+    try {
+      return await _writeTransaction(() async {
+        final prior = await (db.select(
+          db.appSettings,
+        )..where((row) => row.key.equals(key))).getSingleOrNull();
+        if (prior != null) {
+          final saved = _decodeOperationReceipt(
+            prior.value,
+            legacyIdFields: legacyIdFields,
+          );
+          if (saved == null) {
+            return const AppFailure<int>(_unreadableReceiptMessage);
+          }
+          if (saved['fingerprint'] != fingerprint &&
+              saved['fingerprint'] != legacyFingerprint) {
+            return AppFailure<int>(conflictMessage);
+          }
+          return AppSuccess<int>(saved['id'] as int);
         }
-        if (saved['fingerprint'] != fingerprint &&
-            saved['fingerprint'] != legacyFingerprint) {
-          return AppFailure<int>(conflictMessage);
-        }
-        return AppSuccess<int>(saved['id'] as int);
-      }
 
-      final result = await execute();
-      if (result is AppSuccess<int>) {
-        await _upsertSetting(
-          key,
-          jsonEncode({'fingerprint': fingerprint, 'id': result.value}),
-        );
-      }
-      return result;
-    });
+        final result = await execute();
+        if (result is AppSuccess<int>) {
+          await _upsertSetting(
+            key,
+            jsonEncode({'fingerprint': fingerprint, 'id': result.value}),
+          );
+        }
+        return result;
+      });
+    } on Object catch (error, stackTrace) {
+      _recordUnexpectedError(
+        module: 'financial_operation',
+        event: namespace,
+        error: error,
+        stackTrace: stackTrace,
+        operationId: operationKey,
+      );
+      rethrow;
+    }
   }
 
   /// The opening stock operation creates a product, a stock movement, and
@@ -82,36 +93,48 @@ extension V2OperationReceiptHelpers on V2UseCases {
         .toString();
     final key = 'operation.$namespace.$operationKey';
 
-    return _writeTransaction(() async {
-      final prior = await (db.select(
-        db.appSettings,
-      )..where((row) => row.key.equals(key))).getSingleOrNull();
-      if (prior != null) {
-        final saved = _decodeOperationReceipt(prior.value);
-        if (saved == null) {
-          return const AppFailure<Product>(_unreadableReceiptMessage);
+    try {
+      return await _writeTransaction(() async {
+        final prior = await (db.select(
+          db.appSettings,
+        )..where((row) => row.key.equals(key))).getSingleOrNull();
+        if (prior != null) {
+          final saved = _decodeOperationReceipt(prior.value);
+          if (saved == null) {
+            return const AppFailure<Product>(_unreadableReceiptMessage);
+          }
+          if (saved['fingerprint'] != fingerprint) {
+            return AppFailure<Product>(conflictMessage);
+          }
+          final product =
+              await (db.select(db.products)
+                    ..where((row) => row.id.equals(saved['id'] as int)))
+                  .getSingleOrNull();
+          if (product == null) {
+            return const AppFailure<Product>(_unreadableReceiptMessage);
+          }
+          return AppSuccess<Product>(product);
         }
-        if (saved['fingerprint'] != fingerprint) {
-          return AppFailure<Product>(conflictMessage);
-        }
-        final product = await (db.select(
-          db.products,
-        )..where((row) => row.id.equals(saved['id'] as int))).getSingleOrNull();
-        if (product == null) {
-          return const AppFailure<Product>(_unreadableReceiptMessage);
-        }
-        return AppSuccess<Product>(product);
-      }
 
-      final result = await execute();
-      if (result is AppSuccess<Product>) {
-        await _upsertSetting(
-          key,
-          jsonEncode({'fingerprint': fingerprint, 'id': result.value.id}),
-        );
-      }
-      return result;
-    });
+        final result = await execute();
+        if (result is AppSuccess<Product>) {
+          await _upsertSetting(
+            key,
+            jsonEncode({'fingerprint': fingerprint, 'id': result.value.id}),
+          );
+        }
+        return result;
+      });
+    } on Object catch (error, stackTrace) {
+      _recordUnexpectedError(
+        module: 'product_operation',
+        event: namespace,
+        error: error,
+        stackTrace: stackTrace,
+        operationId: operationKey,
+      );
+      rethrow;
+    }
   }
 
   Future<AppResult<Shift>> _runIdempotentShiftOperation({
@@ -129,36 +152,48 @@ extension V2OperationReceiptHelpers on V2UseCases {
         .toString();
     final key = 'operation.$namespace.$operationKey';
 
-    return _writeTransaction(() async {
-      final prior = await (db.select(
-        db.appSettings,
-      )..where((row) => row.key.equals(key))).getSingleOrNull();
-      if (prior != null) {
-        final saved = _decodeOperationReceipt(prior.value);
-        if (saved == null) {
-          return const AppFailure<Shift>(_unreadableReceiptMessage);
+    try {
+      return await _writeTransaction(() async {
+        final prior = await (db.select(
+          db.appSettings,
+        )..where((row) => row.key.equals(key))).getSingleOrNull();
+        if (prior != null) {
+          final saved = _decodeOperationReceipt(prior.value);
+          if (saved == null) {
+            return const AppFailure<Shift>(_unreadableReceiptMessage);
+          }
+          if (saved['fingerprint'] != fingerprint) {
+            return AppFailure<Shift>(conflictMessage);
+          }
+          final shift =
+              await (db.select(db.shifts)
+                    ..where((row) => row.id.equals(saved['id'] as int)))
+                  .getSingleOrNull();
+          if (shift == null) {
+            return const AppFailure<Shift>(_unreadableReceiptMessage);
+          }
+          return AppSuccess<Shift>(shift);
         }
-        if (saved['fingerprint'] != fingerprint) {
-          return AppFailure<Shift>(conflictMessage);
-        }
-        final shift = await (db.select(
-          db.shifts,
-        )..where((row) => row.id.equals(saved['id'] as int))).getSingleOrNull();
-        if (shift == null) {
-          return const AppFailure<Shift>(_unreadableReceiptMessage);
-        }
-        return AppSuccess<Shift>(shift);
-      }
 
-      final result = await execute();
-      if (result is AppSuccess<Shift>) {
-        await _upsertSetting(
-          key,
-          jsonEncode({'fingerprint': fingerprint, 'id': result.value.id}),
-        );
-      }
-      return result;
-    });
+        final result = await execute();
+        if (result is AppSuccess<Shift>) {
+          await _upsertSetting(
+            key,
+            jsonEncode({'fingerprint': fingerprint, 'id': result.value.id}),
+          );
+        }
+        return result;
+      });
+    } on Object catch (error, stackTrace) {
+      _recordUnexpectedError(
+        module: 'shift_operation',
+        event: namespace,
+        error: error,
+        stackTrace: stackTrace,
+        operationId: operationKey,
+      );
+      rethrow;
+    }
   }
 
   Map<String, dynamic>? _decodeOperationReceipt(

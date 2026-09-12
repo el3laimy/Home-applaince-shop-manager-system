@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,9 +9,29 @@ import 'package:window_manager/window_manager.dart';
 import 'v2/app/v2_app.dart';
 import 'v2/data/app_database.dart';
 import 'v2/data/application_lock.dart';
+import 'v2/application/v2_diagnostic_logger.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await V2DiagnosticLogger.shared();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    recordV2DiagnosticError(
+      module: 'flutter',
+      event: 'framework_error',
+      error: details.exception,
+      stackTrace: details.stack,
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stackTrace) {
+    recordV2DiagnosticError(
+      module: 'dart',
+      event: 'uncaught_async_error',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    return false;
+  };
   if (arguments.length == 1 && arguments.single == '--installer-smoke-check') {
     try {
       await _runInstallerSmokeCheck();

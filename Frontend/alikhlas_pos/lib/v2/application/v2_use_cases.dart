@@ -15,6 +15,7 @@ import '../core/result.dart';
 import '../data/app_database.dart';
 import '../data/restore_recovery.dart';
 import 'backup_file_operations.dart';
+import 'v2_diagnostic_logger.dart';
 
 part 'use_cases/v2_models.dart';
 part 'use_cases/v2_invoice_draft_use_cases.dart';
@@ -22,13 +23,22 @@ part 'use_cases/v2_pending_sale_use_cases.dart';
 part 'use_cases/v2_pending_purchase_use_cases.dart';
 part 'use_cases/v2_pending_financial_operation_use_cases.dart';
 part 'use_cases/v2_integrity_audit_use_cases.dart';
+part 'use_cases/v2_integrity_ledger_stock_audit.dart';
+part 'use_cases/v2_integrity_plans_corrections_audit.dart';
+part 'use_cases/v2_integrity_documents_audit.dart';
+part 'use_cases/v2_integrity_reference_audit.dart';
+part 'use_cases/v2_integrity_audit_helpers.dart';
 part 'use_cases/v2_auth_shift_use_cases.dart';
 part 'use_cases/v2_catalog_party_use_cases.dart';
 part 'use_cases/v2_inventory_adjustment_use_cases.dart';
 part 'use_cases/v2_opening_balance_use_cases.dart';
 part 'use_cases/v2_financial_correction_use_cases.dart';
 part 'use_cases/v2_product_csv_import_use_cases.dart';
-part 'use_cases/v2_sales_purchase_return_use_cases.dart';
+part 'use_cases/v2_sale_use_cases.dart';
+part 'use_cases/v2_purchase_use_cases.dart';
+part 'use_cases/v2_purchase_return_use_cases.dart';
+part 'use_cases/v2_sale_return_use_cases.dart';
+part 'use_cases/v2_expense_use_cases.dart';
 part 'use_cases/v2_installment_use_cases.dart';
 part 'use_cases/v2_snapshot_report_use_cases.dart';
 part 'use_cases/v2_statement_receipt_use_cases.dart';
@@ -90,11 +100,13 @@ class V2UseCases {
     BackupFileOperations? backupFileOperations,
     DateTime Function()? clock,
     V2WriteBarrier? writeBarrier,
+    V2DiagnosticEventSink? diagnosticSink,
   }) : clock = clock ?? DateTime.now,
        _restoreFiles = restoreFileOperations ?? const RestoreFileOperations(),
        _backupFileOperations =
            backupFileOperations ?? const BackupFileOperations(),
-       _writeBarrier = writeBarrier ?? V2WriteBarrier();
+       _writeBarrier = writeBarrier ?? V2WriteBarrier(),
+       _diagnosticSink = diagnosticSink;
 
   static const _passwordHashPrefix = 'pbkdf2_sha256';
   static const _passwordIterations = 600000;
@@ -112,6 +124,21 @@ class V2UseCases {
   final RestoreFileOperations _restoreFiles;
   final BackupFileOperations _backupFileOperations;
   final V2WriteBarrier _writeBarrier;
+  final V2DiagnosticEventSink? _diagnosticSink;
+
+  void _recordUnexpectedError({
+    required String module,
+    required String event,
+    required Object error,
+    required StackTrace stackTrace,
+    String? operationId,
+  }) => _diagnosticSink?.call(
+    module: module,
+    event: event,
+    error: error,
+    stackTrace: stackTrace,
+    operationId: operationId,
+  );
 
   Future<T> _write<T>(Future<T> Function() action) {
     if (databaseClosedForRestore) {
