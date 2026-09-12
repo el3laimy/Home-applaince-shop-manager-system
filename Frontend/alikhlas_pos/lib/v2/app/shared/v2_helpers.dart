@@ -166,6 +166,14 @@ void _showResult<T>(
   }
 }
 
+bool _isDatabaseStorageFailure(sqlite.SqliteException error) => const {
+  sqlite.SqlError.SQLITE_FULL,
+  sqlite.SqlError.SQLITE_IOERR,
+  sqlite.SqlError.SQLITE_READONLY,
+  sqlite.SqlError.SQLITE_CANTOPEN,
+  sqlite.SqlError.SQLITE_NOMEM,
+}.contains(error.resultCode);
+
 Future<AppResult<int>> _runWithNegativeBalanceApproval(
   BuildContext context, {
   required Future<AppResult<int>> Function(bool allowNegativeBalance) action,
@@ -195,31 +203,38 @@ Future<AppResult<int>> _submitPendingFinancialOperation(
   PendingFinancialOperation request, {
   required bool allowNegativeBalance,
 }) async {
-  final staged = await useCases.stagePendingFinancialOperation(request);
-  if (staged.encode() != request.encode()) {
-    return const AppFailure<int>(
-      'يوجد طلب مالي سابق يحتاج تحققًا. أكمله أو ألغِه من رسالة الاستعادة.',
-    );
-  }
-  final result = await useCases.submitPendingFinancialOperation(
-    staged,
-    allowNegativeBalance: allowNegativeBalance,
-  );
-  if (result is AppSuccess<int>) {
-    final acknowledged = await useCases.acknowledgePendingFinancialOperation(
-      staged.operationKey,
-    );
-    if (!acknowledged) {
+  try {
+    final staged = await useCases.stagePendingFinancialOperation(request);
+    if (staged.encode() != request.encode()) {
       return const AppFailure<int>(
-        'تم الحفظ لكن تعذر تأكيد النتيجة. أعد فتح التطبيق للتحقق دون تسجيل جديد.',
+        'يوجد طلب مالي سابق يحتاج تحققًا. أكمله أو ألغِه من رسالة الاستعادة.',
       );
     }
-  } else if (result is! AppConfirmationRequired<int>) {
-    await useCases.discardUncommittedPendingFinancialOperation(
-      staged.operationKey,
+    final result = await useCases.submitPendingFinancialOperation(
+      staged,
+      allowNegativeBalance: allowNegativeBalance,
+    );
+    if (result is AppSuccess<int>) {
+      final acknowledged = await useCases.acknowledgePendingFinancialOperation(
+        staged.operationKey,
+      );
+      if (!acknowledged) {
+        return const AppFailure<int>(
+          'تم الحفظ لكن تعذر تأكيد النتيجة. أعد فتح التطبيق للتحقق دون تسجيل جديد.',
+        );
+      }
+    } else if (result is! AppConfirmationRequired<int>) {
+      await useCases.discardUncommittedPendingFinancialOperation(
+        staged.operationKey,
+      );
+    }
+    return result;
+  } on sqlite.SqliteException catch (error) {
+    if (!_isDatabaseStorageFailure(error)) rethrow;
+    return const AppFailure<int>(
+      'تعذر الكتابة في بيانات المحل. حرّر مساحة على القرص وتأكد من صلاحية مجلد التطبيق، ثم أعد المحاولة بنفس الطلب.',
     );
   }
-  return result;
 }
 
 Future<bool> _confirmNegativeBalance(

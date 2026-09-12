@@ -416,33 +416,12 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
     );
     if (data == null || !context.mounted) return;
     final useCases = ref.read(useCasesProvider);
-    if (product == null && data.openingQty > 0) {
-      final result = await _submitPendingFinancialOperation(
-        useCases,
-        PendingFinancialOperation.openingStock(
-          operationKey: useCases.newOpeningStockOperationKey(),
-          name: data.name,
-          barcode: data.barcode,
-          category: data.category,
-          imagePath: data.imagePath,
-          salePriceMinor: data.salePriceMinor,
-          openingQty: data.openingQty,
-          openingCostMinor: data.openingCostMinor,
-          minStockQty: data.minStockQty,
-        ),
-        allowNegativeBalance: false,
-      );
-      if (!context.mounted) return;
-      _showResult(
-        context,
-        result,
-        success: 'تمت إضافة المنتج ورصيده الافتتاحي',
-      );
-      _refresh(ref);
-      return;
-    }
-    final result = product == null
-        ? await useCases.createProduct(
+    try {
+      if (product == null && data.openingQty > 0) {
+        final result = await _submitPendingFinancialOperation(
+          useCases,
+          PendingFinancialOperation.openingStock(
+            operationKey: useCases.newOpeningStockOperationKey(),
             name: data.name,
             barcode: data.barcode,
             category: data.category,
@@ -451,23 +430,53 @@ class _InventoryViewState extends ConsumerState<_InventoryView> {
             openingQty: data.openingQty,
             openingCostMinor: data.openingCostMinor,
             minStockQty: data.minStockQty,
-          )
-        : await useCases.updateProduct(
-            id: product.id,
-            name: data.name,
-            barcode: data.barcode,
-            category: data.category,
-            imagePath: data.imagePath,
-            salePriceMinor: data.salePriceMinor,
-            minStockQty: data.minStockQty,
-          );
-    if (!context.mounted) return;
-    _showResult(
-      context,
-      result,
-      success: product == null ? 'تمت إضافة المنتج' : 'تم تحديث المنتج',
-    );
-    _refresh(ref);
+          ),
+          allowNegativeBalance: false,
+        );
+        if (!context.mounted) return;
+        _showResult(
+          context,
+          result,
+          success: 'تمت إضافة المنتج ورصيده الافتتاحي',
+        );
+        _refresh(ref);
+        return;
+      }
+      final result = product == null
+          ? await useCases.createProduct(
+              name: data.name,
+              barcode: data.barcode,
+              category: data.category,
+              imagePath: data.imagePath,
+              salePriceMinor: data.salePriceMinor,
+              openingQty: data.openingQty,
+              openingCostMinor: data.openingCostMinor,
+              minStockQty: data.minStockQty,
+            )
+          : await useCases.updateProduct(
+              id: product.id,
+              name: data.name,
+              barcode: data.barcode,
+              category: data.category,
+              imagePath: data.imagePath,
+              salePriceMinor: data.salePriceMinor,
+              minStockQty: data.minStockQty,
+            );
+      if (!context.mounted) return;
+      _showResult(
+        context,
+        result,
+        success: product == null ? 'تمت إضافة المنتج' : 'تم تحديث المنتج',
+      );
+      _refresh(ref);
+    } on sqlite.SqliteException catch (error) {
+      if (!_isDatabaseStorageFailure(error)) rethrow;
+      if (!context.mounted) return;
+      _showSnack(
+        context,
+        'تعذر حفظ المنتج. حرّر مساحة على القرص وتأكد من صلاحية مجلد التطبيق، ثم أعد المحاولة.',
+      );
+    }
   }
 
   Future<void> _openInventoryAdjustment(
