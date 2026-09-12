@@ -12,6 +12,7 @@ enum PendingFinancialOperationKind {
   inventoryAdjustment,
   openingBalance,
   financialCorrection,
+  financialCorrectionReversal,
 }
 
 /// One explicitly recoverable mutation outside the sale and purchase carts.
@@ -52,6 +53,7 @@ class PendingFinancialOperation {
     this.financialCorrectionIncreasesBalance,
     this.financialCorrectionReason,
     this.financialCorrectionNote,
+    this.financialCorrectionId,
   }) : saleItemQuantities = Map.unmodifiable(saleItemQuantities ?? const {}),
        purchaseItemQuantities = Map.unmodifiable(
          purchaseItemQuantities ?? const {},
@@ -224,6 +226,19 @@ class PendingFinancialOperation {
     financialCorrectionNote: note,
   );
 
+  factory PendingFinancialOperation.financialCorrectionReversal({
+    required String operationKey,
+    required int correctionId,
+    required String reason,
+    String? note,
+  }) => PendingFinancialOperation._(
+    kind: PendingFinancialOperationKind.financialCorrectionReversal,
+    operationKey: operationKey,
+    financialCorrectionId: correctionId,
+    financialCorrectionReason: reason,
+    financialCorrectionNote: note,
+  );
+
   final PendingFinancialOperationKind kind;
   final String operationKey;
   final int? planId;
@@ -256,6 +271,7 @@ class PendingFinancialOperation {
   final bool? financialCorrectionIncreasesBalance;
   final String? financialCorrectionReason;
   final String? financialCorrectionNote;
+  final int? financialCorrectionId;
 
   String get receiptNamespace => switch (kind) {
     PendingFinancialOperationKind.customerInstallment => 'installment.customer',
@@ -269,6 +285,8 @@ class PendingFinancialOperation {
     PendingFinancialOperationKind.inventoryAdjustment => 'inventory_adjustment',
     PendingFinancialOperationKind.openingBalance => 'opening_balance',
     PendingFinancialOperationKind.financialCorrection => 'financial_correction',
+    PendingFinancialOperationKind.financialCorrectionReversal =>
+      'financial_correction_reversal',
   };
 
   String get label => switch (kind) {
@@ -284,6 +302,8 @@ class PendingFinancialOperation {
       'تسوية فرق جرد المخزون',
     PendingFinancialOperationKind.openingBalance => 'إدخال رصيد افتتاحي',
     PendingFinancialOperationKind.financialCorrection => 'تصحيح خزينة أو محفظة',
+    PendingFinancialOperationKind.financialCorrectionReversal =>
+      'عكس تصحيح مالي',
   };
 
   String encode() {
@@ -330,6 +350,7 @@ class PendingFinancialOperation {
           financialCorrectionIncreasesBalance,
       'financialCorrectionReason': financialCorrectionReason,
       'financialCorrectionNote': financialCorrectionNote,
+      'financialCorrectionId': financialCorrectionId,
     });
   }
 
@@ -456,6 +477,13 @@ class PendingFinancialOperation {
           reason: data['financialCorrectionReason'] as String,
           note: data['financialCorrectionNote'] as String?,
         ),
+      PendingFinancialOperationKind.financialCorrectionReversal =>
+        PendingFinancialOperation.financialCorrectionReversal(
+          operationKey: key,
+          correctionId: data['financialCorrectionId'] as int,
+          reason: data['financialCorrectionReason'] as String,
+          note: data['financialCorrectionNote'] as String?,
+        ),
     };
   }
 }
@@ -568,6 +596,14 @@ extension V2PendingFinancialOperationUseCases on V2UseCases {
           target: request.financialCorrectionTarget!,
           amountMinor: request.amountMinor!,
           increasesBalance: request.financialCorrectionIncreasesBalance!,
+          reason: request.financialCorrectionReason!,
+          note: request.financialCorrectionNote,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
+      PendingFinancialOperationKind.financialCorrectionReversal =>
+        reverseFinancialCorrection(
+          operationKey: request.operationKey,
+          correctionId: request.financialCorrectionId!,
           reason: request.financialCorrectionReason!,
           note: request.financialCorrectionNote,
           allowNegativeBalance: allowNegativeBalance,

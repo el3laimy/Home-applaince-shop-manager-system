@@ -6,6 +6,22 @@ part of '../v2_use_cases.dart';
 extension V2FinancialCorrectionUseCases on V2UseCases {
   String newFinancialCorrectionOperationKey() => newFinancialOperationKey();
 
+  String newFinancialCorrectionReversalOperationKey() =>
+      newFinancialOperationKey();
+
+  Future<List<FinancialCorrection>> reversibleFinancialCorrections() async {
+    final corrections = await (db.select(
+      db.financialCorrections,
+    )..orderBy([(row) => OrderingTerm.desc(row.createdAt)])).get();
+    final reversedIds = (await db.select(db.financialCorrectionReversals).get())
+        .map((row) => row.correctionId)
+        .toSet();
+    return [
+      for (final correction in corrections)
+        if (!reversedIds.contains(correction.id)) correction,
+    ];
+  }
+
   Future<AppResult<int>> recordFinancialCorrection({
     String? operationKey,
     required FinancialCorrectionTarget target,
@@ -113,6 +129,132 @@ extension V2FinancialCorrectionUseCases on V2UseCases {
         ],
       );
       return AppSuccess<int>(correctionId);
+    });
+  }
+
+  Future<AppResult<int>> reverseFinancialCorrection({
+    String? operationKey,
+    required int correctionId,
+    required String reason,
+    String? note,
+    bool allowNegativeBalance = false,
+  }) {
+    if (operationKey == null) {
+      return Future.value(
+        const AppFailure<int>('معرّف مستند العكس مطلوب لمنع تسجيله مرتين.'),
+      );
+    }
+    final cleanReason = reason.trim();
+    final cleanNote = _blankToNull(note);
+    return _runIdempotentFinancialOperation(
+      namespace: 'financial_correction_reversal',
+      operationKey: operationKey,
+      fingerprintPayload: [correctionId, cleanReason, cleanNote],
+      conflictMessage:
+          'مستند العكس محفوظ ببيانات مختلفة. راجع سجل التصحيحات المالية.',
+      execute: () => _reverseFinancialCorrection(
+        correctionId: correctionId,
+        reason: cleanReason,
+        note: cleanNote,
+        allowNegativeBalance: allowNegativeBalance,
+      ),
+    );
+  }
+
+  Future<AppResult<int>> _reverseFinancialCorrection({
+    required int correctionId,
+    required String reason,
+    required String? note,
+    required bool allowNegativeBalance,
+  }) async {
+    if (reason.isEmpty) {
+      return const AppFailure<int>('سبب عكس التصحيح مطلوب.');
+    }
+    if (reason.length > 240) {
+      return const AppFailure<int>('سبب العكس لا يزيد عن 240 حرفًا.');
+    }
+    if (note != null && note.length > 500) {
+      return const AppFailure<int>('التوضيح لا يزيد عن 500 حرف.');
+    }
+    final correction = await (db.select(
+      db.financialCorrections,
+    )..where((row) => row.id.equals(correctionId))).getSingleOrNull();
+    if (correction == null) {
+      return const AppFailure<int>('مستند التصحيح الأصلي غير موجود.');
+    }
+    final existing = await (db.select(
+      db.financialCorrectionReversals,
+    )..where((row) => row.correctionId.equals(correctionId))).getSingleOrNull();
+    if (existing != null) {
+      return const AppFailure<int>('تم عكس هذا التصحيح من قبل.');
+    }
+    final target = FinancialCorrectionTarget.values
+        .where((candidate) => candidate.name == correction.target)
+        .firstOrNull;
+    if (target == null || correction.deltaMinor == 0) {
+      return const AppFailure<int>('بيانات التصحيح الأصلي غير صالحة للعكس.');
+    }
+    if (target == FinancialCorrectionTarget.cash &&
+        await currentShift() == null) {
+      return const AppFailure<int>('افتح وردية قبل عكس تصحيح الخزينة.');
+    }
+
+    final reversalDelta = -correction.deltaMinor;
+    final amountMinor = reversalDelta.abs();
+    final assetLine = _LedgerLineDraft(
+      target.accountCode,
+      debitMinor: reversalDelta > 0 ? amountMinor : 0,
+      creditMinor: reversalDelta < 0 ? amountMinor : 0,
+    );
+    if (!allowNegativeBalance) {
+      final confirmation = await _negativeBalanceConfirmationFor([assetLine]);
+      if (confirmation != null) return confirmation;
+    }
+
+    return _writeTransaction(() async {
+      final latestCorrection = await (db.select(
+        db.financialCorrections,
+      )..where((row) => row.id.equals(correctionId))).getSingleOrNull();
+      final latestReversal =
+          await (db.select(db.financialCorrectionReversals)
+                ..where((row) => row.correctionId.equals(correctionId)))
+              .getSingleOrNull();
+      if (latestCorrection == null) {
+        return const AppFailure<int>('مستند التصحيح الأصلي غير موجود.');
+      }
+      if (latestReversal != null) {
+        return const AppFailure<int>('تم عكس هذا التصحيح من قبل.');
+      }
+      if (target == FinancialCorrectionTarget.cash &&
+          await currentShift() == null) {
+        return const AppFailure<int>('افتح وردية قبل عكس تصحيح الخزينة.');
+      }
+
+      final reversalId = await db
+          .into(db.financialCorrectionReversals)
+          .insert(
+            FinancialCorrectionReversalsCompanion.insert(
+              correctionId: correctionId,
+              reason: reason,
+              note: Value(note),
+              createdAt: Value(clock()),
+            ),
+          );
+      await _postLedger(
+        referenceType: 'financial_correction_reversal',
+        referenceId: reversalId,
+        description:
+            'عكس تصحيح ${target.label} #$correctionId: $reason${note == null ? '' : ' — $note'}',
+        lines: [
+          assetLine,
+          _LedgerLineDraft(
+            AccountCodes.financialVariance,
+            debitMinor: reversalDelta < 0 ? amountMinor : 0,
+            creditMinor: reversalDelta > 0 ? amountMinor : 0,
+          ),
+        ],
+      );
+      return AppSuccess<int>(reversalId);
     });
   }
 }

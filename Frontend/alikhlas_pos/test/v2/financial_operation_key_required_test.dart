@@ -122,6 +122,16 @@ void main() {
       final purchaseItem = await (db.select(
         db.purchaseItems,
       )..where((row) => row.purchaseId.equals(purchaseId))).getSingle();
+      final correctionId =
+          (await useCases.recordFinancialCorrection(
+                    operationKey: useCases.newFinancialCorrectionOperationKey(),
+                    target: FinancialCorrectionTarget.wallet,
+                    amountMinor: 1000,
+                    increasesBalance: true,
+                    reason: 'مصدر اختبار مفتاح العكس',
+                  )
+                  as AppSuccess<int>)
+              .value;
 
       final invoicesBefore = (await db.select(db.saleInvoices).get()).length;
       final purchasesBefore =
@@ -228,6 +238,13 @@ void main() {
         ),
         isA<AppFailure<int>>(),
       );
+      expect(
+        await useCases.reverseFinancialCorrection(
+          correctionId: correctionId,
+          reason: 'عكس بلا مفتاح',
+        ),
+        isA<AppFailure<int>>(),
+      );
 
       expect((await db.select(db.saleInvoices).get()).length, invoicesBefore);
       expect(
@@ -250,6 +267,7 @@ void main() {
         (await db.select(db.financialCorrections).get()).length,
         correctionsBefore,
       );
+      expect(await db.select(db.financialCorrectionReversals).get(), isEmpty);
     },
   );
 }

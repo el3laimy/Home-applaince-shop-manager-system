@@ -27,6 +27,9 @@ extension V2IntegrityAuditUseCases on V2UseCases {
     final purchaseReturnItems = await db.select(db.purchaseReturnItems).get();
     final expenses = await db.select(db.expenses).get();
     final financialCorrections = await db.select(db.financialCorrections).get();
+    final financialCorrectionReversals = await db
+        .select(db.financialCorrectionReversals)
+        .get();
     final issues = <DataIntegrityIssue>[];
 
     final entryById = {for (final entry in entries) entry.id: entry};
@@ -531,6 +534,83 @@ extension V2IntegrityAuditUseCases on V2UseCases {
       }
     }
 
+    final financialCorrectionById = {
+      for (final correction in financialCorrections) correction.id: correction,
+    };
+    final financialCorrectionReversalIds = {
+      for (final reversal in financialCorrectionReversals) reversal.id,
+    };
+    final reversedCorrectionIds = <int>{};
+    for (final reversal in financialCorrectionReversals) {
+      final correction = financialCorrectionById[reversal.correctionId];
+      final duplicateSource = !reversedCorrectionIds.add(reversal.correctionId);
+      final target = correction == null
+          ? null
+          : FinancialCorrectionTarget.values
+                .where((candidate) => candidate.name == correction.target)
+                .firstOrNull;
+      if (correction == null ||
+          duplicateSource ||
+          reversal.reason.trim().isEmpty ||
+          reversal.reason.length > 240 ||
+          (reversal.note?.length ?? 0) > 500) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'financial_correction_reversal_data',
+            record: 'عكس تصحيح مالي #${reversal.id}',
+            message: 'بيانات مستند العكس أو ارتباطه بالتصحيح الأصلي غير صالحة.',
+          ),
+        );
+      }
+
+      final matchingEntries = entries
+          .where(
+            (entry) =>
+                entry.referenceType == 'financial_correction_reversal' &&
+                entry.referenceId == reversal.id,
+          )
+          .toList();
+      final reversalEntry = matchingEntries.length == 1
+          ? matchingEntries.single
+          : null;
+      final reversalLines = reversalEntry == null
+          ? const <LedgerLine>[]
+          : linesByEntry[reversalEntry.id] ?? const <LedgerLine>[];
+      final expectedDelta = -(correction?.deltaMinor ?? 0);
+      final assetNet = reversalLines
+          .where((line) => line.accountCode == target?.accountCode)
+          .fold<int>(
+            0,
+            (total, line) => total + line.debitMinor - line.creditMinor,
+          );
+      final varianceNet = reversalLines
+          .where((line) => line.accountCode == AccountCodes.financialVariance)
+          .fold<int>(
+            0,
+            (total, line) => total + line.debitMinor - line.creditMinor,
+          );
+      final onlyExpectedAccounts = reversalLines.every(
+        (line) =>
+            line.accountCode == target?.accountCode ||
+            line.accountCode == AccountCodes.financialVariance,
+      );
+      if (target == null ||
+          correction == null ||
+          reversalEntry == null ||
+          reversalLines.length != 2 ||
+          !onlyExpectedAccounts ||
+          assetNet != expectedDelta ||
+          varianceNet != -expectedDelta) {
+        issues.add(
+          DataIntegrityIssue(
+            code: 'financial_correction_reversal_ledger',
+            record: 'عكس تصحيح مالي #${reversal.id}',
+            message: 'قيد العكس مفقود أو لا يعكس التصحيح الأصلي بدقة.',
+          ),
+        );
+      }
+    }
+
     final saleById = {for (final sale in sales) sale.id: sale};
     final saleItemsBySale = _groupByInt(saleItems, (item) => item.saleId);
     final purchaseById = {
@@ -871,6 +951,8 @@ extension V2IntegrityAuditUseCases on V2UseCases {
         'financial_correction' => financialCorrectionIds.contains(
           entry.referenceId,
         ),
+        'financial_correction_reversal' =>
+          financialCorrectionReversalIds.contains(entry.referenceId),
         _ => false,
       };
       if (!referenceExists) {

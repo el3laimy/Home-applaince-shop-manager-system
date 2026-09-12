@@ -114,7 +114,8 @@ void main() {
                 'idx_sale_items_sale_id',
                 'idx_purchase_returns_purchase_id',
                 'idx_purchase_return_items_purchase_item_id',
-                'idx_financial_corrections_target_created'
+                'idx_financial_corrections_target_created',
+                'idx_financial_correction_reversals_source'
               )
             ''').get();
       final indexNames = rows.map((row) => row.data['name'] as String);
@@ -137,12 +138,13 @@ void main() {
           'idx_purchase_returns_purchase_id',
           'idx_purchase_return_items_purchase_item_id',
           'idx_financial_corrections_target_created',
+          'idx_financial_correction_reversals_source',
         ]),
       );
     });
 
     test(
-      'database migrates a v3 file to v10 including exact inventory cost fields and indexes',
+      'database migrates a v3 file to v11 including correction reversals and exact inventory costs',
       () async {
         await db.close();
 
@@ -172,7 +174,8 @@ void main() {
                 'opening_balances',
                 'purchase_returns',
                 'purchase_return_items',
-                'financial_corrections'
+                'financial_corrections',
+                'financial_correction_reversals'
               )
             ''').get();
         final productColumns = await db.customSelect('''
@@ -203,11 +206,12 @@ void main() {
                 'idx_sale_items_sale_id',
                 'idx_purchase_returns_purchase_id',
                 'idx_purchase_return_items_purchase_item_id',
-                'idx_financial_corrections_target_created'
+                'idx_financial_corrections_target_created',
+                'idx_financial_correction_reversals_source'
               )
             ''').get();
 
-        expect(userVersion.data['user_version'], 10);
+        expect(userVersion.data['user_version'], 11);
         expect(
           tables.map((row) => row.data['name']),
           containsAll([
@@ -217,6 +221,7 @@ void main() {
             'purchase_returns',
             'purchase_return_items',
             'financial_corrections',
+            'financial_correction_reversals',
           ]),
         );
         expect(
@@ -231,7 +236,7 @@ void main() {
           saleReturnItemColumns.map((row) => row.data['name']),
           contains('cost_minor'),
         );
-        expect(indexes, hasLength(15));
+        expect(indexes, hasLength(16));
       },
     );
 

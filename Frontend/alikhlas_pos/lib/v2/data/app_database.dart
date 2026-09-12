@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
-const kAppDatabaseSchemaVersion = 10;
+const kAppDatabaseSchemaVersion = 11;
 
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -270,6 +270,19 @@ class FinancialCorrections extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// An immutable document that reverses one financial correction exactly once.
+///
+/// The original correction remains in place for auditability. The unique
+/// source link prevents two independent operation keys from reversing it twice.
+class FinancialCorrectionReversals extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get correctionId =>
+      integer().references(FinancialCorrections, #id).unique()();
+  TextColumn get reason => text()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
   return LazyDatabase(() async {
     final dir = await getApplicationSupportDirectory();
@@ -311,6 +324,7 @@ LazyDatabase openAppConnection({String fileName = 'alikhlas_v2.db'}) {
     PurchaseReturns,
     PurchaseReturnItems,
     FinancialCorrections,
+    FinancialCorrectionReversals,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -363,6 +377,9 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(
             'UPDATE sale_return_items SET cost_minor = qty * unit_cost_minor;',
           );
+        }
+        if (from < 11) {
+          await migrator.createTable(financialCorrectionReversals);
         }
       } catch (_, stackTrace) {
         Error.throwWithStackTrace(
@@ -425,6 +442,9 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_financial_corrections_target_created ON financial_corrections(target, created_at);',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_financial_correction_reversals_source ON financial_correction_reversals(correction_id);',
     );
   }
 

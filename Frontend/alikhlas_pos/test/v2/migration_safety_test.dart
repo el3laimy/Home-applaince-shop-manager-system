@@ -9,7 +9,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
   test(
-    'a verified v4 snapshot survives the successful v10 migration',
+    'a verified v4 snapshot survives the successful v11 migration',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'migration-safe-',
@@ -45,11 +45,31 @@ void main() {
       expect(_hasTable(live, 'purchase_returns'), isTrue);
       expect(_hasTable(live, 'purchase_return_items'), isTrue);
       expect(_hasTable(live, 'financial_corrections'), isTrue);
+      expect(_hasTable(live, 'financial_correction_reversals'), isTrue);
       expect(_version(snapshot), 4);
       expect(_setting(snapshot, 'migration.evidence'), 'before-upgrade');
       expect(await recovery.marker.exists(), isFalse);
     },
   );
+
+  test('v10 upgrades by adding the reversal document table', () async {
+    final directory = await Directory.systemTemp.createTemp('migration-v10-');
+    addTearDown(() => directory.delete(recursive: true));
+    final live = File('${directory.path}/shop.db');
+    await _createCurrentDatabase(live);
+    final raw = sqlite.sqlite3.open(live.path);
+    raw
+      ..execute('DROP TABLE financial_correction_reversals;')
+      ..execute('PRAGMA user_version = 10;')
+      ..close();
+
+    final db = AppDatabase(NativeDatabase(live));
+    addTearDown(db.close);
+    await db.select(db.financialCorrectionReversals).get();
+
+    expect(_version(live), 11);
+    expect(_hasTable(live, 'financial_correction_reversals'), isTrue);
+  });
 
   test(
     'a database written by a newer app is rejected before migration',

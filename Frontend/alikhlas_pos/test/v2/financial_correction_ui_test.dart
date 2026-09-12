@@ -100,6 +100,39 @@ void main() {
       expect(correction.target, FinancialCorrectionTarget.wallet.name);
       expect(correction.deltaMinor, 125000);
       expect((await useCases.dashboardSnapshot()).walletMinor, 125000);
+
+      final reversalButton = find.widgetWithText(
+        OutlinedButton,
+        'عكس تصحيح مالي',
+      );
+      await tester.scrollUntilVisible(
+        reversalButton,
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-page-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(reversalButton);
+      await tester.pumpAndSettle();
+      expect(find.text('عكس تصحيح مالي'), findsWidgets);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'سبب العكس'),
+        'التصحيح سُجل على الحساب الخطأ',
+      );
+      await tester.tap(find.text('مراجعة العكس'));
+      await tester.pumpAndSettle();
+      expect(find.text('تأكيد عكس التصحيح المالي'), findsOneWidget);
+      await tester.tap(find.text('اعتماد العكس'));
+      await tester.pumpAndSettle();
+
+      final reversal = await db
+          .select(db.financialCorrectionReversals)
+          .getSingle();
+      expect(reversal.correctionId, correction.id);
+      expect((await useCases.dashboardSnapshot()).walletMinor, 0);
       expect((await useCases.dataIntegrityAudit()).isConsistent, isTrue);
       expect(tester.takeException(), isNull);
     },

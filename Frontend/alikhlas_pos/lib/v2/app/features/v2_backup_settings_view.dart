@@ -307,6 +307,7 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
   bool _saving = false;
   bool _openingBalanceSubmitting = false;
   bool _financialCorrectionSubmitting = false;
+  bool _financialCorrectionReversalSubmitting = false;
 
   @override
   void dispose() {
@@ -526,6 +527,18 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
                       _financialCorrectionSubmitting
                           ? 'جاري تسجيل التصحيح...'
                           : 'تصحيح خزينة أو محفظة',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _financialCorrectionReversalSubmitting
+                        ? null
+                        : _openFinancialCorrectionReversal,
+                    icon: const Icon(Icons.undo_outlined),
+                    label: Text(
+                      _financialCorrectionReversalSubmitting
+                          ? 'جاري تسجيل العكس...'
+                          : 'عكس تصحيح مالي',
                     ),
                   ),
                 ],
@@ -759,6 +772,98 @@ class _SettingsViewState extends ConsumerState<_SettingsView> {
       );
     } finally {
       if (mounted) setState(() => _financialCorrectionSubmitting = false);
+    }
+  }
+
+  Future<void> _openFinancialCorrectionReversal() async {
+    final useCases = ref.read(useCasesProvider);
+    final corrections = await useCases.reversibleFinancialCorrections();
+    if (!mounted) return;
+    if (corrections.isEmpty) {
+      _showSnack(context, 'لا توجد تصحيحات مالية متاحة للعكس');
+      return;
+    }
+    final data = await showDialog<_FinancialCorrectionReversalFormData>(
+      context: context,
+      builder: (_) =>
+          _FinancialCorrectionReversalDialog(corrections: corrections),
+    );
+    if (!mounted || data == null) return;
+    final target = FinancialCorrectionTarget.values.byName(
+      data.correction.target,
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تأكيد عكس التصحيح المالي'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _InfoLine('المستند الأصلي', '#${data.correction.id}'),
+              _InfoLine('الحساب', target.label),
+              _InfoLine(
+                'القيمة',
+                Money(data.correction.deltaMinor.abs()).format(),
+              ),
+              _InfoLine('سبب العكس', data.reason),
+              if (data.note != null) _InfoLine('التوضيح', data.note!),
+              const SizedBox(height: 8),
+              const Text(
+                'سيُحفظ المستند الأصلي ويُضاف قيد معاكس مستقل. لا يمكن عكس التصحيح نفسه مرة ثانية.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('العودة للتعديل'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('اعتماد العكس'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _financialCorrectionReversalSubmitting = true);
+    final request = PendingFinancialOperation.financialCorrectionReversal(
+      operationKey: useCases.newFinancialCorrectionReversalOperationKey(),
+      correctionId: data.correction.id,
+      reason: data.reason,
+      note: data.note,
+    );
+    try {
+      final result = await _runWithNegativeBalanceApproval(
+        context,
+        action: (allowNegativeBalance) => _submitPendingFinancialOperation(
+          useCases,
+          request,
+          allowNegativeBalance: allowNegativeBalance,
+        ),
+        onConfirmationDeclined: () => useCases
+            .discardUncommittedPendingFinancialOperation(request.operationKey)
+            .then((_) {}),
+      );
+      if (!mounted) return;
+      _showResult(context, result, success: 'تم تسجيل عكس التصحيح المالي');
+      _refresh(ref);
+    } on Object {
+      if (!mounted) return;
+      _showSnack(
+        context,
+        'تعذر تسجيل العكس. لم نكرر العملية؛ أعد فتح التطبيق للتحقق من الطلب السابق.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _financialCorrectionReversalSubmitting = false);
+      }
     }
   }
 

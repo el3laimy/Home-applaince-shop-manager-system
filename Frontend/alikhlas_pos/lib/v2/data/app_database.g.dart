@@ -11038,6 +11038,370 @@ class FinancialCorrectionsCompanion
   }
 }
 
+class $FinancialCorrectionReversalsTable extends FinancialCorrectionReversals
+    with
+        TableInfo<
+          $FinancialCorrectionReversalsTable,
+          FinancialCorrectionReversal
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FinancialCorrectionReversalsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _correctionIdMeta = const VerificationMeta(
+    'correctionId',
+  );
+  @override
+  late final GeneratedColumn<int> correctionId = GeneratedColumn<int>(
+    'correction_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'UNIQUE REFERENCES financial_corrections (id)',
+    ),
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    correctionId,
+    reason,
+    note,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'financial_correction_reversals';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FinancialCorrectionReversal> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('correction_id')) {
+      context.handle(
+        _correctionIdMeta,
+        correctionId.isAcceptableOrUnknown(
+          data['correction_id']!,
+          _correctionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_correctionIdMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FinancialCorrectionReversal map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FinancialCorrectionReversal(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      correctionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}correction_id'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FinancialCorrectionReversalsTable createAlias(String alias) {
+    return $FinancialCorrectionReversalsTable(attachedDatabase, alias);
+  }
+}
+
+class FinancialCorrectionReversal extends DataClass
+    implements Insertable<FinancialCorrectionReversal> {
+  final int id;
+  final int correctionId;
+  final String reason;
+  final String? note;
+  final DateTime createdAt;
+  const FinancialCorrectionReversal({
+    required this.id,
+    required this.correctionId,
+    required this.reason,
+    this.note,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['correction_id'] = Variable<int>(correctionId);
+    map['reason'] = Variable<String>(reason);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  FinancialCorrectionReversalsCompanion toCompanion(bool nullToAbsent) {
+    return FinancialCorrectionReversalsCompanion(
+      id: Value(id),
+      correctionId: Value(correctionId),
+      reason: Value(reason),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory FinancialCorrectionReversal.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FinancialCorrectionReversal(
+      id: serializer.fromJson<int>(json['id']),
+      correctionId: serializer.fromJson<int>(json['correctionId']),
+      reason: serializer.fromJson<String>(json['reason']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'correctionId': serializer.toJson<int>(correctionId),
+      'reason': serializer.toJson<String>(reason),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  FinancialCorrectionReversal copyWith({
+    int? id,
+    int? correctionId,
+    String? reason,
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+  }) => FinancialCorrectionReversal(
+    id: id ?? this.id,
+    correctionId: correctionId ?? this.correctionId,
+    reason: reason ?? this.reason,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  FinancialCorrectionReversal copyWithCompanion(
+    FinancialCorrectionReversalsCompanion data,
+  ) {
+    return FinancialCorrectionReversal(
+      id: data.id.present ? data.id.value : this.id,
+      correctionId: data.correctionId.present
+          ? data.correctionId.value
+          : this.correctionId,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FinancialCorrectionReversal(')
+          ..write('id: $id, ')
+          ..write('correctionId: $correctionId, ')
+          ..write('reason: $reason, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, correctionId, reason, note, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FinancialCorrectionReversal &&
+          other.id == this.id &&
+          other.correctionId == this.correctionId &&
+          other.reason == this.reason &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt);
+}
+
+class FinancialCorrectionReversalsCompanion
+    extends UpdateCompanion<FinancialCorrectionReversal> {
+  final Value<int> id;
+  final Value<int> correctionId;
+  final Value<String> reason;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  const FinancialCorrectionReversalsCompanion({
+    this.id = const Value.absent(),
+    this.correctionId = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  FinancialCorrectionReversalsCompanion.insert({
+    this.id = const Value.absent(),
+    required int correctionId,
+    required String reason,
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : correctionId = Value(correctionId),
+       reason = Value(reason);
+  static Insertable<FinancialCorrectionReversal> custom({
+    Expression<int>? id,
+    Expression<int>? correctionId,
+    Expression<String>? reason,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (correctionId != null) 'correction_id': correctionId,
+      if (reason != null) 'reason': reason,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  FinancialCorrectionReversalsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? correctionId,
+    Value<String>? reason,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+  }) {
+    return FinancialCorrectionReversalsCompanion(
+      id: id ?? this.id,
+      correctionId: correctionId ?? this.correctionId,
+      reason: reason ?? this.reason,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (correctionId.present) {
+      map['correction_id'] = Variable<int>(correctionId.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FinancialCorrectionReversalsCompanion(')
+          ..write('id: $id, ')
+          ..write('correctionId: $correctionId, ')
+          ..write('reason: $reason, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -11079,6 +11443,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $PurchaseReturnItemsTable(this);
   late final $FinancialCorrectionsTable financialCorrections =
       $FinancialCorrectionsTable(this);
+  late final $FinancialCorrectionReversalsTable financialCorrectionReversals =
+      $FinancialCorrectionReversalsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -11108,6 +11474,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     purchaseReturns,
     purchaseReturnItems,
     financialCorrections,
+    financialCorrectionReversals,
   ];
 }
 
@@ -20821,6 +21188,47 @@ typedef $$FinancialCorrectionsTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
     });
 
+final class $$FinancialCorrectionsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $FinancialCorrectionsTable,
+          FinancialCorrection
+        > {
+  $$FinancialCorrectionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $FinancialCorrectionReversalsTable,
+    List<FinancialCorrectionReversal>
+  >
+  _financialCorrectionReversalsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.financialCorrectionReversals,
+    aliasName:
+        'financial_corrections__id__financial_correction_reversals__correction_id',
+  );
+
+  $$FinancialCorrectionReversalsTableProcessedTableManager
+  get financialCorrectionReversalsRefs {
+    final manager = $$FinancialCorrectionReversalsTableTableManager(
+      $_db,
+      $_db.financialCorrectionReversals,
+    ).filter((f) => f.correctionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _financialCorrectionReversalsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$FinancialCorrectionsTableFilterComposer
     extends Composer<_$AppDatabase, $FinancialCorrectionsTable> {
   $$FinancialCorrectionsTableFilterComposer({
@@ -20859,6 +21267,35 @@ class $$FinancialCorrectionsTableFilterComposer
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> financialCorrectionReversalsRefs(
+    Expression<bool> Function(
+      $$FinancialCorrectionReversalsTableFilterComposer f,
+    )
+    f,
+  ) {
+    final $$FinancialCorrectionReversalsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.financialCorrectionReversals,
+          getReferencedColumn: (t) => t.correctionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialCorrectionReversalsTableFilterComposer(
+                $db: $db,
+                $table: $db.financialCorrectionReversals,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$FinancialCorrectionsTableOrderingComposer
@@ -20929,6 +21366,35 @@ class $$FinancialCorrectionsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  Expression<T> financialCorrectionReversalsRefs<T extends Object>(
+    Expression<T> Function(
+      $$FinancialCorrectionReversalsTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$FinancialCorrectionReversalsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.financialCorrectionReversals,
+          getReferencedColumn: (t) => t.correctionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialCorrectionReversalsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.financialCorrectionReversals,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$FinancialCorrectionsTableTableManager
@@ -20942,16 +21408,9 @@ class $$FinancialCorrectionsTableTableManager
           $$FinancialCorrectionsTableAnnotationComposer,
           $$FinancialCorrectionsTableCreateCompanionBuilder,
           $$FinancialCorrectionsTableUpdateCompanionBuilder,
-          (
-            FinancialCorrection,
-            BaseReferences<
-              _$AppDatabase,
-              $FinancialCorrectionsTable,
-              FinancialCorrection
-            >,
-          ),
+          (FinancialCorrection, $$FinancialCorrectionsTableReferences),
           FinancialCorrection,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool financialCorrectionReversalsRefs})
         > {
   $$FinancialCorrectionsTableTableManager(
     _$AppDatabase db,
@@ -21005,9 +21464,48 @@ class $$FinancialCorrectionsTableTableManager
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$FinancialCorrectionsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({financialCorrectionReversalsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (financialCorrectionReversalsRefs)
+                  db.financialCorrectionReversals,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (financialCorrectionReversalsRefs)
+                    await $_getPrefetchedData<
+                      FinancialCorrection,
+                      $FinancialCorrectionsTable,
+                      FinancialCorrectionReversal
+                    >(
+                      currentTable: table,
+                      referencedTable: $$FinancialCorrectionsTableReferences
+                          ._financialCorrectionReversalsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$FinancialCorrectionsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).financialCorrectionReversalsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.correctionId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -21022,16 +21520,353 @@ typedef $$FinancialCorrectionsTableProcessedTableManager =
       $$FinancialCorrectionsTableAnnotationComposer,
       $$FinancialCorrectionsTableCreateCompanionBuilder,
       $$FinancialCorrectionsTableUpdateCompanionBuilder,
-      (
-        FinancialCorrection,
+      (FinancialCorrection, $$FinancialCorrectionsTableReferences),
+      FinancialCorrection,
+      PrefetchHooks Function({bool financialCorrectionReversalsRefs})
+    >;
+typedef $$FinancialCorrectionReversalsTableCreateCompanionBuilder =
+    FinancialCorrectionReversalsCompanion Function({
+      Value<int> id,
+      required int correctionId,
+      required String reason,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+    });
+typedef $$FinancialCorrectionReversalsTableUpdateCompanionBuilder =
+    FinancialCorrectionReversalsCompanion Function({
+      Value<int> id,
+      Value<int> correctionId,
+      Value<String> reason,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+    });
+
+final class $$FinancialCorrectionReversalsTableReferences
+    extends
         BaseReferences<
           _$AppDatabase,
-          $FinancialCorrectionsTable,
-          FinancialCorrection
-        >,
+          $FinancialCorrectionReversalsTable,
+          FinancialCorrectionReversal
+        > {
+  $$FinancialCorrectionReversalsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $FinancialCorrectionsTable _correctionIdTable(
+    _$AppDatabase db,
+  ) => db.financialCorrections.createAlias(
+    'financial_correction_reversals__correction_id__financial_corrections__id',
+  );
+
+  $$FinancialCorrectionsTableProcessedTableManager get correctionId {
+    final $_column = $_itemColumn<int>('correction_id')!;
+
+    final manager = $$FinancialCorrectionsTableTableManager(
+      $_db,
+      $_db.financialCorrections,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_correctionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$FinancialCorrectionReversalsTableFilterComposer
+    extends Composer<_$AppDatabase, $FinancialCorrectionReversalsTable> {
+  $$FinancialCorrectionReversalsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$FinancialCorrectionsTableFilterComposer get correctionId {
+    final $$FinancialCorrectionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.correctionId,
+      referencedTable: $db.financialCorrections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialCorrectionsTableFilterComposer(
+            $db: $db,
+            $table: $db.financialCorrections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FinancialCorrectionReversalsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FinancialCorrectionReversalsTable> {
+  $$FinancialCorrectionReversalsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$FinancialCorrectionsTableOrderingComposer get correctionId {
+    final $$FinancialCorrectionsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.correctionId,
+          referencedTable: $db.financialCorrections,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialCorrectionsTableOrderingComposer(
+                $db: $db,
+                $table: $db.financialCorrections,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$FinancialCorrectionReversalsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FinancialCorrectionReversalsTable> {
+  $$FinancialCorrectionReversalsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$FinancialCorrectionsTableAnnotationComposer get correctionId {
+    final $$FinancialCorrectionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.correctionId,
+          referencedTable: $db.financialCorrections,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialCorrectionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.financialCorrections,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$FinancialCorrectionReversalsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FinancialCorrectionReversalsTable,
+          FinancialCorrectionReversal,
+          $$FinancialCorrectionReversalsTableFilterComposer,
+          $$FinancialCorrectionReversalsTableOrderingComposer,
+          $$FinancialCorrectionReversalsTableAnnotationComposer,
+          $$FinancialCorrectionReversalsTableCreateCompanionBuilder,
+          $$FinancialCorrectionReversalsTableUpdateCompanionBuilder,
+          (
+            FinancialCorrectionReversal,
+            $$FinancialCorrectionReversalsTableReferences,
+          ),
+          FinancialCorrectionReversal,
+          PrefetchHooks Function({bool correctionId})
+        > {
+  $$FinancialCorrectionReversalsTableTableManager(
+    _$AppDatabase db,
+    $FinancialCorrectionReversalsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FinancialCorrectionReversalsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$FinancialCorrectionReversalsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$FinancialCorrectionReversalsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> correctionId = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FinancialCorrectionReversalsCompanion(
+                id: id,
+                correctionId: correctionId,
+                reason: reason,
+                note: note,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int correctionId,
+                required String reason,
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FinancialCorrectionReversalsCompanion.insert(
+                id: id,
+                correctionId: correctionId,
+                reason: reason,
+                note: note,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$FinancialCorrectionReversalsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({correctionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (correctionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.correctionId,
+                                referencedTable:
+                                    $$FinancialCorrectionReversalsTableReferences
+                                        ._correctionIdTable(db),
+                                referencedColumn:
+                                    $$FinancialCorrectionReversalsTableReferences
+                                        ._correctionIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$FinancialCorrectionReversalsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FinancialCorrectionReversalsTable,
+      FinancialCorrectionReversal,
+      $$FinancialCorrectionReversalsTableFilterComposer,
+      $$FinancialCorrectionReversalsTableOrderingComposer,
+      $$FinancialCorrectionReversalsTableAnnotationComposer,
+      $$FinancialCorrectionReversalsTableCreateCompanionBuilder,
+      $$FinancialCorrectionReversalsTableUpdateCompanionBuilder,
+      (
+        FinancialCorrectionReversal,
+        $$FinancialCorrectionReversalsTableReferences,
       ),
-      FinancialCorrection,
-      PrefetchHooks Function()
+      FinancialCorrectionReversal,
+      PrefetchHooks Function({bool correctionId})
     >;
 
 class $AppDatabaseManager {
@@ -21085,4 +21920,10 @@ class $AppDatabaseManager {
       $$PurchaseReturnItemsTableTableManager(_db, _db.purchaseReturnItems);
   $$FinancialCorrectionsTableTableManager get financialCorrections =>
       $$FinancialCorrectionsTableTableManager(_db, _db.financialCorrections);
+  $$FinancialCorrectionReversalsTableTableManager
+  get financialCorrectionReversals =>
+      $$FinancialCorrectionReversalsTableTableManager(
+        _db,
+        _db.financialCorrectionReversals,
+      );
 }
