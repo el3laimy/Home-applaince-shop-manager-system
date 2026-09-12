@@ -83,7 +83,13 @@ try {
   Invoke-SmokeCheck
   foreach ($requiredPath in @($uninstaller, $desktopShortcut, $startMenuShortcut, $registryPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
-      throw "Installer did not create required path: $requiredPath"
+      $parent = Split-Path -Parent $requiredPath
+      $entries = if (Test-Path -LiteralPath $parent -PathType Container) {
+        (Get-ChildItem -LiteralPath $parent | ForEach-Object { $_.Name }) -join ', '
+      } else {
+        '<parent directory missing>'
+      }
+      throw "Installer did not create required path: $requiredPath. Parent entries: $entries"
     }
   }
 

@@ -38,6 +38,8 @@ if ($null -eq $compiler) { throw 'NSIS compiler was not installed.' }
 if ($LASTEXITCODE -ne 0) { throw "Unable to run NSIS compiler ($LASTEXITCODE)." }
 
 $arguments = @(
+  '/INPUTCHARSET',
+  'UTF8',
   "/DSOURCE_DIR=$source",
   "/DOUTPUT_DIR=$output",
   "/DICON_FILE=$icon",
