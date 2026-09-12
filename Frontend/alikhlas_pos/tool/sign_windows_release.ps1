@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory = $true)]
   [ValidateNotNullOrEmpty()]
   [string[]]$Files,
-  [string]$TimestampUrl = 'http://timestamp.digicert.com'
+  [string]$TimestampUrl = 'http://timestamp.digicert.com',
+  [switch]$AllowUntrustedCertificate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,30 +38,26 @@ if ($null -eq $signTool) { throw 'Windows SDK signtool.exe was not found.' }
 Write-Host "Using signtool: $($signTool.FullName)"
 
 $certificatePath = Join-Path $env:RUNNER_TEMP 'alikhlas-release-signing.pfx'
-$certificate = $null
 try {
   $certificateBytes = [Convert]::FromBase64String(
     ($certificateBase64 -replace '\s', '')
   )
   [IO.File]::WriteAllBytes($certificatePath, $certificateBytes)
-  $securePassword = ConvertTo-SecureString `
-    $certificatePassword `
-    -AsPlainText `
-    -Force
-  $certificate = Import-PfxCertificate `
-    -FilePath $certificatePath `
-    -CertStoreLocation 'Cert:\CurrentUser\My' `
-    -Password $securePassword
+  $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+    $certificatePath,
+    $certificatePassword,
+    [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+  )
   if ($null -eq $certificate -or -not $certificate.HasPrivateKey) {
-    throw 'The Windows signing certificate could not be imported with its private key.'
+    throw 'The Windows signing certificate could not be opened with its private key.'
   }
-  Write-Host "Imported signing certificate: $($certificate.Subject)"
+  Write-Host "Opened signing certificate: $($certificate.Subject)"
 
   foreach ($file in $resolvedFiles) {
     $signArguments = @(
       'sign',
-      '/sha1', $certificate.Thumbprint,
-      '/s', 'My',
+      '/f', $certificatePath,
+      '/p', $certificatePassword,
       '/fd', 'SHA256'
     )
     if (-not [string]::IsNullOrWhiteSpace($TimestampUrl)) {
@@ -74,8 +71,17 @@ try {
     }
     Write-Host "Verifying Authenticode signature: $file"
     $signature = Get-AuthenticodeSignature -FilePath $file
-    if ($signature.Status -ne 'Valid') {
+    if (
+      -not $AllowUntrustedCertificate -and
+      $signature.Status -ne 'Valid'
+    ) {
       throw "Authenticode signature verification failed for $file ($($signature.Status))."
+    }
+    if (
+      $AllowUntrustedCertificate -and
+      ($signature.Status -eq 'NotSigned' -or $signature.Status -eq 'HashMismatch')
+    ) {
+      throw "The test Authenticode signature is missing or invalid for $file ($($signature.Status))."
     }
     if ($signature.SignerCertificate.Thumbprint -ne $certificate.Thumbprint) {
       throw "The Authenticode signer does not match the imported certificate: $file"
@@ -88,11 +94,5 @@ try {
     }
   }
 } finally {
-  if ($null -ne $certificate) {
-    Remove-Item `
-      "Cert:\CurrentUser\My\$($certificate.Thumbprint)" `
-      -Force `
-      -ErrorAction SilentlyContinue
-  }
   Remove-Item $certificatePath -Force -ErrorAction SilentlyContinue
 }

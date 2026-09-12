@@ -74,25 +74,38 @@ jobs:
         timeout-minutes: 5
         run: |
           $passwordText = 'temporary-signing-test-password'
-          $securePassword = ConvertTo-SecureString $passwordText -AsPlainText -Force
-          $certificate = New-SelfSignedCertificate `
-            -Type CodeSigningCert `
-            -Subject 'CN=ALIkhlasPOS CI signing test' `
-            -CertStoreLocation 'Cert:\CurrentUser\My'
           $certificatePath = Join-Path $env:RUNNER_TEMP 'alikhlas-signing-test.pfx'
           $signedCopy = Join-Path $env:RUNNER_TEMP 'alikhlas-signing-test.exe'
-          $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new(
-            'Root',
-            'CurrentUser'
+          $rsa = [Security.Cryptography.RSA]::Create(2048)
+          $certificate = $null
+          $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new(
+            'CN=ALIkhlasPOS CI signing test',
+            $rsa,
+            [Security.Cryptography.HashAlgorithmName]::SHA256,
+            [Security.Cryptography.RSASignaturePadding]::Pkcs1
           )
           try {
-            Export-PfxCertificate `
-              -Cert $certificate `
-              -FilePath $certificatePath `
-              -Password $securePassword | Out-Null
-            $rootStore.Open('ReadWrite')
-            $rootStore.Add($certificate)
-            $rootStore.Close()
+            $codeSigningOid = [Security.Cryptography.OidCollection]::new()
+            $codeSigningOid.Add(
+              [Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3')
+            ) | Out-Null
+            $request.CertificateExtensions.Add(
+              [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new(
+                $codeSigningOid,
+                $false
+              )
+            )
+            $certificate = $request.CreateSelfSigned(
+              [DateTimeOffset]::UtcNow.AddMinutes(-5),
+              [DateTimeOffset]::UtcNow.AddDays(1)
+            )
+            [IO.File]::WriteAllBytes(
+              $certificatePath,
+              $certificate.Export(
+                [Security.Cryptography.X509Certificates.X509ContentType]::Pfx,
+                $passwordText
+              )
+            )
             Copy-Item `
               'build\windows\x64\runner\Release\alikhlas_pos.exe' `
               $signedCopy
@@ -102,17 +115,11 @@ jobs:
             $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD = $passwordText
             .\tool\sign_windows_release.ps1 `
               -Files @($signedCopy) `
-              -TimestampUrl ''
+              -TimestampUrl '' `
+              -AllowUntrustedCertificate
           } finally {
-            $rootStore.Close()
-            Remove-Item `
-              "Cert:\CurrentUser\Root\$($certificate.Thumbprint)" `
-              -Force `
-              -ErrorAction SilentlyContinue
-            Remove-Item `
-              "Cert:\CurrentUser\My\$($certificate.Thumbprint)" `
-              -Force `
-              -ErrorAction SilentlyContinue
+            if ($null -ne $certificate) { $certificate.Dispose() }
+            $rsa.Dispose()
             Remove-Item $certificatePath -Force -ErrorAction SilentlyContinue
             Remove-Item $signedCopy -Force -ErrorAction SilentlyContinue
             Remove-Item Env:WINDOWS_SIGNING_CERTIFICATE_BASE64 -ErrorAction SilentlyContinue
