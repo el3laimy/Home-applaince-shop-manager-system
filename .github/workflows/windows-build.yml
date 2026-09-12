@@ -84,12 +84,29 @@ jobs:
             -IconFile 'windows\runner\resources\app_icon.ico' `
             -Version $version
 
+          .\tool\build_windows_installer.ps1 `
+            -SourceDirectory 'build\windows\x64\runner\Release' `
+            -OutputDirectory 'build\windows\x64\runner\InstallerSmokeOld' `
+            -IconFile 'windows\runner\resources\app_icon.ico' `
+            -Version '0.0.1'
+
       - name: Verify Windows installer artifact
         shell: pwsh
         run: |
           $installer = Get-ChildItem 'build\windows\x64\runner\Installer\ALIkhlasPOS-Setup-*-x64.exe' | Select-Object -First 1
           if ($null -eq $installer -or $installer.Length -lt 1MB) { throw "Windows installer was not produced" }
           Write-Host "Windows installer: $($installer.FullName) ($($installer.Length) bytes)"
+
+      - name: Accept Windows install, upgrade, removal, and reinstall
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
+          $older = Get-ChildItem 'build\windows\x64\runner\InstallerSmokeOld\ALIkhlasPOS-Setup-0.0.1-x64.exe' | Select-Object -First 1
+          $current = Get-ChildItem 'build\windows\x64\runner\Installer\ALIkhlasPOS-Setup-*-x64.exe' | Select-Object -First 1
+          .\tool\smoke_windows_installer.ps1 `
+            -OlderInstaller $older.FullName `
+            -CurrentInstaller $current.FullName `
+            -ExpectedVersion $version
 
       - name: Upload Windows bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -121,7 +138,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev xvfb
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -141,12 +158,21 @@ jobs:
           version="$(awk '/^version:/ {split($2, parts, "+"); print parts[1]; exit}' pubspec.yaml)"
           test -n "$version"
           bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package "$version"
+          bash tool/build_linux_deb.sh build/linux/x64/release/bundle build/linux/x64/release/package-smoke-old "0.0.1"
 
       - name: Verify Debian installer
         run: |
           deb="$(find build/linux/x64/release/package -maxdepth 1 -name '*.deb' -print -quit)"
           test -n "$deb"
           bash tool/verify_linux_deb.sh "$deb"
+
+      - name: Accept Linux install, upgrade, removal, and reinstall
+        run: |
+          older_deb="$(find build/linux/x64/release/package-smoke-old -maxdepth 1 -name '*.deb' -print -quit)"
+          current_deb="$(find build/linux/x64/release/package -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$older_deb"
+          test -n "$current_deb"
+          bash tool/smoke_linux_installer.sh "$older_deb" "$current_deb"
 
       - name: Upload Linux bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
