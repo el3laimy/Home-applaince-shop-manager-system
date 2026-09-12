@@ -186,14 +186,14 @@ extension V2PortableBackupUseCases on V2UseCases {
           'بصمة قاعدة البيانات في الحزمة لا تطابق محتواها.',
         );
       }
-      _validateRestoreFile(candidate);
+      await _prepareRestoreCandidate(candidate);
       await _installPortableAssets(
         staging: staging,
         candidate: candidate,
         appDataDirectory: currentDatabase.parent,
         assets: manifest.assets,
       );
-      _validateRestoreFile(candidate);
+      _validateCurrentRestoreFile(candidate);
       await _restoreBackupFile(candidate);
     } finally {
       if (await staging.exists()) await staging.delete(recursive: true);

@@ -23,6 +23,7 @@
   - cash overflow requires an open shift.
 - Expense records are stored in an `expenses` table and posted to the ledger.
 - Backup uses `VACUUM INTO`, keeps the latest 30 backup files, and restore clears WAL/SHM sidecar files.
+- Raw and portable backups from supported schema versions v3 through v11 are prepared and migrated in a disposable staging copy before the live database is closed; the selected backup remains unchanged if migration fails.
 - Liquid Glass daily operations UI covers dashboard, POS, inventory, parties, purchases, installments, returns, reports, backup, and settings.
 - Apple/iOS-inspired Liquid Glass polish now uses bundled Cairo Arabic fonts, shared theme tokens, stronger glass contrast, opt-in real blur, and golden coverage for login/dashboard/POS/reports surfaces.
 - Sale receipt, party statement, and report PDFs use the bundled Cairo font assets without loading fonts at print time.
@@ -72,7 +73,7 @@ The v2 test suite covers:
 - installment collection and supplier payment;
 - expenses;
 - partial returns and installment return overflow;
-- backup/restore and v3/v4 to v11 migration.
+- backup/restore, including direct restore of staged v3/v4 backups to v11 without modifying the selected source file.
 - inventory-adjustment accounting, recovery, integrity checks, and minimum-window UI coverage.
 - Cairo theme, glass contrast, centralized blur, and visual golden snapshots for login/dashboard/POS/reports.
 - party statement PDF smoke coverage with invoice details.

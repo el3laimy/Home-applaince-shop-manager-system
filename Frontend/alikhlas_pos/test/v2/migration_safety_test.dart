@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:alikhlas_pos/v2/application/v2_use_cases.dart';
+import 'package:alikhlas_pos/v2/core/result.dart';
 import 'package:alikhlas_pos/v2/data/app_database.dart';
 import 'package:alikhlas_pos/v2/data/migration_recovery.dart';
 import 'package:drift/native.dart';
@@ -170,6 +171,79 @@ void main() {
 
       expect(await recovery.marker.exists(), isFalse);
       expect(await migratingMarker.exists(), isFalse);
+    },
+  );
+
+  test(
+    'restore upgrades a v4 staging copy without changing the backup',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'restore-old-backup-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final live = File('${directory.path}/live.db');
+      final backup = File('${directory.path}/backup-v4.db');
+      await _createV4Database(backup);
+      final originalBackup = await backup.readAsBytes();
+
+      var liveDatabase = AppDatabase(NativeDatabase(live));
+      addTearDown(() => liveDatabase.close());
+      final useCases = V2UseCases(liveDatabase);
+      await useCases.bootstrap(createDefaultOwner: true);
+
+      await useCases.restoreFromBackup(backup);
+
+      expect(useCases.databaseClosedForRestore, isTrue);
+      expect(await backup.readAsBytes(), originalBackup);
+      expect(_version(backup), 4);
+
+      liveDatabase = AppDatabase(NativeDatabase(live));
+      expect(
+        await (liveDatabase.select(liveDatabase.appSettings)
+              ..where((setting) => setting.key.equals('migration.evidence')))
+            .getSingle()
+            .then((setting) => setting.value),
+        'before-upgrade',
+      );
+      expect(_version(live), kAppDatabaseSchemaVersion);
+      expect(_hasTable(live, 'financial_correction_reversals'), isTrue);
+    },
+  );
+
+  test(
+    'failed old-backup migration keeps the live database open and unchanged',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'restore-invalid-old-backup-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final live = File('${directory.path}/live.db');
+      final invalidBackup = File('${directory.path}/invalid-v4.db');
+      final raw = sqlite.sqlite3.open(invalidBackup.path);
+      raw
+        ..execute('CREATE TABLE evidence(value TEXT NOT NULL);')
+        ..execute("INSERT INTO evidence VALUES ('invalid-backup');")
+        ..execute('PRAGMA user_version = 4;')
+        ..close();
+      final originalBackup = await invalidBackup.readAsBytes();
+
+      final liveDatabase = AppDatabase(NativeDatabase(live));
+      addTearDown(liveDatabase.close);
+      final useCases = V2UseCases(liveDatabase);
+      await useCases.bootstrap(createDefaultOwner: true);
+
+      await expectLater(
+        useCases.restoreFromBackup(invalidBackup),
+        throwsA(isA<FormatException>()),
+      );
+
+      expect(useCases.databaseClosedForRestore, isFalse);
+      expect(await invalidBackup.readAsBytes(), originalBackup);
+      expect(
+        await useCases.login('owner', 'owner123'),
+        isA<AppSuccess<User>>(),
+      );
+      expect(_version(live), kAppDatabaseSchemaVersion);
     },
   );
 }

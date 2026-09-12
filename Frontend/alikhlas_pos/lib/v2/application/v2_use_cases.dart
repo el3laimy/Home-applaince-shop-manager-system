@@ -7,12 +7,14 @@ import 'package:crypto/crypto.dart';
 import 'package:archive/archive_io.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 
 import '../accounting/account_codes.dart';
 import '../core/money.dart';
 import '../core/result.dart';
 import '../data/app_database.dart';
+import '../data/migration_recovery.dart';
 import '../data/restore_recovery.dart';
 import 'backup_file_operations.dart';
 import 'v2_diagnostic_logger.dart';

@@ -30,7 +30,7 @@ Run this checklist on clean target devices before commercial release:
 3. Uninstall Windows and confirm user data is retained as documented; reinstall and confirm it can reopen it.
 4. Install the Debian package on a clean supported Debian/Ubuntu device, launch it, then remove and reinstall it.
 5. Test the target receipt printer, barcode-label printer, and physical barcode scanner.
-6. Create a backup on the intended external location, restore a copy to a test database, and verify its balances.
+6. Create a backup on the intended external location, restore a copy to a test database, then restore a representative supported old-shop backup and verify its balances and migration evidence.
 7. Execute a forced-close/power-loss simulation and a disk-full simulation using a disposable test database.
 8. Run a controlled end-user pilot with real workflows before commercial rollout.
 

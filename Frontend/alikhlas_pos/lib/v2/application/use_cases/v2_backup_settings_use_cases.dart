@@ -114,8 +114,6 @@ extension V2BackupSettingsUseCases on V2UseCases {
     if (!await backupFile.exists()) {
       throw ArgumentError('Backup file does not exist: ${backupFile.path}');
     }
-    _validateRestoreFile(backupFile);
-    await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE);');
     final dbFile = await _currentDatabaseFile();
     final dbPath = dbFile.path;
     final walFile = File('$dbPath-wal');
@@ -125,27 +123,32 @@ extension V2BackupSettingsUseCases on V2UseCases {
       p.dirname(dbPath),
     ).createTemp('restore-candidate-');
     final candidate = File(p.join(stagingDirectory.path, 'candidate.db'));
-    await backupFile.copy(candidate.path);
-    _validateRestoreFile(candidate);
-    if (await recovery.marker.exists()) {
-      throw StateError('يوجد استرجاع غير مكتمل. أعد تشغيل التطبيق أولًا.');
-    }
-    if (await recovery.rollback.exists()) await recovery.rollback.delete();
-    final escapedRollback = recovery.rollback.path.replaceAll("'", "''");
-    // SQLite creates a consistent snapshot, including committed WAL content.
-    await db.customStatement("VACUUM INTO '$escapedRollback';");
-    await db.close();
-    databaseClosedForRestore = true;
-    await recovery.markPending();
     try {
-      await _restoreFiles.deleteFileIfExists(walFile);
-      await _restoreFiles.deleteFileIfExists(shmFile);
-      await _restoreFiles.copyFile(candidate, dbFile);
-      _validateRestoreFile(dbFile);
-      await recovery.commit();
-    } catch (_) {
-      await recovery.recoverIfPending();
-      rethrow;
+      // Never migrate the user's backup file in place. The disposable copy is
+      // upgraded and fully validated while the live database stays open.
+      await backupFile.copy(candidate.path);
+      await _prepareRestoreCandidate(candidate);
+      await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE);');
+      if (await recovery.marker.exists()) {
+        throw StateError('يوجد استرجاع غير مكتمل. أعد تشغيل التطبيق أولًا.');
+      }
+      if (await recovery.rollback.exists()) await recovery.rollback.delete();
+      final escapedRollback = recovery.rollback.path.replaceAll("'", "''");
+      // SQLite creates a consistent snapshot, including committed WAL content.
+      await db.customStatement("VACUUM INTO '$escapedRollback';");
+      await db.close();
+      databaseClosedForRestore = true;
+      await recovery.markPending();
+      try {
+        await _restoreFiles.deleteFileIfExists(walFile);
+        await _restoreFiles.deleteFileIfExists(shmFile);
+        await _restoreFiles.copyFile(candidate, dbFile);
+        _validateCurrentRestoreFile(dbFile);
+        await recovery.commit();
+      } catch (_) {
+        await recovery.recoverIfPending();
+        rethrow;
+      }
     } finally {
       try {
         await stagingDirectory.delete(recursive: true);
@@ -155,7 +158,41 @@ extension V2BackupSettingsUseCases on V2UseCases {
     }
   }
 
-  void _validateRestoreFile(File file) {
+  Future<void> _prepareRestoreCandidate(File file) async {
+    final sourceVersion = _validateRestoreSource(file);
+    if (sourceVersion < db.schemaVersion) {
+      AppDatabase? candidateDatabase;
+      try {
+        candidateDatabase = AppDatabase(NativeDatabase(file));
+        final migratedVersion =
+            (await candidateDatabase
+                        .customSelect('PRAGMA user_version;')
+                        .getSingle())
+                    .data
+                    .values
+                    .single
+                as int;
+        if (migratedVersion != db.schemaVersion) {
+          throw const FormatException(
+            'لم تصل النسخة الاحتياطية إلى إصدار البيانات الحالي.',
+          );
+        }
+      } on DatabaseMigrationFailedDuringUpgrade {
+        throw const FormatException(
+          'تعذر تحديث النسخة الاحتياطية القديمة. لم تتغير بيانات المحل الحالية.',
+        );
+      } on sqlite.SqliteException {
+        throw const FormatException(
+          'تعذر تحديث النسخة الاحتياطية القديمة. لم تتغير بيانات المحل الحالية.',
+        );
+      } finally {
+        await candidateDatabase?.close();
+      }
+    }
+    _validateCurrentRestoreFile(file);
+  }
+
+  int _validateRestoreSource(File file) {
     sqlite.Database? candidate;
     try {
       candidate = sqlite.sqlite3.open(
@@ -168,14 +205,44 @@ extension V2BackupSettingsUseCases on V2UseCases {
           'النسخة الاحتياطية تالفة. لم يتم اعتماد الاسترجاع.',
         );
       }
-      final version = candidate
-          .select('PRAGMA user_version;')
-          .single
-          .values
-          .single;
+      final version =
+          candidate.select('PRAGMA user_version;').single.values.single as int;
+      if (version < 3) {
+        throw const FormatException(
+          'إصدار النسخة قديم جدًا ولا يمكن تحديثه تلقائيًا.',
+        );
+      }
+      if (version > db.schemaVersion) {
+        throw const FormatException(
+          'النسخة من إصدار أحدث. حدّث التطبيق قبل الاسترجاع.',
+        );
+      }
+      return version;
+    } on sqlite.SqliteException {
+      throw const FormatException('ملف النسخة غير صالح أو غير قابل للقراءة.');
+    } finally {
+      candidate?.close();
+    }
+  }
+
+  void _validateCurrentRestoreFile(File file) {
+    sqlite.Database? candidate;
+    try {
+      candidate = sqlite.sqlite3.open(
+        file.path,
+        mode: sqlite.OpenMode.readOnly,
+      );
+      final integrity = candidate.select('PRAGMA quick_check;');
+      if (integrity.length != 1 || integrity.single.values.single != 'ok') {
+        throw const FormatException(
+          'النسخة الاحتياطية تالفة. لم يتم اعتماد الاسترجاع.',
+        );
+      }
+      final version =
+          candidate.select('PRAGMA user_version;').single.values.single as int;
       if (version != db.schemaVersion) {
         throw const FormatException(
-          'إصدار النسخة غير متوافق. استخدم نسخة من نفس إصدار البيانات.',
+          'إصدار النسخة غير متوافق بعد تجهيزها للاسترجاع.',
         );
       }
       for (final table in db.allTables) {
