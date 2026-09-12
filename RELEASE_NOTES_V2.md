@@ -49,6 +49,7 @@
 - Login and recovery attempts are throttled, and current password hashes use PBKDF2-HMAC-SHA256 with 600,000 iterations.
 - Unexpected failures are written to a bounded local JSONL diagnostic log that omits exception messages, customer data, file paths, and raw operation keys.
 - Windows NSIS and Linux Debian packages pass automated install, upgrade, uninstall, reinstall, launch, and user-data-retention checks in `Desktop Release Build`.
+- A version tag matching the complete `pubspec.yaml` version requires Windows signing secrets, signs and verifies both the application and installer, and creates a draft GitHub Release with both installers and `SHA256SUMS`.
 
 ## Verification
 
@@ -83,4 +84,4 @@ The v2 test suite covers:
 - Validate sale receipts, A4 statements, barcode labels, and scanning on the target physical devices.
 - Exercise an external backup destination, a representative old shop database, forced close/power loss, and a full filesystem on disposable test data.
 - Complete a controlled pilot with a non-technical shop user and resolve all blocking observations.
-- Approve the publisher identity, sign the Windows installer, check SmartScreen behavior, and publish the support contact and response hours.
+- Approve the publisher identity and code-signing certificate, run the tagged release path, check SmartScreen behavior, and publish the support contact and response hours.

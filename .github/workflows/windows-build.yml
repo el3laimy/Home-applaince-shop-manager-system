@@ -11,6 +11,8 @@ on:
       - main
       - fix/v2-installment-returns
       - 'codex/**'
+    tags:
+      - 'v*'
     paths:
       - ".github/workflows/windows-build.yml"
       - "Frontend/alikhlas_pos/**"
@@ -67,6 +69,65 @@ jobs:
       - name: Build Windows
         run: flutter build windows --release --dart-define=APP_GIT_SHA=$env:GITHUB_SHA
 
+      - name: Test Windows signing helper
+        shell: pwsh
+        run: |
+          $passwordText = 'temporary-signing-test-password'
+          $securePassword = ConvertTo-SecureString $passwordText -AsPlainText -Force
+          $certificate = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject 'CN=ALIkhlasPOS CI signing test' `
+            -CertStoreLocation 'Cert:\CurrentUser\My'
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'alikhlas-signing-test.pfx'
+          $signedCopy = Join-Path $env:RUNNER_TEMP 'alikhlas-signing-test.exe'
+          $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new(
+            'Root',
+            'CurrentUser'
+          )
+          try {
+            Export-PfxCertificate `
+              -Cert $certificate `
+              -FilePath $certificatePath `
+              -Password $securePassword | Out-Null
+            $rootStore.Open('ReadWrite')
+            $rootStore.Add($certificate)
+            $rootStore.Close()
+            Copy-Item `
+              'build\windows\x64\runner\Release\alikhlas_pos.exe' `
+              $signedCopy
+            $env:WINDOWS_SIGNING_CERTIFICATE_BASE64 = [Convert]::ToBase64String(
+              [IO.File]::ReadAllBytes($certificatePath)
+            )
+            $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD = $passwordText
+            .\tool\sign_windows_release.ps1 `
+              -Files @($signedCopy) `
+              -TimestampUrl ''
+          } finally {
+            $rootStore.Close()
+            Remove-Item `
+              "Cert:\CurrentUser\Root\$($certificate.Thumbprint)" `
+              -Force `
+              -ErrorAction SilentlyContinue
+            Remove-Item `
+              "Cert:\CurrentUser\My\$($certificate.Thumbprint)" `
+              -Force `
+              -ErrorAction SilentlyContinue
+            Remove-Item $certificatePath -Force -ErrorAction SilentlyContinue
+            Remove-Item $signedCopy -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:WINDOWS_SIGNING_CERTIFICATE_BASE64 -ErrorAction SilentlyContinue
+            Remove-Item Env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD -ErrorAction SilentlyContinue
+          }
+
+      - name: Sign Windows application for tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          .\tool\sign_windows_release.ps1 `
+            -Files @('build\windows\x64\runner\Release\alikhlas_pos.exe')
+
       - name: Install NSIS compiler
         shell: pwsh
         run: >
@@ -96,6 +157,18 @@ jobs:
           $installer = Get-ChildItem 'build\windows\x64\runner\Installer\ALIkhlasPOS-Setup-*-x64.exe' | Select-Object -First 1
           if ($null -eq $installer -or $installer.Length -lt 1MB) { throw "Windows installer was not produced" }
           Write-Host "Windows installer: $($installer.FullName) ($($installer.Length) bytes)"
+
+      - name: Sign and verify Windows installer for tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $installer = Get-ChildItem `
+            'build\windows\x64\runner\Installer\ALIkhlasPOS-Setup-*-x64.exe' |
+            Select-Object -First 1
+          .\tool\sign_windows_release.ps1 -Files @($installer.FullName)
 
       - name: Accept Windows install, upgrade, removal, and reinstall
         shell: pwsh
@@ -187,3 +260,81 @@ jobs:
           name: alikhlas-pos-linux-deb
           path: Frontend/alikhlas_pos/build/linux/x64/release/package/*.deb
           if-no-files-found: error
+
+  publish-draft-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - verify
+      - build-windows
+      - build-linux
+    name: Publish signed draft release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Require tag to match the package version
+        working-directory: Frontend/alikhlas_pos
+        run: |
+          package_version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          test -n "$package_version"
+          expected_tag="v${package_version}"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pubspec version $expected_tag." >&2
+            exit 1
+          fi
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != 'tag' ]; then
+            echo "Release tag $GITHUB_REF_NAME must be an annotated tag." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Tagged commit $GITHUB_SHA is not part of origin/main." >&2
+            exit 1
+          fi
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: alikhlas-pos-windows-installer
+          path: release-assets
+
+      - name: Download Debian installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: alikhlas-pos-linux-deb
+          path: release-assets
+
+      - name: Create and verify package checksums
+        run: |
+          mapfile -t packages < <(
+            find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.deb' \) -print | sort
+          )
+          if [ "${#packages[@]}" -ne 2 ]; then
+            echo "Expected exactly one Windows installer and one Debian package." >&2
+            printf '%s\n' "${packages[@]}" >&2
+            exit 1
+          fi
+          sha256sum "${packages[@]}" | sed 's#release-assets/##' > release-assets/SHA256SUMS
+          (cd release-assets && sha256sum --check SHA256SUMS)
+
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "A GitHub release already exists for $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            release-assets/*.exe \
+            release-assets/*.deb \
+            release-assets/SHA256SUMS \
+            --verify-tag \
+            --draft \
+            --title "ALIkhlasPOS ${GITHUB_REF_NAME#v}" \
+            --notes-file RELEASE_NOTES_V2.md
