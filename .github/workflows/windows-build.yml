@@ -71,6 +71,7 @@ jobs:
 
       - name: Test Windows signing helper
         shell: pwsh
+        timeout-minutes: 5
         run: |
           $passwordText = 'temporary-signing-test-password'
           $securePassword = ConvertTo-SecureString $passwordText -AsPlainText -Force
@@ -121,6 +122,7 @@ jobs:
       - name: Sign Windows application for tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
+        timeout-minutes: 10
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
@@ -161,6 +163,7 @@ jobs:
       - name: Sign and verify Windows installer for tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
+        timeout-minutes: 10
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}

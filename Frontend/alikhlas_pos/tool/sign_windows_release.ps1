@@ -27,14 +27,14 @@ $resolvedFiles = @(
   }
 )
 
-$signTool = Get-ChildItem `
-  -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
-  -Filter 'signtool.exe' `
-  -Recurse |
-  Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
-  Sort-Object FullName -Descending |
+$sdkBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+$signTool = Get-ChildItem -LiteralPath $sdkBin -Directory |
+  Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+  Sort-Object { [version]$_.Name } -Descending |
+  ForEach-Object { Get-Item (Join-Path $_.FullName 'x64\signtool.exe') -ErrorAction SilentlyContinue } |
   Select-Object -First 1
 if ($null -eq $signTool) { throw 'Windows SDK signtool.exe was not found.' }
+Write-Host "Using signtool: $($signTool.FullName)"
 
 $certificatePath = Join-Path $env:RUNNER_TEMP 'alikhlas-release-signing.pfx'
 $certificate = $null
@@ -54,6 +54,7 @@ try {
   if ($null -eq $certificate -or -not $certificate.HasPrivateKey) {
     throw 'The Windows signing certificate could not be imported with its private key.'
   }
+  Write-Host "Imported signing certificate: $($certificate.Subject)"
 
   foreach ($file in $resolvedFiles) {
     $signArguments = @(
@@ -66,11 +67,12 @@ try {
       $signArguments += @('/tr', $TimestampUrl, '/td', 'SHA256')
     }
     $signArguments += $file
+    Write-Host "Signing: $file"
     & $signTool.FullName $signArguments
     if ($LASTEXITCODE -ne 0) {
       throw "Failed to sign $file ($LASTEXITCODE)."
     }
-
+    Write-Host "Verifying signature: $file"
     & $signTool.FullName verify /pa /v $file
     if ($LASTEXITCODE -ne 0) {
       throw "Signature verification failed for $file ($LASTEXITCODE)."
